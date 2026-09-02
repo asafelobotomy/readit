@@ -1,0 +1,27 @@
+{
+  "name": "@readit/extension",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "compile": "wxt prepare",
+    "postinstall": "wxt prepare",
+    "typecheck": "tsc --noEmit",
+    "zip": "wxt zip"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.0.4",
+    "@readit/css-engine": "*",
+    "@readit/features": "*",
+    "@readit/schema": "*",
+    "@wxt-dev/storage": "^1.2.9",
+    "preact": "^10.26.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.1",
+    "typescript": "^5.8.2",
+    "wxt": "^0.20.5"
+  }
+}
