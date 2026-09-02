@@ -185,15 +185,32 @@ export const keyboardNavFeature: FeatureModule = {
   audience: ["reader", "creator", "moderator"],
   category: "productivity",
   label: "Keyboard navigation",
-  description: "J/K scroll between posts in the feed.",
+  description:
+    "Defer to Reddit’s J/K hotkeys by default, or use readit scroll-between-posts.",
   apply(ctx) {
     if (!ctx.settings.flags.keyboardNav) return;
+    const mode = ctx.settings.keyboardNavPrefs?.mode ?? "defer";
+    document.documentElement.dataset.readitKb = mode;
+
+    // Defer: do not register a listener — official Reddit owns J/K/A/Z.
+    if (mode !== "readit") {
+      const existing = (
+        window as unknown as { __readitKbHandler?: (e: KeyboardEvent) => void }
+      ).__readitKbHandler;
+      if (existing) {
+        window.removeEventListener("keydown", existing);
+        delete (window as unknown as { __readitKbHandler?: unknown }).__readitKbHandler;
+      }
+      (window as unknown as { __readitKb?: boolean }).__readitKb = false;
+      return;
+    }
+
     if ((window as unknown as { __readitKb?: boolean }).__readitKb) return;
     (window as unknown as { __readitKb?: boolean }).__readitKb = true;
-    document.documentElement.dataset.readitKb = "1";
 
     const handler = (e: KeyboardEvent) => {
       if (!ctx.settings.flags.keyboardNav) return;
+      if ((ctx.settings.keyboardNavPrefs?.mode ?? "defer") !== "readit") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       if (isEditableTarget(target)) return;
@@ -219,6 +236,7 @@ export const keyboardNavFeature: FeatureModule = {
       .__readitKbHandler;
     if (handler) window.removeEventListener("keydown", handler);
     (window as unknown as { __readitKb?: boolean }).__readitKb = false;
+    delete (window as unknown as { __readitKbHandler?: unknown }).__readitKbHandler;
     delete document.documentElement.dataset.readitKb;
   },
 };

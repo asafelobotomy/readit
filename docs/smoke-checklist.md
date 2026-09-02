@@ -1,6 +1,6 @@
 # End-to-end smoke checklist (New Reddit)
 
-**Latest automated run:** 2026-09-02T13:09:25.887Z · **85 pass / 0 fail / 6 skip** (+ layout.unit ✓) · mode `launch-playwright`
+**Latest automated run:** 2026-09-02 · **90 pass / 0 fail / 7 skip** · mode `launch-playwright` (Wave A included)
 
 Automated harness: `npm run smoke` (Playwright Chromium) or `npm run smoke:brave` (puppeteer → Brave CDP on `:9222`).
 

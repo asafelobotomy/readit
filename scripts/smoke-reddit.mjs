@@ -440,7 +440,10 @@ try {
         ),
         kb:
           document.documentElement.dataset.readitKb === "1" ||
+          document.documentElement.dataset.readitKb === "readit" ||
           !!(window).__readitKb,
+        kbMode: document.documentElement.dataset.readitKb || "",
+        compact: document.documentElement.classList.contains("readit-feed-compact"),
       };
     }, name);
   }
@@ -458,10 +461,21 @@ try {
     dense.ok && String(dense.feedWidth).includes("1100") ? "pass" : "fail",
     JSON.stringify(dense),
   );
+  // Wave A: Dense defaults to defer (official hotkeys), not readit J/K.
   record(
     "advanced.keyboard_nav",
-    dense.kb ? "pass" : "fail",
-    `data-readit-kb / __readitKb=${dense.kb}`,
+    dense.kbMode === "defer" || dense.kbMode === "readit" ? "pass" : "fail",
+    `data-readit-kb=${dense.kbMode}`,
+  );
+  record(
+    "track.waveA.hotkey_defer",
+    dense.kbMode === "defer" && !dense.kb ? "pass" : "fail",
+    JSON.stringify({ kbMode: dense.kbMode, kb: dense.kb }),
+  );
+  record(
+    "track.waveA.compact_feed",
+    dense.compact ? "pass" : "fail",
+    JSON.stringify({ compact: dense.compact }),
   );
   record(
     "simple.profile_switch",
@@ -595,8 +609,12 @@ try {
 
   const mediaMode = await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
-    const select = root?.querySelector("select.readit-select");
-    if (!(select instanceof HTMLSelectElement)) return { ok: false };
+    const select = [...(root?.querySelectorAll("select.readit-select") || [])].find(
+      (s) => [...s.options].some((o) => o.value === "links_on_feed"),
+    );
+    if (!(select instanceof HTMLSelectElement)) {
+      return { ok: false, reason: "no media select" };
+    }
     const setter = Object.getOwnPropertyDescriptor(
       HTMLSelectElement.prototype,
       "value",
@@ -910,6 +928,67 @@ try {
     };
   });
   record("simple.noise_pack_ui", noisePack.ok ? "pass" : "fail", JSON.stringify(noisePack));
+
+  // Wave A — feed philosophy + action declutter
+  const waveA = await studioEval(page, async () => {
+    const root = document.querySelector("readit-studio")?.shadowRoot;
+    const text = root?.textContent || "";
+    const hasPhilosophy =
+      /Feed philosophy|信息流哲学|Start on Following|Following/i.test(text);
+    const awardsLab = [...(root?.querySelectorAll("label") || [])].find((l) =>
+      /Hide awards|隐藏奖励/i.test(l.textContent || ""),
+    );
+    const awards = awardsLab?.querySelector("input[type=checkbox]");
+    if (awards instanceof HTMLInputElement && !awards.checked) {
+      awards.click();
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    const css = document.getElementById("readit-css-engine")?.textContent || "";
+    const lurkerLab = [...(root?.querySelectorAll("label") || [])].find((l) =>
+      /Lurker mode|潜水模式/i.test(l.textContent || ""),
+    );
+    const lurker = lurkerLab?.querySelector("input[type=checkbox]");
+    if (lurker instanceof HTMLInputElement && !lurker.checked) {
+      lurker.click();
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    return {
+      hasPhilosophy,
+      awardsCss: /readit-hide:awards/.test(css),
+      lurkerClass: document.documentElement.classList.contains("readit-lurker"),
+      followingFlag: /Start on Following|Following（非 For You）|默认 Following/i.test(
+        text,
+      ),
+    };
+  });
+  record(
+    "track.waveA.feed_philosophy_ui",
+    waveA.hasPhilosophy ? "pass" : "fail",
+    JSON.stringify(waveA),
+  );
+  record(
+    "track.waveA.action_declutter",
+    waveA.awardsCss ? "pass" : "fail",
+    JSON.stringify(waveA),
+  );
+  record(
+    "track.waveA.lurker_mode",
+    waveA.lurkerClass ? "pass" : "fail",
+    JSON.stringify(waveA),
+  );
+  const followingStatus = await page.evaluate(
+    () => document.documentElement.dataset.readitFollowing || "none",
+  );
+  // ok = switched; degraded = not home / partial; broken = no tabs; none = not applied yet
+  record(
+    "track.waveA.following_default",
+    followingStatus === "ok" || followingStatus === "degraded"
+      ? "pass"
+      : followingStatus === "broken" || followingStatus === "none"
+        ? "skip"
+        : "fail",
+    `dataset.readitFollowing=${followingStatus}`,
+  );
 
   await clickTab(page, "Create");
   const createUx = await studioEval(page, () => {

@@ -1,0 +1,162 @@
+{
+  "active": {
+    "paused": false,
+    "classes": [
+      "theme-beta",
+      "readit-active",
+      "readit-op-highlight",
+      "readit-feed-compact",
+      "readit-layout-slots",
+      "theme-dark",
+      "readit-layout-preset-classic"
+    ],
+    "subgridParent": {
+      "tag": "DIV",
+      "id": "",
+      "class": "grid-container theme-rpl grid flex-nav-expanded",
+      "display": "grid",
+      "justifyContent": "normal",
+      "gridTemplateColumns": "272px 1633px"
+    },
+    "subgridCS": {
+      "display": "flex",
+      "margin": "0px",
+      "marginInline": "0px",
+      "justifySelf": "auto",
+      "gridColumn": "2",
+      "width": "1120px",
+      "maxWidth": "1648px"
+    },
+    "boxes": {
+      "left": {
+        "sel": "#left-sidebar-container",
+        "x": 0,
+        "w": 280,
+        "maxWidth": "280px",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "main": {
+        "sel": "#main-content",
+        "x": 553,
+        "w": 732,
+        "maxWidth": "777px",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "right": {
+        "sel": "#right-sidebar-container",
+        "x": 1309,
+        "w": 316,
+        "maxWidth": "316px",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "subgrid": {
+        "sel": "#subgrid-container",
+        "x": 529,
+        "w": 1120,
+        "maxWidth": "1648px",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "shredditApp": {
+        "sel": "shreddit-app",
+        "x": 0,
+        "w": 1905,
+        "maxWidth": "none",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      }
+    },
+    "gapLeftToMain": 273
+  },
+  "paused": {
+    "paused": true,
+    "classes": [
+      "theme-beta",
+      "theme-dark"
+    ],
+    "subgridParent": {
+      "tag": "DIV",
+      "id": "",
+      "class": "grid-container theme-rpl grid flex-nav-expanded",
+      "display": "grid",
+      "justifyContent": "normal",
+      "gridTemplateColumns": "272px 1633px"
+    },
+    "subgridCS": {
+      "display": "flex",
+      "margin": "0px",
+      "marginInline": "0px",
+      "justifySelf": "auto",
+      "gridColumn": "2",
+      "width": "1120px",
+      "maxWidth": "1648px"
+    },
+    "boxes": {
+      "left": {
+        "sel": "#left-sidebar-container",
+        "x": 0,
+        "w": 272,
+        "maxWidth": "none",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "main": {
+        "sel": "#main-content",
+        "x": 553,
+        "w": 732,
+        "maxWidth": "none",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "right": {
+        "sel": "#right-sidebar-container",
+        "x": 1309,
+        "w": 316,
+        "maxWidth": "316px",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "subgrid": {
+        "sel": "#subgrid-container",
+        "x": 529,
+        "w": 1120,
+        "maxWidth": "1648px",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      },
+      "shredditApp": {
+        "sel": "shreddit-app",
+        "x": 0,
+        "w": 1905,
+        "maxWidth": "none",
+        "marginLeft": "0px",
+        "marginRight": "0px",
+        "justifySelf": "auto",
+        "placeSelf": "auto"
+      }
+    },
+    "gapLeftToMain": 281
+  },
+  "pausedOk": true
+}

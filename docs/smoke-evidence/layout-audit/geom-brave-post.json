@@ -1,0 +1,93 @@
+{
+  "url": "https://www.reddit.com/r/AskReddit/comments/1w5bvzy/what_is_the_best_thing_about_getting_older/",
+  "viewport": {
+    "w": 1920,
+    "h": 967
+  },
+  "classes": [
+    "theme-beta",
+    "readit-active",
+    "readit-op-highlight",
+    "readit-feed-compact",
+    "readit-layout-slots",
+    "theme-dark",
+    "readit-layout-preset-classic"
+  ],
+  "feedWidth": "777px",
+  "leftNavW": "280px",
+  "styleTag": false,
+  "styleSnippet": "no_shreddit-app_in_style",
+  "hasBadRule": false,
+  "boxes": {
+    "left": {
+      "sel": "#left-sidebar-container",
+      "x": 0,
+      "y": 56,
+      "w": 280,
+      "h": 5992,
+      "maxWidth": "280px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "main": {
+      "sel": "#main-content",
+      "x": 553,
+      "y": 56,
+      "w": 732,
+      "h": 5992,
+      "maxWidth": "777px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "right": {
+      "sel": "#right-sidebar-container",
+      "x": 1309,
+      "y": 56,
+      "w": 316,
+      "h": 5992,
+      "maxWidth": "316px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "subgrid": {
+      "sel": "#subgrid-container",
+      "x": 529,
+      "y": 56,
+      "w": 1120,
+      "h": 5992,
+      "maxWidth": "1648px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "shell": {
+      "sel": "[data-readit-layout-shell]",
+      "x": 0,
+      "y": 56,
+      "w": 1905,
+      "h": 5992,
+      "maxWidth": "none",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "shredditApp": {
+      "sel": "shreddit-app",
+      "x": 0,
+      "y": 0,
+      "w": 1905,
+      "h": 6048,
+      "maxWidth": "none",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "mainTag": {
+      "sel": "main",
+      "x": 553,
+      "y": 56,
+      "w": 732,
+      "h": 5992,
+      "maxWidth": "777px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    }
+  }
+}

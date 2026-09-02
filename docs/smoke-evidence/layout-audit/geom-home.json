@@ -1,0 +1,63 @@
+{
+  "classes": [
+    "theme-beta",
+    "readit-active",
+    "readit-op-highlight",
+    "readit-layout-slots",
+    "readit-layout-preset-classic",
+    "readit-layout-degraded"
+  ],
+  "feedWidth": "980px",
+  "boxes": {
+    "left": {
+      "sel": "#left-sidebar-container",
+      "x": 303,
+      "y": 56,
+      "w": 272,
+      "h": 944,
+      "maxWidth": "272px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "main": {
+      "sel": "#main-content",
+      "x": 642,
+      "y": 56,
+      "w": 732,
+      "h": 6483,
+      "maxWidth": "980px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "right": {
+      "sel": "#right-sidebar-container",
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0,
+      "maxWidth": "316px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "subgrid": {
+      "sel": "#subgrid-container",
+      "x": 618,
+      "y": 56,
+      "w": 1120,
+      "h": 6483,
+      "maxWidth": "1285px",
+      "marginLeft": "0px",
+      "marginRight": "0px"
+    },
+    "shredditApp": {
+      "sel": "shreddit-app",
+      "x": 303,
+      "y": 0,
+      "w": 980,
+      "h": 6539,
+      "maxWidth": "980px",
+      "marginLeft": "302.5px",
+      "marginRight": "302.5px"
+    }
+  }
+}

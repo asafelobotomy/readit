@@ -1,0 +1,39 @@
+{
+  "boxes": {
+    "left": {
+      "sel": "#left-sidebar-container",
+      "x": 0,
+      "w": 272,
+      "maxWidth": "272px",
+      "marginLeft": "0px"
+    },
+    "main": {
+      "sel": "#main-content",
+      "x": 414,
+      "w": 732,
+      "maxWidth": "980px",
+      "marginLeft": "0px"
+    },
+    "right": {
+      "sel": "#right-sidebar-container",
+      "x": 0,
+      "w": 0,
+      "maxWidth": "316px",
+      "marginLeft": "0px"
+    },
+    "shredditApp": {
+      "sel": "shreddit-app",
+      "x": 0,
+      "w": 1585,
+      "maxWidth": "none",
+      "marginLeft": "0px"
+    },
+    "subgrid": {
+      "sel": "#subgrid-container",
+      "x": 390,
+      "w": 1120,
+      "maxWidth": "1285px",
+      "marginLeft": "0px"
+    }
+  }
+}

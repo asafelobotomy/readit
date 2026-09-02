@@ -8,3 +8,5 @@ dist
 .env
 .env.*
 coverage
+.layout-audit-baseline/
+.layout-audit-profile/

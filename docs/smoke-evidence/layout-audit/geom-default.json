@@ -1,0 +1,33 @@
+{
+  "viewport": {
+    "w": 1600,
+    "h": 1000
+  },
+  "classes": [
+    "readit-active",
+    "readit-op-highlight",
+    "readit-layout-slots",
+    "readit-layout-preset-classic",
+    "readit-layout-degraded"
+  ],
+  "feedWidth": "980px",
+  "leftNavWidth": "272px",
+  "dataset": {
+    "readitLayout": "classic",
+    "readitFollowing": "degraded",
+    "readitToolbox": "0"
+  },
+  "boxes": {
+    "leftSidebar": null,
+    "leftSlot": null,
+    "main": null,
+    "mainSlot": null,
+    "right": null,
+    "rightSlot": null,
+    "subgrid": null,
+    "shell": null,
+    "shredditApp": null,
+    "mainTag": null
+  },
+  "styleTagPresent": false
+}
