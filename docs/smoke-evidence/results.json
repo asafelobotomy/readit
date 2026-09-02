@@ -1,0 +1,467 @@
+{
+  "at": "2026-09-02T13:09:25.887Z",
+  "mode": "launch-playwright",
+  "cdpEndpoint": null,
+  "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
+  "extensionPath": "/home/solon/GitHub/readit/dist/chrome-mv3",
+  "results": [
+    {
+      "id": "unit.noise_css",
+      "status": "pass",
+      "detail": "CSS noise pack aiSummary"
+    },
+    {
+      "id": "unit.kb_focus_guard",
+      "status": "pass",
+      "detail": "keyboard focus guard"
+    },
+    {
+      "id": "unit.import_preview",
+      "status": "pass",
+      "detail": "import preview dry-run"
+    },
+    {
+      "id": "track.next.export_schema_stamp",
+      "status": "pass",
+      "detail": "import preview dry-run"
+    },
+    {
+      "id": "layout.unit",
+      "status": "pass",
+      "detail": "test:layout"
+    },
+    {
+      "id": "track.later.anti_refresh_manual",
+      "status": "skip",
+      "detail": "manual — verify home new-posts chip hidden with anti-refresh on"
+    },
+    {
+      "id": "shell.extension_loads",
+      "status": "pass",
+      "detail": "id=jejcocmfppabgmlibooijkhnogalikme"
+    },
+    {
+      "id": "shell.fab_present",
+      "status": "pass",
+      "detail": "{\"host\":true,\"fab\":true,\"classes\":[\"theme-beta\",\"readit-active\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-slots\",\"readit-layout-preset-classic\",\"readit-layout-degraded\"],\"toolbox\":\"0\",\"styleTag\":true}"
+    },
+    {
+      "id": "shell.early_css",
+      "status": "pass",
+      "detail": "styleTag=true"
+    },
+    {
+      "id": "coexist.toolbox_attr",
+      "status": "pass",
+      "detail": "toolbox=0"
+    },
+    {
+      "id": "shell.fab_opens_studio",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "shell.tabs_present",
+      "status": "pass",
+      "detail": "Simple,Layout,Advanced,Curate,Create,CQS,Mod,Library"
+    },
+    {
+      "id": "profile.focus_reader",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"feedWidth\":\"980px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-layout-preset-classic\"],\"kb\":false}"
+    },
+    {
+      "id": "profile.dense_power",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"feedWidth\":\"1100px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-layout-preset-classic\"],\"kb\":true}"
+    },
+    {
+      "id": "advanced.keyboard_nav",
+      "status": "pass",
+      "detail": "data-readit-kb / __readitKb=true"
+    },
+    {
+      "id": "simple.profile_switch",
+      "status": "pass",
+      "detail": "alias of Dense Power switch"
+    },
+    {
+      "id": "profile.creator_desk",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"feedWidth\":\"1000px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-layout-preset-classic\"],\"kb\":false}"
+    },
+    {
+      "id": "profile.minimal_media",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"feedWidth\":\"900px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-layout-preset-classic\"],\"kb\":false}"
+    },
+    {
+      "id": "profile.mod_desk",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"feedWidth\":\"1200px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-preset-classic\"],\"kb\":true}"
+    },
+    {
+      "id": "shell.undo",
+      "status": "pass",
+      "detail": "{\"beforeUndo\":\"980px\",\"afterUndo\":{\"width\":\"980px\",\"toast\":\"\"}}"
+    },
+    {
+      "id": "simple.hide_sidebars_toggle",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":true,\"after\":false}"
+    },
+    {
+      "id": "simple.hide_promoted_toggle",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":true,\"after\":false}"
+    },
+    {
+      "id": "simple.density_font",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"gap\":\"18px\",\"scale\":\"1.1\"}"
+    },
+    {
+      "id": "simple.media_mode",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"value\":\"links_on_feed\"}"
+    },
+    {
+      "id": "simple.quiet_nsfw",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"checked\":true}"
+    },
+    {
+      "id": "simple.sync_lightweight",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":false,\"after\":true}"
+    },
+    {
+      "id": "simple.picker_arm_esc",
+      "status": "pass",
+      "detail": "{\"pickerArmed\":true,\"pickerGone\":true}"
+    },
+    {
+      "id": "layout.tab_ui",
+      "status": "pass",
+      "detail": "{\"hasPresets\":true,\"zone\":true,\"slotHealth\":true,\"chips\":[\"Classic\",\"Nav right\",\"Dual left\",\"Dual right\",\"Single column\"]}"
+    },
+    {
+      "id": "layout.presets_chips",
+      "status": "pass",
+      "detail": "[\"Classic\",\"Nav right\",\"Dual left\",\"Dual right\",\"Single column\"]"
+    },
+    {
+      "id": "layout.slot_health",
+      "status": "pass",
+      "detail": "{\"slotHealth\":true}"
+    },
+    {
+      "id": "layout.nav_right",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"stamped\":true,\"recipe\":true,\"preset\":true}"
+    },
+    {
+      "id": "layout.dual_left",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"dualLeft\",\"hasRecipe\":true}"
+    },
+    {
+      "id": "layout.single_column",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"singleColumn\",\"hasRecipe\":true}"
+    },
+    {
+      "id": "layout.reset_classic",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"classic\"}"
+    },
+    {
+      "id": "layout.widths",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":\"272px\",\"after\":\"300px\",\"nextVal\":\"300\"}"
+    },
+    {
+      "id": "layout.edit_mode",
+      "status": "pass",
+      "detail": "{\"editMode\":{\"armed\":true,\"banner\":true,\"cls\":true},\"editOff\":{\"banner\":false,\"cls\":false}}"
+    },
+    {
+      "id": "layout.hide_sidebars_bridge",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"checked\":true,\"layout\":\"singleColumn\",\"hasRecipe\":true}"
+    },
+    {
+      "id": "simple.noise_pack_ui",
+      "status": "pass",
+      "detail": "{\"ok\":true}"
+    },
+    {
+      "id": "create.feed_ux_controls",
+      "status": "pass",
+      "detail": "{\"ok\":true}"
+    },
+    {
+      "id": "advanced.health_overview",
+      "status": "pass",
+      "detail": "{\"ok\":true}"
+    },
+    {
+      "id": "track.now.positioning_blurb",
+      "status": "pass",
+      "detail": "{\"ok\":true}"
+    },
+    {
+      "id": "track.now.noise_pack_ui",
+      "status": "pass",
+      "detail": "alias of simple.noise_pack_ui"
+    },
+    {
+      "id": "track.now.noise_toggle_css",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"checked\":true}"
+    },
+    {
+      "id": "track.now.docs_positioning",
+      "status": "pass",
+      "detail": "README + LOAD_IN_CHROME.txt"
+    },
+    {
+      "id": "track.next.mark_read_controls",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"hasControls\":true,\"checked\":true}"
+    },
+    {
+      "id": "track.next.mark_read_apply",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"hasControls\":true,\"checked\":true}"
+    },
+    {
+      "id": "track.later.anti_refresh_toggle",
+      "status": "pass",
+      "detail": "{\"antiOn\":true,\"antiClass\":true,\"commentOn\":true,\"account\":true}"
+    },
+    {
+      "id": "track.later.comment_ux_toggle",
+      "status": "pass",
+      "detail": "{\"antiOn\":true,\"antiClass\":true,\"commentOn\":true,\"account\":true}"
+    },
+    {
+      "id": "track.later.account_switcher_btn",
+      "status": "pass",
+      "detail": "{\"antiOn\":true,\"antiClass\":true,\"commentOn\":true,\"account\":true}"
+    },
+    {
+      "id": "track.next.filter_kinds",
+      "status": "pass",
+      "detail": "{\"flair\":true,\"karmaMax\":true,\"blockSub\":true,\"blockUser\":true}"
+    },
+    {
+      "id": "track.next.block_helpers",
+      "status": "pass",
+      "detail": "{\"flair\":true,\"karmaMax\":true,\"blockSub\":true,\"blockUser\":true}"
+    },
+    {
+      "id": "track.next.health_overview",
+      "status": "pass",
+      "detail": "alias of advanced.health_overview"
+    },
+    {
+      "id": "track.next.locale_switch",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"zhOk\":true}"
+    },
+    {
+      "id": "shell.pause_resume",
+      "status": "pass",
+      "detail": "{\"paused\":{\"active\":false,\"style\":\"/* readit paused */\"},\"resumed\":true}"
+    },
+    {
+      "id": "shell.export_control",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "advanced.feature_search",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"items\":[\"Layout slotsdegraded\",\"Comment UXdegraded\",\"Keyboard navigationokproductivity · advanced · J/K scroll between posts in the f\"],\"health\":[\"readit-health-ok\",\"readit-health-degraded\",\"readit-health-broken\",\"readit-health-degraded\",\"readit-health-degraded\"]}"
+    },
+    {
+      "id": "advanced.feature_health",
+      "status": "pass",
+      "detail": "[\"readit-health-ok\",\"readit-health-degraded\",\"readit-health-broken\",\"readit-health-degraded\",\"readit-health-degraded\"]"
+    },
+    {
+      "id": "curate.add_filter",
+      "status": "pass",
+      "detail": "{\"ok\":true}"
+    },
+    {
+      "id": "curate.user_tag",
+      "status": "pass",
+      "detail": "user=NOWIreland"
+    },
+    {
+      "id": "curate.user_tag_dom",
+      "status": "pass",
+      "detail": "user=NOWIreland"
+    },
+    {
+      "id": "curate.reading_mode",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "create.clean_link",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"toast\":\"Copied clean URL\"}"
+    },
+    {
+      "id": "create.canned_copy",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"toast\":\"Copied reply\"}"
+    },
+    {
+      "id": "create.op_highlight",
+      "status": "pass",
+      "detail": "{\"abs\":{\"ok\":true,\"label\":\"Absolute timestamps\"},\"op\":{\"ok\":true,\"label\":\"Highlight OP\"},\"always\":{\"ok\":true,\"label\":\"Always show actions\"},\"opClass\":true}"
+    },
+    {
+      "id": "create.always_show_actions",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"label\":\"Always show actions\"}"
+    },
+    {
+      "id": "cqs.tab_ui",
+      "status": "pass",
+      "detail": "{\"ok\":true}"
+    },
+    {
+      "id": "cqs.enable_toggle",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":false,\"after\":true}"
+    },
+    {
+      "id": "cqs.manual_tier",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"toast\":\"Manual CQS tier\",\"strong\":true,\"value\":\"High\"}"
+    },
+    {
+      "id": "cqs.prefs_toggle",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":true,\"after\":false}"
+    },
+    {
+      "id": "cqs.bot_parse",
+      "status": "skip",
+      "detail": "manual — requires r/WhatIsMyCQS bot reply"
+    },
+    {
+      "id": "cqs.risk_banner",
+      "status": "skip",
+      "detail": "manual — requires submit burst / heuristic trigger"
+    },
+    {
+      "id": "mod.desk_profile",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"density\":true}"
+    },
+    {
+      "id": "mod.quick_bar",
+      "status": "pass",
+      "detail": "bars=28"
+    },
+    {
+      "id": "mod.macro_copy",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"toast\":\"Macro copied\"}"
+    },
+    {
+      "id": "mod.usernote",
+      "status": "pass",
+      "detail": "{\"noteListed\":true,\"noteDom\":true,\"tagUser\":\"NOWIreland\"}"
+    },
+    {
+      "id": "mod.toolbox_notice",
+      "status": "skip",
+      "detail": "Toolbox not installed — soft-disable path N/A"
+    },
+    {
+      "id": "library.save_queue",
+      "status": "pass",
+      "detail": "{\"count\":1,\"text\":\"Reddit - The heart of the internetRemove\"}"
+    },
+    {
+      "id": "library.remove",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":1,\"after\":0}"
+    },
+    {
+      "id": "routes.subreddit",
+      "status": "pass",
+      "detail": "{\"fab\":true,\"width\":\"777px\",\"active\":true,\"styleTag\":true}"
+    },
+    {
+      "id": "advanced.sub_override",
+      "status": "pass",
+      "detail": "{\"overrideListed\":true,\"width\":\"777px\"}"
+    },
+    {
+      "id": "routes.post_comments",
+      "status": "pass",
+      "detail": "https://www.reddit.com/r/AskReddit/comments/1w4v39y/would_you_quit_your_job_forever_right_now_and/"
+    },
+    {
+      "id": "create.absolute_timestamps",
+      "status": "pass",
+      "detail": "count=51"
+    },
+    {
+      "id": "track.later.quote_dom",
+      "status": "pass",
+      "detail": "quoteButtons=25"
+    },
+    {
+      "id": "routes.spa_soft_nav",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"href\":\"https://www.reddit.com/r/CasualIreland/\",\"fab\":true,\"active\":true,\"mode\":\"click\"}"
+    },
+    {
+      "id": "routes.home",
+      "status": "pass",
+      "detail": "visited www.reddit.com"
+    },
+    {
+      "id": "routes.modqueue",
+      "status": "skip",
+      "detail": "requires mod credentials — not available in automated smoke"
+    },
+    {
+      "id": "coexist.old_reddit",
+      "status": "skip",
+      "detail": "manual — Old Reddit unsupported by design"
+    },
+    {
+      "id": "shell.popup_loads",
+      "status": "pass",
+      "detail": "chrome-extension://jejcocmfppabgmlibooijkhnogalikme/popup.html"
+    },
+    {
+      "id": "shell.popup_profile",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"value\":\"focus-reader\"}"
+    },
+    {
+      "id": "shell.popup_pause",
+      "status": "pass",
+      "detail": "{\"pauseClick\":{\"ok\":true,\"before\":\"Pause extension\",\"after\":\"Resume extension\"},\"pagePaused\":{\"active\":false}}"
+    },
+    {
+      "id": "shell.popup_open_studio",
+      "status": "pass",
+      "detail": "{\"clickOpen\":{\"ok\":true,\"tabCount\":1,\"sends\":[{\"id\":1447956092,\"url\":\"https://www.reddit.com/\",\"ok\":true}],\"clicked\":true},\"opened\":true}"
+    }
+  ],
+  "pass": 85,
+  "fail": 0,
+  "skip": 6
+}

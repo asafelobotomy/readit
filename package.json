@@ -1,0 +1,30 @@
+{
+  "name": "readit",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "extension"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @readit/extension",
+    "build": "npm run build -w @readit/extension",
+    "compile": "npm run compile -w @readit/extension",
+    "zip": "npm run zip -w @readit/extension",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:layout": "node --experimental-strip-types --import ./scripts/register-ts-resolve.mjs scripts/test-layout-slots.mts",
+    "smoke": "npm run build && node scripts/smoke-reddit.mjs",
+    "smoke:brave": "READIT_CDP=http://127.0.0.1:9222 node scripts/smoke-reddit.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.27.7": true
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1",
+    "puppeteer-core": "^25.9.0"
+  }
+}

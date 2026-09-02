@@ -1,0 +1,13 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true,
+    "paths": {
+      "@readit/schema": ["../packages/schema/src/index.ts"],
+      "@readit/css-engine": ["../packages/css-engine/src/index.ts"],
+      "@readit/features": ["../packages/features/src/index.ts"]
+    }
+  }
+}
