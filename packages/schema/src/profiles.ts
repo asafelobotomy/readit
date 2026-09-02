@@ -1,5 +1,39 @@
-import type { ProfilePack, ReaditSettings } from "./types.js";
-import { SETTINGS_VERSION } from "./types.js";
+import type {
+  LayoutPreset,
+  LayoutSlotsConfig,
+  LayoutWidths,
+  ProfilePack,
+  ReaditSettings,
+} from "./types.js";
+import {
+  CLASSIC_COLUMN_ORDER,
+  CLASSIC_LAYOUT_PLACEMENTS,
+  SETTINGS_VERSION,
+  applyLayoutPreset,
+  normalizeColumnOrder,
+} from "./types.js";
+
+const emptyActionHide = {
+  awards: false,
+  crosspost: false,
+  joinButton: false,
+} as const;
+
+function profileLayoutRecipe(
+  preset: LayoutPreset,
+  widths: LayoutWidths,
+): LayoutSlotsConfig {
+  return applyLayoutPreset(
+    {
+      preset: "classic",
+      placements: { ...CLASSIC_LAYOUT_PLACEMENTS },
+      columnOrder: [...CLASSIC_COLUMN_ORDER],
+      widths,
+      editMode: false,
+    },
+    preset,
+  );
+}
 
 const focusReader: ProfilePack = {
   id: "focus-reader",
@@ -28,6 +62,7 @@ const focusReader: ProfilePack = {
       aiSummary: false,
       searchAnswers: false,
       announcements: false,
+      ...emptyActionHide,
     },
     mediaMode: "links_on_feed",
     quietNsfw: false,
@@ -58,13 +93,23 @@ const focusReader: ProfilePack = {
     markRead: false,
     antiRefresh: false,
     commentUx: false,
+    followingFeed: true,
+    lurkerMode: false,
   },
+  layoutSlots: profileLayoutRecipe("singleColumn", {
+    leftNavPx: 272,
+    rightRailPx: 316,
+    pagePadLeftPx: 48,
+    pagePadRightPx: 48,
+    columnGapPx: 12,
+  }),
 };
 
 const densePower: ProfilePack = {
   id: "dense-power",
   name: "Dense Power",
-  description: "Compact cards, keyboard nav, always-visible post actions.",
+  description:
+    "Compact cards, Following-first Home, official hotkeys by default (opt into readit J/K).",
   audiences: ["reader", "creator"],
   builtin: true,
   knobs: {
@@ -88,6 +133,9 @@ const densePower: ProfilePack = {
       aiSummary: false,
       searchAnswers: false,
       announcements: false,
+      awards: true,
+      crosspost: true,
+      joinButton: true,
     },
     mediaMode: "autoplay_off",
     quietNsfw: false,
@@ -112,13 +160,23 @@ const densePower: ProfilePack = {
     modMacros: false,
     modUsernotes: false,
     modHighlight: false,
+    /** Armed; mode defaults to defer via keyboardNavPrefs */
     keyboardNav: true,
     cqsTracker: false,
     layoutSlots: true,
     markRead: true,
     antiRefresh: true,
     commentUx: false,
+    followingFeed: true,
+    lurkerMode: false,
   },
+  layoutSlots: profileLayoutRecipe("classic", {
+    leftNavPx: 240,
+    rightRailPx: 280,
+    pagePadLeftPx: 16,
+    pagePadRightPx: 16,
+    columnGapPx: 8,
+  }),
 };
 
 const creatorDesk: ProfilePack = {
@@ -148,6 +206,7 @@ const creatorDesk: ProfilePack = {
       aiSummary: false,
       searchAnswers: false,
       announcements: false,
+      ...emptyActionHide,
     },
     mediaMode: "normal",
     quietNsfw: false,
@@ -178,7 +237,16 @@ const creatorDesk: ProfilePack = {
     markRead: false,
     antiRefresh: false,
     commentUx: false,
+    followingFeed: false,
+    lurkerMode: false,
   },
+  layoutSlots: profileLayoutRecipe("classic", {
+    leftNavPx: 272,
+    rightRailPx: 340,
+    pagePadLeftPx: 24,
+    pagePadRightPx: 24,
+    columnGapPx: 12,
+  }),
 };
 
 const minimalMedia: ProfilePack = {
@@ -208,6 +276,7 @@ const minimalMedia: ProfilePack = {
       aiSummary: false,
       searchAnswers: false,
       announcements: false,
+      ...emptyActionHide,
     },
     mediaMode: "links_on_feed",
     quietNsfw: true,
@@ -234,11 +303,20 @@ const minimalMedia: ProfilePack = {
     modHighlight: false,
     keyboardNav: false,
     cqsTracker: false,
-    layoutSlots: false,
+    layoutSlots: true,
     markRead: false,
     antiRefresh: false,
     commentUx: false,
+    followingFeed: true,
+    lurkerMode: false,
   },
+  layoutSlots: profileLayoutRecipe("classic", {
+    leftNavPx: 260,
+    rightRailPx: 300,
+    pagePadLeftPx: 32,
+    pagePadRightPx: 32,
+    columnGapPx: 12,
+  }),
 };
 
 const modDesk: ProfilePack = {
@@ -268,6 +346,7 @@ const modDesk: ProfilePack = {
       aiSummary: false,
       searchAnswers: false,
       announcements: false,
+      ...emptyActionHide,
     },
     mediaMode: "autoplay_off",
     quietNsfw: false,
@@ -294,11 +373,20 @@ const modDesk: ProfilePack = {
     modHighlight: true,
     keyboardNav: true,
     cqsTracker: false,
-    layoutSlots: false,
+    layoutSlots: true,
     markRead: false,
     antiRefresh: false,
     commentUx: false,
+    followingFeed: false,
+    lurkerMode: false,
   },
+  layoutSlots: profileLayoutRecipe("navRight", {
+    leftNavPx: 240,
+    rightRailPx: 360,
+    pagePadLeftPx: 16,
+    pagePadRightPx: 16,
+    columnGapPx: 8,
+  }),
 };
 
 export const BUILTIN_PROFILES: ProfilePack[] = [
@@ -364,20 +452,16 @@ export function createDefaultSettings(): ReaditSettings {
       burstWindowMs: 600_000,
       burstLimit: 8,
     },
-    layoutSlots: {
-      preset: "classic",
-      placements: {
-        leftNav: "left",
-        main: "center",
-        rightRail: "right",
-        subHeader: "right",
-      },
-      widths: {
-        leftNavPx: 272,
-        rightRailPx: 316,
-      },
-      editMode: false,
-    },
+    layoutSlots: structuredClone(
+      active.layoutSlots ??
+        profileLayoutRecipe("classic", {
+          leftNavPx: 272,
+          rightRailPx: 316,
+          pagePadLeftPx: 24,
+          pagePadRightPx: 24,
+          columnGapPx: 12,
+        }),
+    ),
     markReadPrefs: {
       mode: "off",
       dimOpacity: 0.45,
@@ -385,6 +469,13 @@ export function createDefaultSettings(): ReaditSettings {
     commentUxPrefs: {
       quoteButton: true,
       showFormatting: true,
+    },
+    feedPrefs: {
+      followingDefault: true,
+      feedDensity: "comfortable",
+    },
+    keyboardNavPrefs: {
+      mode: "defer",
     },
     studioLocale: "en",
     featureHealth: {},
@@ -401,10 +492,44 @@ export function applyProfile(
     settings.profiles.find((p) => p.id === profileId) ??
     BUILTIN_PROFILES.find((p) => p.id === profileId);
   if (!profile) return settings;
+
+  const compactIds = new Set(["dense-power", "minimal-media"]);
   return {
     ...settings,
     activeProfileId: profile.id,
     knobs: structuredClone(profile.knobs),
     flags: { ...settings.flags, ...structuredClone(profile.flags) },
+    feedPrefs: {
+      ...settings.feedPrefs,
+      followingDefault: profile.flags.followingFeed
+        ? true
+        : settings.feedPrefs.followingDefault,
+      feedDensity: compactIds.has(profile.id) ? "compact" : "comfortable",
+    },
+    layoutSlots: profile.layoutSlots
+      ? {
+          ...structuredClone(profile.layoutSlots),
+          editMode: false,
+        }
+      : settings.layoutSlots,
   };
+}
+
+/** Short Studio blurb for a profile’s column-layout recipe. */
+export function formatProfileLayoutBlurb(
+  profile: ProfilePack,
+): string | null {
+  if (!profile.flags.layoutSlots || !profile.layoutSlots) return null;
+  const layout = profile.layoutSlots;
+  if (layout.preset === "singleColumn") return "Layout: single column";
+  const labels: Record<"leftNav" | "main" | "rightRail", string> = {
+    leftNav: "nav",
+    main: "feed",
+    rightRail: "rail",
+  };
+  const order = normalizeColumnOrder(layout.columnOrder)
+    .filter((id) => layout.placements[id] !== "hidden")
+    .map((id) => labels[id])
+    .join(" · ");
+  return order ? `Layout: ${order}` : null;
 }

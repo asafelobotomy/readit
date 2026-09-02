@@ -30,15 +30,20 @@ import {
   resizeFeedFeature,
 } from "./hide-and-filter.js";
 import {
+  applyColumnOrder,
   applyLayoutPreset,
   clearLayoutSlotMarks,
+  COLUMN_PANEL_LABELS,
   LAYOUT_SLOTS,
   layoutSlotsFeature,
   layoutSlotsHealth,
+  moveLayoutPanelToIndex,
+  presetToColumnOrder,
   presetToPlacements,
   resolveSlots,
   setSlotZone,
   stampLayoutSlots,
+  swapLayoutColumns,
   syncSidebarsHide,
 } from "./layout-slots.js";
 import {
@@ -46,6 +51,10 @@ import {
   commentUxFeature,
   markReadFeature,
 } from "./ux-extras.js";
+import {
+  followingFeedFeature,
+  lurkerModeFeature,
+} from "./feed-philosophy.js";
 import {
   modHighlightFeature,
   modMacrosFeature,
@@ -79,6 +88,8 @@ export const ALL_FEATURES: FeatureModule[] = [
   markReadFeature,
   antiRefreshFeature,
   commentUxFeature,
+  followingFeedFeature,
+  lurkerModeFeature,
   cqsTrackerFeature,
   modQuickActionsFeature,
   modMacrosFeature,
@@ -100,6 +111,7 @@ const SCAN_FEATURE_IDS = new Set([
   "layoutSlots",
   "markRead",
   "commentUx",
+  "followingFeed",
 ]);
 
 export type FeatureRuntime = {
@@ -152,7 +164,7 @@ export function createFeatureRuntime(): FeatureRuntime {
           } else if (SCAN_FEATURE_IDS.has(feature.id)) {
             void feature.apply(ctx);
             lastEnabled.set(feature.id, true);
-          } else if (feature.id === "keyboardNav") {
+          } else if (feature.id === "keyboardNav" || feature.id === "followingFeed") {
             feature.teardown(ctx);
             void feature.apply(ctx);
             lastEnabled.set(feature.id, true);
@@ -233,21 +245,37 @@ export {
   tierDelta,
 };
 export {
+  applyColumnOrder,
   applyLayoutPreset,
   clearLayoutSlotMarks,
+  COLUMN_PANEL_LABELS,
   LAYOUT_SLOTS,
   layoutSlotsFeature,
   layoutSlotsHealth,
+  moveLayoutPanelToIndex,
+  presetToColumnOrder,
   presetToPlacements,
   resolveSlots,
   setSlotZone,
   stampLayoutSlots,
+  swapLayoutColumns,
   syncSidebarsHide,
 };
-export type { ResolvedSlot, SlotDefinition } from "./layout-slots.js";
+export type {
+  LayoutOrderPersistDetail,
+  LayoutPadsPersistDetail,
+  LayoutWidthsPersistDetail,
+  ResolvedSlot,
+  SlotDefinition,
+} from "./layout-slots.js";
 export {
   antiRefreshFeature,
   commentUxFeature,
   markReadFeature,
 };
+export {
+  followingFeedFeature,
+  lurkerModeFeature,
+  switchHomeToFollowing,
+} from "./feed-philosophy.js";
 export { isEditableTarget };

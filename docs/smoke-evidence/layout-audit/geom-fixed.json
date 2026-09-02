@@ -1,0 +1,60 @@
+{
+  "home": {
+    "hasSubgridFix": false,
+    "hasBadAppRule": false,
+    "feedWidth": "1100px",
+    "gap": 24,
+    "boxes": {
+      "left": {
+        "x": 0,
+        "w": 280,
+        "maxWidth": "280px"
+      },
+      "main": {
+        "x": 304,
+        "w": 756,
+        "maxWidth": "1100px"
+      },
+      "right": {
+        "x": 1084,
+        "w": 316,
+        "maxWidth": "316px"
+      },
+      "subgrid": {
+        "x": 280,
+        "w": 1625,
+        "maxWidth": "none"
+      },
+      "app": {
+        "x": 0,
+        "w": 1905,
+        "maxWidth": "none"
+      }
+    }
+  },
+  "post": {
+    "gap": 24,
+    "boxes": {
+      "left": {
+        "x": 0,
+        "w": 280
+      },
+      "main": {
+        "x": 304,
+        "w": 756
+      },
+      "right": {
+        "x": 1084,
+        "w": 316
+      },
+      "subgrid": {
+        "x": 280,
+        "w": 1625
+      },
+      "app": {
+        "x": 0,
+        "w": 1905
+      }
+    }
+  }
+}

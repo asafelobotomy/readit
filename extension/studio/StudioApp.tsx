@@ -4,6 +4,7 @@ import {
   ALL_FEATURES,
   applyLayoutPreset,
   cleanRedditUrl,
+  COLUMN_PANEL_LABELS,
   computeCqsRiskScore,
   confidenceLabel,
   LAYOUT_SLOTS,
@@ -15,6 +16,8 @@ import {
 } from "@readit/features";
 import {
   createId,
+  formatProfileLayoutBlurb,
+  normalizeColumnOrder,
   type CqsTier,
   type ElementRule,
   type FilterRule,
@@ -70,14 +73,7 @@ const LAYOUT_PRESETS: { id: LayoutPreset; label: string }[] = [
   { id: "singleColumn", label: "Single column" },
 ];
 
-const MOVABLE_SLOTS: LayoutSlotId[] = ["leftNav", "rightRail", "subHeader"];
-
-const ZONE_COLUMNS: { id: LayoutZone; label: string }[] = [
-  { id: "left", label: "Left" },
-  { id: "center", label: "Center" },
-  { id: "right", label: "Right" },
-  { id: "hidden", label: "Hidden" },
-];
+const COLUMN_POSITION_LABELS = ["Left", "Center", "Right"] as const;
 
 export function StudioApp({ api }: { api: StudioApi }) {
   const [open, setOpen] = useState(false);
@@ -307,7 +303,8 @@ export function StudioApp({ api }: { api: StudioApi }) {
 
       {settings.layoutSlots.editMode && !settings.paused && (
         <div class="readit-picker-banner">
-          Layout edit — right-click a slot or element (Esc to exit)
+          Column edit unlocked — drag labels to reorder, edges to resize (Esc
+          locks)
         </div>
       )}
 
@@ -326,7 +323,13 @@ export function StudioApp({ api }: { api: StudioApi }) {
               }));
               return;
             }
-            if (action.type === "moveSlot" && menu.slotId && menu.slotId !== "main") {
+            if (
+              action.type === "moveSlot" &&
+              menu.slotId &&
+              (menu.slotId === "leftNav" ||
+                menu.slotId === "main" ||
+                menu.slotId === "rightRail")
+            ) {
               await commit(`Move ${menu.slotId}`, (s) => ({
                 ...s,
                 flags: { ...s.flags, layoutSlots: true },
@@ -573,6 +576,8 @@ function LayoutTab({
   onCloseDrawer: () => void;
 }) {
   const cfg = settings.layoutSlots;
+  const order = normalizeColumnOrder(cfg.columnOrder);
+  const canMove = cfg.editMode && !settings.paused && settings.flags.layoutSlots;
   const healthById = new Map(slotHealth.map((s) => [s.id, s]));
 
   const applyPreset = (preset: LayoutPreset) => {
@@ -609,7 +614,7 @@ function LayoutTab({
       <div class="readit-section">
         <h2>Layout</h2>
         <p class="readit-muted">
-          Rearranges page chrome only — not individual posts.
+          Three columns — Nav, Feed, Rail. Each keeps its own width when moved.
         </p>
         <div class="readit-row">
           <label>
@@ -624,9 +629,34 @@ function LayoutTab({
                 }));
               }}
             />
-            Enable layout slots
+            Enable layout columns
           </label>
         </div>
+        <div class="readit-row" style={{ marginTop: 8 }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={cfg.editMode}
+              disabled={!settings.flags.layoutSlots || settings.paused}
+              onChange={(e) => {
+                const next = e.currentTarget.checked;
+                void onCommit(
+                  next ? "Allow column moves" : "Lock columns",
+                  (s) => ({
+                    ...s,
+                    flags: { ...s.flags, layoutSlots: true },
+                    layoutSlots: { ...s.layoutSlots, editMode: next },
+                  }),
+                );
+              }}
+            />
+            Allow moving columns
+          </label>
+        </div>
+        <p class="readit-muted" style={{ marginTop: 4 }}>
+          Off by default so browsing never nudges the layout. Turn on, then drag
+          column / pad labels on the page to reorder; drag edges to resize.
+        </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
           {LAYOUT_PRESETS.map((p) => (
             <button
@@ -646,67 +676,27 @@ function LayoutTab({
       </div>
 
       <div class="readit-section">
-        <h2>Zones</h2>
+        <h2>Columns</h2>
+        {!canMove && (
+          <p class="readit-muted">
+            Enable “Allow moving columns”, then drag labels on the page.
+          </p>
+        )}
+        {canMove && (
+          <p class="readit-muted">
+            On-page: drag a column label to another slot, or drag Left/Right pad
+            labels across the page to swap gutters.
+          </p>
+        )}
         <div class="readit-zone-board">
-          {ZONE_COLUMNS.map((col) => (
-            <div key={col.id} class="readit-zone-col">
-              <div class="readit-zone-label">{col.label}</div>
-              {col.id === "center" && (
-                <div class="readit-slot-chip" data-fixed="true">
-                  main
-                </div>
-              )}
-              {MOVABLE_SLOTS.filter((id) => {
-                const zone = cfg.placements[id];
-                if (col.id === "left") {
-                  return zone === "left" || zone === "stackedLeft";
-                }
-                if (col.id === "right") {
-                  return zone === "right" || zone === "stackedRight";
-                }
-                return zone === col.id;
-              }).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  class="readit-slot-chip"
-                  title={`Move ${id}`}
-                  onClick={() => {
-                    const order: LayoutZone[] = [
-                      "left",
-                      "center",
-                      "right",
-                      "hidden",
-                    ];
-                    const cur = cfg.placements[id];
-                    const idx = Math.max(
-                      0,
-                      order.findIndex(
-                        (z) =>
-                          z === cur ||
-                          (cur === "stackedLeft" && z === "left") ||
-                          (cur === "stackedRight" && z === "right"),
-                      ),
-                    );
-                    const next = order[(idx + 1) % order.length]!;
-                    if (next === "center") {
-                      void onCommit(`Hide ${id}`, (s) => ({
-                        ...s,
-                        flags: { ...s.flags, layoutSlots: true },
-                        layoutSlots: setSlotZone(s.layoutSlots, id, "hidden"),
-                      }));
-                      return;
-                    }
-                    void onCommit(`Move ${id}`, (s) => ({
-                      ...s,
-                      flags: { ...s.flags, layoutSlots: true },
-                      layoutSlots: setSlotZone(s.layoutSlots, id, next),
-                    }));
-                  }}
-                >
-                  {id}
-                </button>
-              ))}
+          {order.map((panel, index) => (
+            <div key={`${panel}-${index}`} class="readit-zone-col">
+              <div class="readit-zone-label">
+                {COLUMN_POSITION_LABELS[index]}
+              </div>
+              <div class="readit-slot-chip" data-active="false">
+                {COLUMN_PANEL_LABELS[panel]}
+              </div>
             </div>
           ))}
         </div>
@@ -714,17 +704,22 @@ function LayoutTab({
 
       <div class="readit-section">
         <h2>Widths</h2>
+        <p class="readit-muted">
+          Panel-owned — travel with the panel when moved. Outer pads fill blank
+          viewport edges (default 24px). Drag edges on-page when “Allow moving
+          columns” is on.
+        </p>
         <div class="readit-row">
-          <span>Left nav ({cfg.widths.leftNavPx}px)</span>
+          <span>Nav ({cfg.widths.leftNavPx}px)</span>
           <input
             type="range"
-            min={180}
+            min={64}
             max={420}
             value={cfg.widths.leftNavPx}
             disabled={cfg.placements.leftNav === "hidden"}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
-              void onCommit("Left nav width", (s) => ({
+              void onCommit("Nav width", (s) => ({
                 ...s,
                 layoutSlots: {
                   ...s.layoutSlots,
@@ -735,7 +730,26 @@ function LayoutTab({
           />
         </div>
         <div class="readit-row">
-          <span>Right rail ({cfg.widths.rightRailPx}px)</span>
+          <span>Feed ({settings.knobs.tokens.feedWidthPx}px)</span>
+          <input
+            type="range"
+            min={480}
+            max={1600}
+            value={settings.knobs.tokens.feedWidthPx}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              void onCommit("Feed width", (s) => ({
+                ...s,
+                knobs: {
+                  ...s.knobs,
+                  tokens: { ...s.knobs.tokens, feedWidthPx: v },
+                },
+              }));
+            }}
+          />
+        </div>
+        <div class="readit-row">
+          <span>Rail ({cfg.widths.rightRailPx}px)</span>
           <input
             type="range"
             min={200}
@@ -744,11 +758,68 @@ function LayoutTab({
             disabled={cfg.placements.rightRail === "hidden"}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
-              void onCommit("Right rail width", (s) => ({
+              void onCommit("Rail width", (s) => ({
                 ...s,
                 layoutSlots: {
                   ...s.layoutSlots,
                   widths: { ...s.layoutSlots.widths, rightRailPx: v },
+                },
+              }));
+            }}
+          />
+        </div>
+        <div class="readit-row">
+          <span>Left pad ({cfg.widths.pagePadLeftPx ?? 24}px)</span>
+          <input
+            type="range"
+            min={0}
+            max={480}
+            value={cfg.widths.pagePadLeftPx ?? 24}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              void onCommit("Left page pad", (s) => ({
+                ...s,
+                layoutSlots: {
+                  ...s.layoutSlots,
+                  widths: { ...s.layoutSlots.widths, pagePadLeftPx: v },
+                },
+              }));
+            }}
+          />
+        </div>
+        <div class="readit-row">
+          <span>Right pad ({cfg.widths.pagePadRightPx ?? 24}px)</span>
+          <input
+            type="range"
+            min={0}
+            max={480}
+            value={cfg.widths.pagePadRightPx ?? 24}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              void onCommit("Right page pad", (s) => ({
+                ...s,
+                layoutSlots: {
+                  ...s.layoutSlots,
+                  widths: { ...s.layoutSlots.widths, pagePadRightPx: v },
+                },
+              }));
+            }}
+          />
+        </div>
+        <div class="readit-row">
+          <span>Column gap ({cfg.widths.columnGapPx ?? 12}px)</span>
+          <input
+            type="range"
+            min={0}
+            max={48}
+            value={cfg.widths.columnGapPx ?? 12}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              void onCommit("Column gap", (s) => ({
+                ...s,
+                layoutSlots: {
+                  ...s.layoutSlots,
+                  widths: { ...s.layoutSlots.widths, columnGapPx: v },
                 },
               }));
             }}
@@ -778,13 +849,14 @@ function LayoutTab({
       </div>
 
       <div class="readit-section">
-        <h2>Edit mode</h2>
+        <h2>Page edit</h2>
         <button
           type="button"
           class={`readit-btn${cfg.editMode ? " primary" : ""}`}
+          disabled={!settings.flags.layoutSlots || settings.paused}
           onClick={() => {
             const next = !cfg.editMode;
-            void onCommit(next ? "Layout edit on" : "Layout edit off", (s) => ({
+            void onCommit(next ? "Allow column moves" : "Lock columns", (s) => ({
               ...s,
               flags: { ...s.flags, layoutSlots: true },
               layoutSlots: { ...s.layoutSlots, editMode: next },
@@ -792,7 +864,9 @@ function LayoutTab({
             if (next) onCloseDrawer();
           }}
         >
-          {cfg.editMode ? "Editing — Esc to exit" : "Edit layout"}
+          {cfg.editMode
+            ? "Editing on page — Esc to lock"
+            : "Edit on page (drag labels + edges)"}
         </button>
       </div>
     </>
@@ -827,28 +901,49 @@ function LayoutContextMenu({
         e.stopPropagation();
       }}
     >
-      {isSlot && menu.slotId !== "main" && (
+      {isSlot &&
+        (menu.slotId === "leftNav" ||
+          menu.slotId === "main" ||
+          menu.slotId === "rightRail") && (
+          <>
+            {menu.slotId !== "main" && (
+              <button
+                type="button"
+                onClick={() => onAction({ type: "hideSlot" })}
+              >
+                Hide panel
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onAction({ type: "moveSlot", zone: "left" })}
+            >
+              Swap to Left
+            </button>
+            <button
+              type="button"
+              onClick={() => onAction({ type: "moveSlot", zone: "center" })}
+            >
+              Swap to Center
+            </button>
+            <button
+              type="button"
+              onClick={() => onAction({ type: "moveSlot", zone: "right" })}
+            >
+              Swap to Right
+            </button>
+            <button
+              type="button"
+              onClick={() => onAction({ type: "resetPreset" })}
+            >
+              Reset to Classic
+            </button>
+          </>
+        )}
+      {isSlot && menu.slotId === "subHeader" && (
         <>
           <button type="button" onClick={() => onAction({ type: "hideSlot" })}>
             Hide slot
-          </button>
-          <button
-            type="button"
-            onClick={() => onAction({ type: "moveSlot", zone: "left" })}
-          >
-            Move to Left
-          </button>
-          <button
-            type="button"
-            onClick={() => onAction({ type: "moveSlot", zone: "right" })}
-          >
-            Move to Right
-          </button>
-          <button
-            type="button"
-            onClick={() => onAction({ type: "moveSlot", zone: "hidden" })}
-          >
-            Move to Hidden
           </button>
           <button
             type="button"
@@ -857,11 +952,6 @@ function LayoutContextMenu({
             Reset to Classic
           </button>
         </>
-      )}
-      {isSlot && menu.slotId === "main" && (
-        <button type="button" onClick={() => onAction({ type: "resetPreset" })}>
-          Reset to Classic
-        </button>
       )}
       {!isSlot && (
         <>
@@ -910,17 +1000,21 @@ function SimpleTab({
       <div class="readit-section">
         <h2>Profiles</h2>
         <p class="readit-muted">{t(settings.studioLocale, "brandBlurb")}</p>
-        {settings.profiles.map((p) => (
-          <div
-            key={p.id}
-            class="readit-card"
-            data-active={String(p.id === settings.activeProfileId)}
-            onClick={() => onProfile(p.id)}
-          >
-            <strong>{p.name}</strong>
-            <span>{p.description}</span>
-          </div>
-        ))}
+        {settings.profiles.map((p) => {
+          const layoutBlurb = formatProfileLayoutBlurb(p);
+          return (
+            <div
+              key={p.id}
+              class="readit-card"
+              data-active={String(p.id === settings.activeProfileId)}
+              onClick={() => onProfile(p.id)}
+            >
+              <strong>{p.name}</strong>
+              <span>{p.description}</span>
+              {layoutBlurb && <span class="readit-muted">{layoutBlurb}</span>}
+            </div>
+          );
+        })}
       </div>
 
       <div class="readit-section">
@@ -1031,6 +1125,9 @@ function SimpleTab({
             ["searchAnswers", "searchAnswers"],
             ["announcements", "announcements"],
             ["premiumUpsell", "premiumUpsell"],
+            ["awards", "awards"],
+            ["crosspost", "crosspost"],
+            ["joinButton", "joinButton"],
           ] as const
         ).map(([key, labelKey]) => (
           <div class="readit-row" key={key}>
@@ -1060,6 +1157,58 @@ function SimpleTab({
             </label>
           </div>
         ))}
+        <h2 style={{ marginTop: 14 }}>{t(settings.studioLocale, "feedPhilosophy")}</h2>
+        <div class="readit-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.flags.followingFeed}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                void onCommit(t(settings.studioLocale, "followingFeed"), (s) => ({
+                  ...s,
+                  flags: { ...s.flags, followingFeed: checked },
+                  feedPrefs: { ...s.feedPrefs, followingDefault: checked },
+                }));
+              }}
+            />
+            {t(settings.studioLocale, "followingFeed")}
+          </label>
+        </div>
+        <div class="readit-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.flags.lurkerMode}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                void onCommit(t(settings.studioLocale, "lurkerMode"), (s) => ({
+                  ...s,
+                  flags: { ...s.flags, lurkerMode: checked },
+                }));
+              }}
+            />
+            {t(settings.studioLocale, "lurkerMode")}
+          </label>
+        </div>
+        <div class="readit-row">
+          <span>{t(settings.studioLocale, "feedDensity")}</span>
+          <select
+            class="readit-select"
+            style={{ width: 160 }}
+            value={settings.feedPrefs.feedDensity}
+            onChange={(e) => {
+              const value = e.currentTarget.value as "comfortable" | "compact";
+              void onCommit(t(settings.studioLocale, "feedDensity"), (s) => ({
+                ...s,
+                feedPrefs: { ...s.feedPrefs, feedDensity: value },
+              }));
+            }}
+          >
+            <option value="comfortable">Comfortable</option>
+            <option value="compact">Compact</option>
+          </select>
+        </div>
         <div class="readit-row">
           <span>Media</span>
           <select
@@ -1212,6 +1361,46 @@ function AdvancedTab({
             <option value={loc.id}>{loc.label}</option>
           ))}
         </select>
+      </div>
+
+      <div class="readit-section">
+        <h2>{t(settings.studioLocale, "keyboardMode")}</h2>
+        <p class="readit-muted">{t(settings.studioLocale, "keyboardCheat")}</p>
+        <div class="readit-row">
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.flags.keyboardNav}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                void onCommit("Keyboard navigation", (s) => ({
+                  ...s,
+                  flags: { ...s.flags, keyboardNav: checked },
+                }));
+              }}
+            />
+            Enable keyboard nav feature
+          </label>
+        </div>
+        <div class="readit-row">
+          <span>{t(settings.studioLocale, "keyboardMode")}</span>
+          <select
+            class="readit-select"
+            style={{ width: 200 }}
+            value={settings.keyboardNavPrefs.mode}
+            disabled={!settings.flags.keyboardNav}
+            onChange={(e) => {
+              const value = e.currentTarget.value as "defer" | "readit";
+              void onCommit(t(settings.studioLocale, "keyboardMode"), (s) => ({
+                ...s,
+                keyboardNavPrefs: { ...s.keyboardNavPrefs, mode: value },
+              }));
+            }}
+          >
+            <option value="defer">{t(settings.studioLocale, "keyboardDefer")}</option>
+            <option value="readit">{t(settings.studioLocale, "keyboardReadit")}</option>
+          </select>
+        </div>
       </div>
 
       <div class="readit-section">

@@ -1,0 +1,51 @@
+{
+  "classes": [
+    "theme-beta",
+    "readit-active",
+    "readit-op-highlight",
+    "readit-feed-compact",
+    "readit-layout-slots",
+    "theme-dark",
+    "readit-layout-preset-classic",
+    "readit-layout-degraded"
+  ],
+  "feedWidth": "1100px",
+  "hasBadRule": false,
+  "boxes": {
+    "left": {
+      "sel": "#left-sidebar-container",
+      "x": 0,
+      "w": 280,
+      "maxWidth": "280px",
+      "marginLeft": "0px"
+    },
+    "main": {
+      "sel": "#main-content",
+      "x": 553,
+      "w": 732,
+      "maxWidth": "1100px",
+      "marginLeft": "0px"
+    },
+    "right": {
+      "sel": "#right-sidebar-container",
+      "x": 1309,
+      "w": 316,
+      "maxWidth": "316px",
+      "marginLeft": "0px"
+    },
+    "shredditApp": {
+      "sel": "shreddit-app",
+      "x": 0,
+      "w": 1905,
+      "maxWidth": "none",
+      "marginLeft": "0px"
+    },
+    "subgrid": {
+      "sel": "#subgrid-container",
+      "x": 529,
+      "w": 1120,
+      "maxWidth": "1648px",
+      "marginLeft": "0px"
+    }
+  }
+}

@@ -4,7 +4,16 @@ import {
   createFeatureRuntime,
   currentSubreddit,
 } from "@readit/features";
-import type { CqsRiskEvent, CqsSnapshot, ReaditSettings } from "@readit/schema";
+import type {
+  CqsRiskEvent,
+  CqsSnapshot,
+  LayoutColumnPanel,
+  ReaditSettings,
+} from "@readit/schema";
+import {
+  normalizeColumnOrder,
+  placementsFromColumnOrder,
+} from "@readit/schema";
 import { createShadowRootUi } from "wxt/utils/content-script-ui/shadow-root";
 import { loadSettings, saveSettings, watchSettings } from "../lib/settings";
 import { mountStudio } from "../studio/mount";
@@ -34,11 +43,17 @@ function isReaditMutation(mutations: MutationRecord[]): boolean {
     if (node instanceof Element) {
       if (node.id === "readit-css-engine" || node.id === "readit-root") return true;
       if (node.id === "readit-cqs-banner") return true;
+      if (node.id === "readit-col-resize-host") return true;
       if (node.tagName?.toLowerCase() === "readit-studio") return true;
       if (node.classList?.contains("readit-mod-bar")) return true;
       if (node.classList?.contains("readit-user-tag")) return true;
       if (node.classList?.contains("readit-abs-time")) return true;
       if (node.classList?.contains("readit-cqs-banner")) return true;
+      if (node.classList?.contains("readit-col-resize")) return true;
+      if (node.classList?.contains("readit-pad-resize")) return true;
+      if (node.classList?.contains("readit-layout-frame")) return true;
+      if (node.classList?.contains("readit-frame-label")) return true;
+      if (node.classList?.contains("readit-drop-line")) return true;
       if (node.getAttributeNames?.().some((n) => n.startsWith("data-readit-"))) {
         return true;
       }
@@ -75,6 +90,128 @@ export default defineContentScript({
     watchSettings(reapply);
 
     let persistBusy = false;
+    ctx.addEventListener(window, "readit:layout-widths", (ev) => {
+      void (async () => {
+          const detail = (
+          ev as CustomEvent<{
+            leftNavPx?: number;
+            rightRailPx?: number;
+            feedWidthPx?: number;
+            pagePadLeftPx?: number;
+            pagePadRightPx?: number;
+            columnGapPx?: number;
+          }>
+        ).detail;
+        if (!detail || persistBusy) return;
+        persistBusy = true;
+        try {
+          const current = await loadSettings();
+          const next = await saveSettings({
+            ...current,
+            layoutSlots: {
+              ...current.layoutSlots,
+              widths: {
+                ...current.layoutSlots.widths,
+                leftNavPx:
+                  detail.leftNavPx ?? current.layoutSlots.widths.leftNavPx,
+                rightRailPx:
+                  detail.rightRailPx ?? current.layoutSlots.widths.rightRailPx,
+                pagePadLeftPx:
+                  detail.pagePadLeftPx ??
+                  current.layoutSlots.widths.pagePadLeftPx ??
+                  24,
+                pagePadRightPx:
+                  detail.pagePadRightPx ??
+                  current.layoutSlots.widths.pagePadRightPx ??
+                  24,
+                columnGapPx:
+                  detail.columnGapPx ??
+                  current.layoutSlots.widths.columnGapPx ??
+                  12,
+              },
+            },
+            knobs: {
+              ...current.knobs,
+              tokens: {
+                ...current.knobs.tokens,
+                feedWidthPx:
+                  detail.feedWidthPx ?? current.knobs.tokens.feedWidthPx,
+              },
+            },
+          });
+          reapply(next);
+        } finally {
+          persistBusy = false;
+        }
+      })();
+    });
+
+    ctx.addEventListener(window, "readit:layout-order", (ev) => {
+      void (async () => {
+        const detail = (
+          ev as CustomEvent<{ columnOrder?: LayoutColumnPanel[] }>
+        ).detail;
+        if (!detail?.columnOrder?.length || persistBusy) return;
+        persistBusy = true;
+        try {
+          const current = await loadSettings();
+          const columnOrder = normalizeColumnOrder(detail.columnOrder);
+          const next = await saveSettings({
+            ...current,
+            flags: { ...current.flags, layoutSlots: true },
+            layoutSlots: {
+              ...current.layoutSlots,
+              preset: "custom",
+              columnOrder,
+              placements: placementsFromColumnOrder(
+                columnOrder,
+                current.layoutSlots.placements,
+              ),
+            },
+          });
+          reapply(next);
+        } finally {
+          persistBusy = false;
+        }
+      })();
+    });
+
+    ctx.addEventListener(window, "readit:layout-pads", (ev) => {
+      void (async () => {
+        const detail = (
+          ev as CustomEvent<{
+            pagePadLeftPx?: number;
+            pagePadRightPx?: number;
+          }>
+        ).detail;
+        if (!detail || persistBusy) return;
+        persistBusy = true;
+        try {
+          const current = await loadSettings();
+          const next = await saveSettings({
+            ...current,
+            layoutSlots: {
+              ...current.layoutSlots,
+              widths: {
+                ...current.layoutSlots.widths,
+                pagePadLeftPx:
+                  detail.pagePadLeftPx ??
+                  current.layoutSlots.widths.pagePadLeftPx ??
+                  24,
+                pagePadRightPx:
+                  detail.pagePadRightPx ??
+                  current.layoutSlots.widths.pagePadRightPx ??
+                  24,
+              },
+            },
+          });
+          reapply(next);
+        } finally {
+          persistBusy = false;
+        }
+      })();
+    });
+
     ctx.addEventListener(window, "readit:cqs-persist", (ev) => {
       void (async () => {
         const detail = (ev as CustomEvent<CqsPersistDetail>).detail;
