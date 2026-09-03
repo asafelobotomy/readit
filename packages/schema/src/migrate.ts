@@ -91,7 +91,7 @@ export function migrateSettings(raw: unknown): ReaditSettings {
     base = applyV4FeedbackDefaults(base);
     base = applyV5WaveADefaults(base);
     base = applyV6ColumnOrderDefaults(base);
-    return applyV7ProfileLayoutRecipes(base);
+    return applyV8EditChromeDefaults(applyV7ProfileLayoutRecipes(base));
   }
 
   const parsed = ReaditSettingsSchema.safeParse({
@@ -125,6 +125,9 @@ export function migrateSettings(raw: unknown): ReaditSettings {
   }
   if (version < 7) {
     base = applyV7ProfileLayoutRecipes(base);
+  }
+  if (version < 8) {
+    base = applyV8EditChromeDefaults(base);
   }
 
   return { ...base, version: SETTINGS_VERSION };
@@ -334,4 +337,28 @@ function applyV7ProfileLayoutRecipes(settings: ReaditSettings): ReaditSettings {
     };
   });
   return { ...settings, profiles };
+}
+
+/** v8: edit toolbox — separators, gutter theme, zoom, font family/weight. */
+function applyV8EditChromeDefaults(settings: ReaditSettings): ReaditSettings {
+  const layout = settings.layoutSlots;
+  const tokens = settings.knobs.tokens;
+  return {
+    ...settings,
+    knobs: {
+      ...settings.knobs,
+      tokens: {
+        ...tokens,
+        fontFamily: tokens.fontFamily ?? "system",
+        fontWeight: tokens.fontWeight ?? 400,
+      },
+    },
+    layoutSlots: {
+      ...layout,
+      separators: layout.separators ?? [],
+      gutterTheme: layout.gutterTheme ?? "plain",
+      zoomAll: layout.zoomAll ?? 1,
+      zoomByPanel: layout.zoomByPanel ?? {},
+    },
+  };
 }

@@ -1,0 +1,161 @@
+{
+  "at": "2026-09-03T09:28:46.545Z",
+  "mode": "cdp-puppeteer",
+  "cdpEndpoint": "http://127.0.0.1:9222",
+  "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
+  "results": [
+    {
+      "id": "layout.unit",
+      "status": "pass",
+      "detail": "test:layout"
+    },
+    {
+      "id": "layout.shell_home",
+      "status": "pass",
+      "detail": "{\"host\":true,\"fab\":true,\"active\":true}"
+    },
+    {
+      "id": "layout.flag_enabled",
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"no enable checkbox\"}"
+    },
+    {
+      "id": "layout.tab_ui",
+      "status": "fail",
+      "detail": "{\"hasPresets\":false,\"zone\":false,\"slotHealth\":false,\"zoneLabels\":[],\"chips\":[]}"
+    },
+    {
+      "id": "layout.zone_board",
+      "status": "fail",
+      "detail": "[]"
+    },
+    {
+      "id": "layout.slot_health",
+      "status": "fail",
+      "detail": "{\"slotHealth\":false}"
+    },
+    {
+      "id": "layout.preset.classic",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"classic\",\"expectLayout\":\"classic\",\"recipe\":true}"
+    },
+    {
+      "id": "layout.preset.nav_right",
+      "status": "fail",
+      "detail": "{\"ok\":false,\"expectLayout\":\"navRight\",\"recipe\":false}"
+    },
+    {
+      "id": "layout.preset.dual_left",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"dualLeft\",\"expectLayout\":\"dualLeft\",\"recipe\":true}"
+    },
+    {
+      "id": "layout.preset.dual_right",
+      "status": "fail",
+      "detail": "{\"ok\":false,\"expectLayout\":\"dualRight\",\"recipe\":false}"
+    },
+    {
+      "id": "layout.preset.single_column",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"singleColumn\",\"expectLayout\":\"singleColumn\",\"recipe\":true}"
+    },
+    {
+      "id": "layout.reset_classic",
+      "status": "fail",
+      "detail": "{\"ok\":false,\"expectLayout\":\"classic\",\"recipe\":false}"
+    },
+    {
+      "id": "layout.width.nav",
+      "status": "pass",
+      "detail": "{\"navW\":{\"ok\":true,\"before\":\"64\",\"after\":\"220\",\"nextVal\":\"220\"},\"navVar\":\"220px\"}"
+    },
+    {
+      "id": "layout.width.nav_min",
+      "status": "pass",
+      "detail": "{\"navMin\":{\"ok\":true,\"before\":\"220\",\"after\":\"64\",\"nextVal\":\"64\"},\"navMinProbe\":{\"width\":64,\"textSample\":\"AutoForgeTheGame\\nD\\nGamesOnReddit\\npics\\nnews\\nAskReddit\\nEliteTransGirls\\nFetishHaven\\ngirlcockheaven\\nPlayhouseSellersForum\\nSt\",\"verticalStart\":false,\"cssVar\":\"64px\",\"iconCount\":8,\"anyClipped\":false,\"avgAbsCenter\":5}}"
+    },
+    {
+      "id": "layout.width.feed",
+      "status": "fail",
+      "detail": "{\"feedW\":{\"ok\":false,\"reason\":\"no range for Feed (\"},\"feedVar\":\"1354px\"}"
+    },
+    {
+      "id": "layout.width.rail",
+      "status": "fail",
+      "detail": "{\"railW\":{\"ok\":false,\"reason\":\"no range for Rail (\"},\"railVar\":\"280px\"}"
+    },
+    {
+      "id": "layout.width.pads_gap",
+      "status": "fail",
+      "detail": "{\"padL\":{\"ok\":false,\"reason\":\"no range for Left pad\"},\"padR\":{\"ok\":false,\"reason\":\"no range for Right pad\"},\"gap\":{\"ok\":false,\"reason\":\"no range for Column gap\"},\"padVars\":{\"left\":\"104px\",\"right\":\"84px\",\"gap\":\"12px\"}}"
+    },
+    {
+      "id": "layout.width.fit_budget",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"shellRight\":1910,\"vw\":1910}"
+    },
+    {
+      "id": "layout.edit.allow_moving",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"editClass\":true}"
+    },
+    {
+      "id": "layout.edit.banner",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"text\":\"Column edit unlocked — drag anywhere on a column card to reorder; edges to resize (Esc locks)\"}"
+    },
+    {
+      "id": "layout.edit.frames",
+      "status": "pass",
+      "detail": "{\"labels\":[\"Nav\",\"Feed\",\"Rail\",\"L\",\"R\"],\"frameCount\":5,\"colHandles\":3,\"padHandles\":2,\"outline\":\"none\",\"edit\":true}"
+    },
+    {
+      "id": "layout.edit.no_slot_outline",
+      "status": "pass",
+      "detail": "{\"outline\":\"none\"}"
+    },
+    {
+      "id": "layout.edit.resize_handles",
+      "status": "pass",
+      "detail": "{\"colHandles\":3,\"padHandles\":2}"
+    },
+    {
+      "id": "layout.dnd.column_reorder",
+      "status": "pass",
+      "detail": "{\"beforeCols\":\"leftNav,main,rightRail\",\"afterCols\":\"leftNav,rightRail,main\",\"dndCoords\":{\"sx\":263.5078125,\"sy\":78,\"ex\":1300,\"ey\":96}}"
+    },
+    {
+      "id": "layout.dnd.pad_swap",
+      "status": "fail",
+      "detail": "{\"padsBefore\":{\"left\":\"24px\",\"right\":\"24px\"},\"padsAfter\":{\"left\":\"24px\",\"right\":\"24px\"},\"padDrag\":{\"sx\":14,\"sy\":78,\"ex\":1432.5,\"ey\":136}}"
+    },
+    {
+      "id": "layout.resize.edge",
+      "status": "pass",
+      "detail": "{\"edgeBefore\":\"780px\",\"edgeAfter\":\"828px\",\"edge\":{\"x\":1308,\"y\":176}}"
+    },
+    {
+      "id": "layout.edit.esc_lock",
+      "status": "pass",
+      "detail": "{\"edit\":false,\"frames\":0}"
+    },
+    {
+      "id": "layout.profile.focus_reader",
+      "status": "fail",
+      "detail": "{\"layout\":\"custom\",\"columns\":\"leftNav,rightRail,main\",\"clicked\":false}"
+    },
+    {
+      "id": "layout.profile.mod_desk",
+      "status": "pass",
+      "detail": "{\"layout\":\"navRight\",\"columns\":\"rightRail,main,leftNav\",\"clicked\":true}"
+    },
+    {
+      "id": "layout.bridge.hide_sidebars",
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"no checkbox\"}"
+    }
+  ],
+  "pass": 17,
+  "fail": 13,
+  "skip": 0
+}

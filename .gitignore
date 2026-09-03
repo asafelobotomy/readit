@@ -3,6 +3,7 @@ node_modules
 .wxt
 dist
 .smoke-profile
+.smoke-profile-*/
 *.log
 .DS_Store
 .env

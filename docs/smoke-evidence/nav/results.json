@@ -1,0 +1,141 @@
+{
+  "at": "2026-09-03T08:38:50.649Z",
+  "mode": "cdp-puppeteer",
+  "cdpEndpoint": "http://127.0.0.1:9222",
+  "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
+  "results": [
+    {
+      "id": "nav.unit",
+      "status": "pass",
+      "detail": "test:layout"
+    },
+    {
+      "id": "nav.harness.reddit_ready",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"captcha\":true,\"hasNav\":true,\"navW\":240,\"rLinks\":0,\"slot\":true}"
+    },
+    {
+      "id": "nav.shell_home",
+      "status": "pass",
+      "detail": "{\"host\":true,\"fab\":true,\"active\":true}"
+    },
+    {
+      "id": "nav.flag_enabled",
+      "status": "pass",
+      "detail": "classic + widths"
+    },
+    {
+      "id": "nav.wide.not_compact",
+      "status": "pass",
+      "detail": "{\"compact\":false,\"navW\":272,\"navVar\":\"272px\"}"
+    },
+    {
+      "id": "nav.wide.labels_visible",
+      "status": "fail",
+      "detail": "{\"sampleText\":\"Collapse Navigation\",\"labelProbe\":[]}"
+    },
+    {
+      "id": "nav.wide.icons_present",
+      "status": "fail",
+      "detail": "{\"iconCount\":0}"
+    },
+    {
+      "id": "nav.compact.class_mid",
+      "status": "pass",
+      "detail": "{\"midSet\":{\"ok\":true,\"before\":\"272\",\"after\":\"140\",\"nextVal\":\"140\",\"min\":\"64\",\"max\":\"400\"},\"compact\":true,\"navW\":140}"
+    },
+    {
+      "id": "nav.visual.min_shot",
+      "status": "pass",
+      "detail": "02-nav-min.png"
+    },
+    {
+      "id": "nav.visual.crop_shot",
+      "status": "pass",
+      "detail": "03-nav-min-crop.png"
+    },
+    {
+      "id": "nav.compact.class_min",
+      "status": "pass",
+      "detail": "{\"minSet\":{\"ok\":true,\"before\":\"140\",\"after\":\"64\",\"nextVal\":\"64\",\"min\":\"64\",\"max\":\"400\"},\"compact\":true,\"navW\":64}"
+    },
+    {
+      "id": "nav.compact.width_var",
+      "status": "pass",
+      "detail": "{\"navVar\":\"64px\",\"navW\":64}"
+    },
+    {
+      "id": "nav.community.stamped",
+      "status": "pass",
+      "detail": "{\"count\":12}"
+    },
+    {
+      "id": "nav.community.name_accuracy",
+      "status": "pass",
+      "detail": "[{\"expect\":\"AutoForgeTheGame\",\"subText\":\"AutoForgeTheGame\",\"nameOk\":true},{\"expect\":\"GamesOnReddit\",\"subText\":\"GamesOnReddit\",\"nameOk\":true},{\"expect\":\"pics\",\"subText\":\"pics\",\"nameOk\":true},{\"expect\":\"news\",\"subText\":\"news\",\"nameOk\":true},{\"expect\":\"AskReddit\",\"subText\":\"AskReddit\",\"nameOk\":true},{\"expect\":\"NoStupidQuestions\",\"subText\":\"NoStupidQuestions\",\"nameOk\":true},{\"expect\":\"askteddit\",\"subText\":\"askteddit\",\"nameOk\":true},{\"expect\":\"EliteTransGirls\",\"subText\":\"EliteTransGirls\",\"nameOk\":true},{\"expect\":\"FetishHaven\",\"subText\":\"FetishHaven\",\"nameOk\":true},{\"expect\":\"girlcockheaven\",\"subText\":\"girlcockheaven\",\"nameOk\":true},{\"expect\":\"PlayhouseSellersForum\",\"subText\":\"PlayhouseSellersForum\",\"nameOk\":true},{\"expect\":\"StraightTransGirls\",\"subText\":\"StraightTransGirls\",\"nameOk\":true}]"
+    },
+    {
+      "id": "nav.community.tooltip",
+      "status": "pass",
+      "detail": "[{\"expect\":\"AutoForgeTheGame\",\"title\":\"r/AutoForgeTheGame\",\"tipOk\":true},{\"expect\":\"GamesOnReddit\",\"title\":\"r/GamesOnReddit\",\"tipOk\":true},{\"expect\":\"pics\",\"title\":\"r/pics\",\"tipOk\":true},{\"expect\":\"news\",\"title\":\"r/news\",\"tipOk\":true}]"
+    },
+    {
+      "id": "nav.community.subname_style",
+      "status": "pass",
+      "detail": "[{\"fontSize\":9,\"fontWeight\":700,\"visible\":true},{\"fontSize\":9,\"fontWeight\":700,\"visible\":true},{\"fontSize\":9,\"fontWeight\":700,\"visible\":true},{\"fontSize\":9,\"fontWeight\":700,\"visible\":true}]"
+    },
+    {
+      "id": "nav.community.avatar_visible",
+      "status": "pass",
+      "detail": "[{\"hasAvatar\":true,\"w\":28,\"h\":28},{\"hasAvatar\":false,\"w\":0,\"h\":0},{\"hasAvatar\":true,\"w\":28,\"h\":28},{\"hasAvatar\":true,\"w\":28,\"h\":28}]"
+    },
+    {
+      "id": "nav.community.avatar_not_clipped",
+      "status": "pass",
+      "detail": "[{\"clipped\":false,\"w\":28},{\"clipped\":false,\"w\":28},{\"clipped\":false,\"w\":28},{\"clipped\":false,\"w\":28},{\"clipped\":false,\"w\":28},{\"clipped\":false,\"w\":28}]"
+    },
+    {
+      "id": "nav.community.stack_layout",
+      "status": "pass",
+      "detail": "[{\"stackOk\":true,\"sub\":\"AutoForgeTheGame\"},{\"stackOk\":false,\"sub\":\"GamesOnReddit\"},{\"stackOk\":true,\"sub\":\"pics\"},{\"stackOk\":true,\"sub\":\"news\"}]"
+    },
+    {
+      "id": "nav.align.icons_centered",
+      "status": "pass",
+      "detail": "[{\"w\":22,\"h\":22,\"centerDelta\":-5,\"clipped\":false},{\"w\":28,\"h\":28,\"centerDelta\":-5,\"clipped\":false},{\"w\":28,\"h\":28,\"centerDelta\":-5,\"clipped\":false},{\"w\":28,\"h\":28,\"centerDelta\":-5,\"clipped\":false},{\"w\":28,\"h\":28,\"centerDelta\":-5,\"clipped\":false},{\"w\":28,\"h\":28,\"centerDelta\":-5,\"clipped\":false},{\"w\":28,\"h\":28,\"centerDelta\":-5,\"clipped\":false},{\"w\":28,\"h\":28,\"centerDelta\":-5,\"clipped\":false}]"
+    },
+    {
+      "id": "nav.align.no_sideways_ellipsis",
+      "status": "pass",
+      "detail": "{\"sampleText\":\"AutoForgeTheGame D GamesOnReddit pics news AskReddit NoStupidQuestions askteddit E EliteTransGirls F FetishHaven G girlcockheaven P PlayhouseSellersForum StraightTransGirls T Tgirls T TgirlsCum T TgirlsOnOnlyfans T Tgirl\",\"sidewaysEllipsis\":false}"
+    },
+    {
+      "id": "nav.chrome.icons_kept",
+      "status": "pass",
+      "detail": "{\"count\":8}"
+    },
+    {
+      "id": "nav.section.stamped",
+      "status": "pass",
+      "detail": "[{\"tag\":\"DIV\",\"section\":\"games\",\"title\":\"GAMES ON REDDIT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"recent\",\"title\":\"RECENT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"communities\",\"title\":\"COMMUNITIES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"resources\",\"title\":\"RESOURCES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true}]"
+    },
+    {
+      "id": "nav.section.icon_pseudo",
+      "status": "pass",
+      "detail": "[{\"tag\":\"DIV\",\"section\":\"games\",\"title\":\"GAMES ON REDDIT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"recent\",\"title\":\"RECENT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"communities\",\"title\":\"COMMUNITIES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"resources\",\"title\":\"RESOURCES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true}]"
+    },
+    {
+      "id": "nav.clutter.tags_hidden",
+      "status": "pass",
+      "detail": "{\"tags\":[{\"text\":\"smoke-tag\",\"display\":\"none\",\"visible\":false}],\"notes\":[{\"content\":\"none\",\"visible\":false}]}"
+    },
+    {
+      "id": "nav.clutter.stars_hidden",
+      "status": "pass",
+      "detail": "{\"stars\":[]}"
+    }
+  ],
+  "pass": 24,
+  "fail": 2,
+  "skip": 0
+}

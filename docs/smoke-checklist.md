@@ -25,7 +25,8 @@ Status marks filled after the run: ✓ pass · ✗ fail · — skip
 | Shell | Extension loads, early CSS, FAB/studio, tabs, undo, pause, popup |
 | Profiles | All five builtin profiles apply knobs/flags |
 | Simple | Hide/density/media/NSFW/sync/picker |
-| Layout | Presets, stamps, recipes, widths, health, sidebars bridge, edit mode |
+| Layout | Presets, stamps, recipes, widths, health, sidebars bridge, edit mode — full suite: [`smoke-checklist-layout.md`](smoke-checklist-layout.md) |
+| Nav | Compact icon rail, avatars, subnames, section icons, alignment — [`smoke-checklist-nav.md`](smoke-checklist-nav.md) |
 | Advanced | Feature search/health, sub override, keyboard nav |
 | Curate | Filters, tags, reading mode |
 | Create | Clean links, canned replies, timestamps, OP/actions flags |
@@ -186,6 +187,8 @@ Status marks filled after the run: ✓ pass · ✗ fail · — skip
 npm run test:layout
 npm run build
 npm run smoke
+npm run smoke:layout
 # Brave Origin:
 npm run smoke:brave
+npm run smoke:layout:brave
 ```

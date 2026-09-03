@@ -1,7 +1,7 @@
 {
-  "at": "2026-09-02T15:51:35.736Z",
-  "mode": "launch-playwright",
-  "cdpEndpoint": null,
+  "at": "2026-09-03T08:36:27.554Z",
+  "mode": "cdp-puppeteer",
+  "cdpEndpoint": "http://127.0.0.1:9222",
   "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
   "extensionPath": "/home/solon/GitHub/readit/dist/chrome-mv3",
   "results": [
@@ -43,7 +43,7 @@
     {
       "id": "shell.fab_present",
       "status": "pass",
-      "detail": "{\"host\":true,\"fab\":true,\"classes\":[\"theme-beta\",\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-preset-classic\",\"readit-layout-degraded\"],\"toolbox\":\"0\",\"styleTag\":true}"
+      "detail": "{\"host\":true,\"fab\":true,\"classes\":[\"theme-beta\",\"readit-active\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-slots\",\"theme-dark\",\"readit-layout-preset-classic\",\"readit-layout-degraded\",\"readit-nav-compact\",\"readit-rail-compact\"],\"toolbox\":\"0\",\"styleTag\":true}"
     },
     {
       "id": "shell.early_css",
@@ -68,12 +68,12 @@
     {
       "id": "profile.focus_reader",
       "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"980px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-preset-classic\",\"readit-layout-degraded\"],\"kb\":false,\"kbMode\":\"\",\"compact\":false}"
+      "detail": "{\"ok\":true,\"feedWidth\":\"980px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-rail-compact\",\"readit-layout-preset-singleColumn\"],\"kb\":false,\"kbMode\":\"\",\"compact\":false}"
     },
     {
       "id": "profile.dense_power",
       "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"1100px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-feed-compact\",\"readit-layout-preset-classic\"],\"kb\":false,\"kbMode\":\"defer\",\"compact\":true}"
+      "detail": "{\"ok\":true,\"feedWidth\":\"1100px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-rail-compact\",\"readit-feed-compact\",\"readit-layout-preset-classic\"],\"kb\":false,\"kbMode\":\"defer\",\"compact\":true}"
     },
     {
       "id": "advanced.keyboard_nav",
@@ -103,12 +103,12 @@
     {
       "id": "profile.minimal_media",
       "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"900px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-feed-compact\",\"readit-layout-preset-classic\"],\"kb\":false,\"kbMode\":\"\",\"compact\":true}"
+      "detail": "{\"ok\":true,\"feedWidth\":\"900px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-feed-compact\",\"readit-layout-preset-classic\",\"readit-rail-compact\"],\"kb\":false,\"kbMode\":\"\",\"compact\":true}"
     },
     {
       "id": "profile.mod_desk",
       "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"1200px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-preset-classic\"],\"kb\":false,\"kbMode\":\"defer\",\"compact\":false}"
+      "detail": "{\"ok\":true,\"feedWidth\":\"1200px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-preset-navRight\"],\"kb\":false,\"kbMode\":\"defer\",\"compact\":false}"
     },
     {
       "id": "shell.undo",
@@ -167,8 +167,8 @@
     },
     {
       "id": "layout.nav_right",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"stamped\":true,\"recipe\":true,\"preset\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"stamped\":true,\"recipe\":false,\"preset\":true}"
     },
     {
       "id": "layout.dual_left",
@@ -182,18 +182,18 @@
     },
     {
       "id": "layout.reset_classic",
-      "status": "pass",
+      "status": "fail",
       "detail": "{\"ok\":true,\"layout\":\"classic\"}"
     },
     {
       "id": "layout.widths",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"before\":\"280px\",\"after\":\"300px\",\"nextVal\":\"300\"}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"no slider\"}"
     },
     {
       "id": "layout.edit_mode",
-      "status": "pass",
-      "detail": "{\"editMode\":{\"armed\":true,\"banner\":true,\"cls\":true},\"editOff\":{\"banner\":false,\"cls\":false}}"
+      "status": "fail",
+      "detail": "{\"editMode\":{\"ok\":false,\"reason\":\"no edit button\"},\"editOff\":{\"banner\":false,\"cls\":false}}"
     },
     {
       "id": "layout.hide_sidebars_bridge",
@@ -328,12 +328,12 @@
     {
       "id": "curate.user_tag",
       "status": "pass",
-      "detail": "user=Grok-by-SpaceXAI"
+      "detail": "user=cherryjammm"
     },
     {
       "id": "curate.user_tag_dom",
       "status": "pass",
-      "detail": "user=Grok-by-SpaceXAI"
+      "detail": "user=cherryjammm"
     },
     {
       "id": "curate.reading_mode",
@@ -408,7 +408,7 @@
     {
       "id": "mod.usernote",
       "status": "pass",
-      "detail": "{\"noteListed\":true,\"noteDom\":true,\"tagUser\":\"Grok-by-SpaceXAI\"}"
+      "detail": "{\"noteListed\":true,\"noteDom\":true,\"tagUser\":\"cherryjammm\"}"
     },
     {
       "id": "mod.toolbox_notice",
@@ -438,22 +438,22 @@
     {
       "id": "routes.post_comments",
       "status": "pass",
-      "detail": "https://www.reddit.com/r/AskReddit/comments/1w50qeq/whats_something_thats_highly_likely_to_happen_in/"
+      "detail": "https://www.reddit.com/r/AskReddit/comments/1w61j0f/what_is_the_worst_movie_youve_ever_watched_and/"
     },
     {
       "id": "create.absolute_timestamps",
       "status": "pass",
-      "detail": "count=51"
+      "detail": "count=3"
     },
     {
       "id": "track.later.quote_dom",
       "status": "pass",
-      "detail": "quoteButtons=25"
+      "detail": "quoteButtons=1"
     },
     {
       "id": "routes.spa_soft_nav",
       "status": "pass",
-      "detail": "{\"ok\":true,\"href\":\"https://www.reddit.com/r/mildlyinfuriating/\",\"fab\":true,\"active\":true,\"mode\":\"click\"}"
+      "detail": "{\"ok\":true,\"href\":\"https://www.reddit.com/r/NoStupidQuestions/\",\"fab\":true,\"active\":true,\"mode\":\"click\"}"
     },
     {
       "id": "routes.home",
@@ -488,10 +488,10 @@
     {
       "id": "shell.popup_open_studio",
       "status": "pass",
-      "detail": "{\"clickOpen\":{\"ok\":true,\"tabCount\":1,\"sends\":[{\"id\":1447956211,\"url\":\"https://www.reddit.com/\",\"ok\":true}],\"clicked\":true},\"opened\":true}"
+      "detail": "{\"clickOpen\":{\"ok\":true,\"tabCount\":2,\"sends\":[{\"id\":2140449600,\"url\":\"https://www.reddit.com/user/cherryjammm/\",\"ok\":false,\"err\":\"Error: Could not establish connection. Receiving end does not exist.\"},{\"id\":2140449687,\"url\":\"https://www.reddit.com/\",\"ok\":true}],\"clicked\":true},\"opened\":true}"
     }
   ],
-  "pass": 90,
-  "fail": 0,
+  "pass": 86,
+  "fail": 4,
   "skip": 7
 }

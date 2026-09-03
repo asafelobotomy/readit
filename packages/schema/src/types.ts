@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SETTINGS_VERSION = 7 as const;
+export const SETTINGS_VERSION = 8 as const;
 
 export const AudienceSchema = z.enum(["reader", "creator", "moderator"]);
 export type Audience = z.infer<typeof AudienceSchema>;
@@ -18,10 +18,23 @@ export const FeatureHealthSchema = z.enum(["ok", "degraded", "broken"]);
 export type FeatureHealth = z.infer<typeof FeatureHealthSchema>;
 
 /** CSS / layout tokens applied via :root custom properties */
+export const FontFamilySchema = z.enum(["system", "serif", "sans", "mono"]);
+export type FontFamily = z.infer<typeof FontFamilySchema>;
+
+export const FontWeightSchema = z.union([
+  z.literal(400),
+  z.literal(500),
+  z.literal(600),
+  z.literal(700),
+]);
+export type FontWeight = z.infer<typeof FontWeightSchema>;
+
 export const CssTokensSchema = z.object({
   feedWidthPx: z.number().min(480).max(1600).default(920),
   density: z.number().min(0).max(1).default(0.45),
   fontScale: z.number().min(0.85).max(1.4).default(1),
+  fontFamily: FontFamilySchema.default("system"),
+  fontWeight: FontWeightSchema.default(400),
   radiusPx: z.number().min(0).max(24).default(8),
   accent: z.string().default("#ff4500"),
   themeMode: ThemeModeSchema.default("system"),
@@ -252,24 +265,83 @@ export const LayoutPlacementsSchema = z.object({
 export type LayoutPlacements = z.infer<typeof LayoutPlacementsSchema>;
 
 export const LayoutWidthsSchema = z.object({
-  leftNavPx: z.number().min(64).max(420).default(272),
-  rightRailPx: z.number().min(200).max(420).default(316),
+  /** Icon-rail floor (64) → comfortable labeled nav (400). */
+  leftNavPx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 272),
+    z.number().transform((n) => Math.min(400, Math.max(64, Math.round(n)))),
+  ),
+  /** Readable widgets (280) → wide rail (400). */
+  rightRailPx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 316),
+    z.number().transform((n) => Math.min(400, Math.max(280, Math.round(n)))),
+  ),
   /** Outer page gutter (left of first column). */
-  pagePadLeftPx: z.number().min(0).max(480).default(24),
+  pagePadLeftPx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 24),
+    z.number().transform((n) => Math.min(160, Math.max(0, Math.round(n)))),
+  ),
   /** Outer page gutter (right of last column). */
-  pagePadRightPx: z.number().min(0).max(480).default(24),
+  pagePadRightPx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 24),
+    z.number().transform((n) => Math.min(160, Math.max(0, Math.round(n)))),
+  ),
   /** Gap between the three columns (prevents chrome overlap). */
-  columnGapPx: z.number().min(0).max(48).default(12),
+  columnGapPx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 12),
+    z.number().transform((n) => Math.min(48, Math.max(0, Math.round(n)))),
+  ),
 });
 export type LayoutWidths = z.infer<typeof LayoutWidthsSchema>;
 
 export const LAYOUT_WIDTH_LIMITS = {
-  leftNav: { min: 64, max: 420 },
-  rightRail: { min: 200, max: 420 },
+  leftNav: { min: 64, max: 400 },
+  /** Floor keeps Recent Posts / widgets readable (no vertical letter stacks). */
+  rightRail: { min: 280, max: 400 },
   main: { min: 480, max: 1600 },
-  pagePad: { min: 0, max: 480 },
+  /** Keep gutters modest so pads cannot starve nav/feed/rail. */
+  pagePad: { min: 0, max: 160 },
   columnGap: { min: 0, max: 48 },
+  separator: { min: 8, max: 120 },
 } as const;
+
+export const MAX_LAYOUT_SEPARATORS = 3 as const;
+
+export const GutterThemeSchema = z.enum([
+  "plain",
+  "line",
+  "soft",
+  "paper",
+  "inset",
+]);
+export type GutterTheme = z.infer<typeof GutterThemeSchema>;
+
+export const LayoutSeparatorSchema = z.object({
+  id: z.string(),
+  after: LayoutColumnPanelSchema,
+  widthPx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 24),
+    z
+      .number()
+      .transform((n) =>
+        Math.min(
+          LAYOUT_WIDTH_LIMITS.separator.max,
+          Math.max(LAYOUT_WIDTH_LIMITS.separator.min, Math.round(n)),
+        ),
+      ),
+  ),
+});
+export type LayoutSeparator = z.infer<typeof LayoutSeparatorSchema>;
+
+export function clampSeparatorWidth(px: number): number {
+  return Math.min(
+    LAYOUT_WIDTH_LIMITS.separator.max,
+    Math.max(LAYOUT_WIDTH_LIMITS.separator.min, Math.round(px)),
+  );
+}
+
+export function clampZoom(n: number): number {
+  return Math.min(1.5, Math.max(0.85, Math.round(n * 100) / 100));
+}
 
 export function clampPanelWidth(
   panel: LayoutColumnPanel,
@@ -402,6 +474,8 @@ export function fitLayoutWidths(
   widths: LayoutWidthBudget,
   visibleOrder: readonly LayoutColumnPanel[],
   viewportPx: number,
+  /** Extra track widths (separators) counted against the viewport budget. */
+  extraTracksPx = 0,
 ): LayoutWidthBudget {
   const order = visibleOrder.length
     ? [...visibleOrder]
@@ -417,11 +491,12 @@ export function fitLayoutWidths(
 
   const viewport = Math.max(0, Math.round(viewportPx));
   const gaps = gapTotalPx(order.length, next.columnGapPx);
+  const extras = Math.max(0, Math.round(extraTracksPx));
   const minCols = order.reduce(
     (sum, panel) => sum + panelWidthLimits(panel).min,
     0,
   );
-  const minShell = minCols + gaps;
+  const minShell = minCols + gaps + extras;
 
   // Pads cannot leave less than the minimum column shell.
   let padBudget = Math.max(0, viewport - minShell);
@@ -441,7 +516,7 @@ export function fitLayoutWidths(
 
   const contentBudget = Math.max(
     minCols,
-    viewport - next.pagePadLeftPx - next.pagePadRightPx - gaps,
+    viewport - next.pagePadLeftPx - next.pagePadRightPx - gaps - extras,
   );
   let excess = sumPanelWidths(order, next) - contentBudget;
   if (excess > 0) {
@@ -474,7 +549,22 @@ export function resizePanelInBudget(
   };
   if (idx < 0) return fitLayoutWidths(next, order, viewportPx);
 
+  const before = readPanelWidth(panel, next);
   writePanelWidth(panel, next, clampPanelWidth(panel, desiredPx));
+
+  // Shrinking nav/rail donates the freed pixels to the feed (up to main.max)
+  // so the feed can grow toward the largest size the viewport allows.
+  if (panel !== "main" && order.includes("main")) {
+    const after = readPanelWidth(panel, next);
+    const freed = before - after;
+    if (freed > 0) {
+      writePanelWidth(
+        "main",
+        next,
+        clampPanelWidth("main", next.feedWidthPx + freed),
+      );
+    }
+  }
 
   const gaps = gapTotalPx(order.length, next.columnGapPx);
   const budget =
@@ -502,13 +592,23 @@ export function resizePadInBudget(
   desiredPx: number,
   viewportPx: number,
 ): LayoutWidthBudget {
+  const order = visibleOrder.filter(Boolean);
   const next: LayoutWidthBudget = {
     ...widths,
     columnGapPx: clampColumnGap(widths.columnGapPx),
   };
+  const before =
+    side === "left" ? next.pagePadLeftPx : next.pagePadRightPx;
   if (side === "left") next.pagePadLeftPx = clampPagePad(desiredPx);
   else next.pagePadRightPx = clampPagePad(desiredPx);
-  return fitLayoutWidths(next, visibleOrder, viewportPx);
+  const after =
+    side === "left" ? next.pagePadLeftPx : next.pagePadRightPx;
+  // Shrinking a pad donates freed pixels to the feed (up to main.max).
+  const freed = before - after;
+  if (freed > 0 && order.includes("main")) {
+    next.feedWidthPx = clampPanelWidth("main", next.feedWidthPx + freed);
+  }
+  return fitLayoutWidths(next, order, viewportPx);
 }
 
 export const CLASSIC_COLUMN_ORDER: LayoutColumnPanel[] = [
@@ -560,8 +660,56 @@ export const LayoutSlotsConfigSchema = z.object({
   widths: LayoutWidthsSchema.default({}),
   /** When false, column chips / page edit moves are locked. */
   editMode: z.boolean().default(false),
+  /** Blank resizable tracks between columns (max 3). */
+  separators: z
+    .array(LayoutSeparatorSchema)
+    .max(MAX_LAYOUT_SEPARATORS)
+    .default([]),
+  gutterTheme: GutterThemeSchema.default("plain"),
+  /** Global visual zoom (1 = 100%). */
+  zoomAll: z.preprocess(
+    (v) => (typeof v === "number" ? v : 1),
+    z.number().transform((n) => clampZoom(n)),
+  ),
+  /** Per-panel zoom overrides (take precedence when set). */
+  zoomByPanel: z
+    .object({
+      leftNav: z.number().optional(),
+      main: z.number().optional(),
+      rightRail: z.number().optional(),
+    })
+    .default({}),
 });
 export type LayoutSlotsConfig = z.infer<typeof LayoutSlotsConfigSchema>;
+
+/** Interleaved panel + separator tracks for grid template building. */
+export type LayoutTrack =
+  | { type: "panel"; panel: LayoutColumnPanel }
+  | { type: "separator"; id: string; widthPx: number };
+
+export function buildLayoutTracks(
+  config: Pick<LayoutSlotsConfig, "columnOrder" | "separators" | "placements">,
+): LayoutTrack[] {
+  const order = normalizeColumnOrder(config.columnOrder);
+  const visible = order.filter(
+    (id) => config.placements[id] !== "hidden",
+  );
+  const seps = (config.separators || []).slice(0, MAX_LAYOUT_SEPARATORS);
+  const out: LayoutTrack[] = [];
+  for (const panel of visible) {
+    out.push({ type: "panel", panel });
+    for (const sep of seps) {
+      if (sep.after === panel) {
+        out.push({
+          type: "separator",
+          id: sep.id,
+          widthPx: clampSeparatorWidth(sep.widthPx),
+        });
+      }
+    }
+  }
+  return out;
+}
 
 export function presetToColumnOrder(preset: LayoutPreset): LayoutColumnPanel[] {
   switch (preset) {

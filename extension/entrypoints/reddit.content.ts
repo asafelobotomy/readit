@@ -212,6 +212,32 @@ export default defineContentScript({
       })();
     });
 
+    ctx.addEventListener(window, "readit:layout-separators", (ev) => {
+      void (async () => {
+        const detail = (
+          ev as CustomEvent<{
+            separators?: ReaditSettings["layoutSlots"]["separators"];
+          }>
+        ).detail;
+        if (!detail?.separators || persistBusy) return;
+        persistBusy = true;
+        try {
+          const current = await loadSettings();
+          const next = await saveSettings({
+            ...current,
+            layoutSlots: {
+              ...current.layoutSlots,
+              preset: "custom",
+              separators: detail.separators.slice(0, 3),
+            },
+          });
+          reapply(next);
+        } finally {
+          persistBusy = false;
+        }
+      })();
+    });
+
     ctx.addEventListener(window, "readit:cqs-persist", (ev) => {
       void (async () => {
         const detail = (ev as CustomEvent<CqsPersistDetail>).detail;
@@ -237,7 +263,12 @@ export default defineContentScript({
     });
 
     ctx.addEventListener(window, "wxt:locationchange", () => {
-      runtime.applyAll(withSubOverride(settings));
+      const next = withSubOverride(settings);
+      runtime.applyAll(next);
+      // Reddit replaces shell/nav asynchronously — follow-up scans remount rail.
+      window.setTimeout(() => runtime.scanDom(withSubOverride(settings)), 80);
+      window.setTimeout(() => runtime.scanDom(withSubOverride(settings)), 350);
+      window.setTimeout(() => runtime.scanDom(withSubOverride(settings)), 1200);
     });
 
     let timer: number | undefined;
@@ -246,7 +277,7 @@ export default defineContentScript({
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         runtime.scanDom(withSubOverride(settings));
-      }, 300);
+      }, 180);
     });
     observer.observe(document.documentElement, {
       childList: true,

@@ -30,6 +30,10 @@ function profileLayoutRecipe(
       columnOrder: [...CLASSIC_COLUMN_ORDER],
       widths,
       editMode: false,
+      separators: [],
+      gutterTheme: "plain",
+      zoomAll: 1,
+      zoomByPanel: {},
     },
     preset,
   );
@@ -45,6 +49,8 @@ const focusReader: ProfilePack = {
     tokens: {
       feedWidthPx: 980,
       density: 0.35,
+      fontFamily: "system",
+      fontWeight: 400,
       fontScale: 1.08,
       radiusPx: 10,
       accent: "#ff4500",
@@ -116,6 +122,8 @@ const densePower: ProfilePack = {
     tokens: {
       feedWidthPx: 1100,
       density: 0.85,
+      fontFamily: "system",
+      fontWeight: 400,
       fontScale: 0.95,
       radiusPx: 4,
       accent: "#0079d3",
@@ -189,6 +197,8 @@ const creatorDesk: ProfilePack = {
     tokens: {
       feedWidthPx: 1000,
       density: 0.5,
+      fontFamily: "system",
+      fontWeight: 400,
       fontScale: 1,
       radiusPx: 8,
       accent: "#46d160",
@@ -259,6 +269,8 @@ const minimalMedia: ProfilePack = {
     tokens: {
       feedWidthPx: 900,
       density: 0.4,
+      fontFamily: "system",
+      fontWeight: 400,
       fontScale: 1.05,
       radiusPx: 8,
       accent: "#ff4500",
@@ -329,6 +341,8 @@ const modDesk: ProfilePack = {
     tokens: {
       feedWidthPx: 1200,
       density: 0.9,
+      fontFamily: "system",
+      fontWeight: 400,
       fontScale: 0.92,
       radiusPx: 4,
       accent: "#d93900",

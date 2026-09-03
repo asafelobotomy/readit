@@ -29,7 +29,7 @@ export default defineContentScript({
       if (
         t instanceof Element &&
         t.closest?.(
-          ".readit-frame-label, .readit-col-resize, .readit-pad-resize",
+          ".readit-layout-frame, .readit-frame-label, .readit-col-resize, .readit-pad-resize",
         )
       ) {
         w.__readitBridgeDragging = true;

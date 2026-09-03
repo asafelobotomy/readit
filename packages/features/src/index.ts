@@ -30,10 +30,12 @@ import {
   resizeFeedFeature,
 } from "./hide-and-filter.js";
 import {
+  addLayoutSeparator,
   applyColumnOrder,
   applyLayoutPreset,
   clearLayoutSlotMarks,
   COLUMN_PANEL_LABELS,
+  getEditSelection,
   LAYOUT_SLOTS,
   layoutSlotsFeature,
   layoutSlotsHealth,
@@ -252,6 +254,8 @@ export {
   LAYOUT_SLOTS,
   layoutSlotsFeature,
   layoutSlotsHealth,
+  addLayoutSeparator,
+  getEditSelection,
   moveLayoutPanelToIndex,
   presetToColumnOrder,
   presetToPlacements,
@@ -261,6 +265,27 @@ export {
   swapLayoutColumns,
   syncSidebarsHide,
 };
+export {
+  classifyNavSection,
+  clearNavCompactStamps,
+  mountNavCompactObserver,
+  mountNavRail,
+  modelFingerprint,
+  NAV_COMPACT_MAX_PX,
+  NAV_RAIL_ID,
+  refreshNavRail,
+  scrapeNavModel,
+  stampNavCompact,
+  unmountNavCompactObserver,
+  unmountNavRail,
+} from "./nav-rail.js";
+export type {
+  NavItem,
+  NavItemKind,
+  NavModel,
+  NavSection,
+  NavSectionId,
+} from "./nav-rail.js";
 export type {
   LayoutOrderPersistDetail,
   LayoutPadsPersistDetail,

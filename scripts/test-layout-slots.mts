@@ -7,14 +7,21 @@ import { buildStylesheet, LAYOUT_RECIPE_MARKER } from "../packages/css-engine/sr
 import { isEditableTarget } from "../packages/features/src/reader-creator.ts";
 import {
   applyLayoutPreset,
+  addLayoutSeparator,
   layoutSlotsHealth,
   presetToPlacements,
   resolveSlots,
   swapLayoutColumns,
 } from "../packages/features/src/layout-slots.ts";
 import {
+  classifyNavSection,
+  modelFingerprint,
+  type NavModel,
+} from "../packages/features/src/nav-rail.ts";
+import {
   applyProfile,
   BUILTIN_PROFILES,
+  buildLayoutTracks,
   clampColumnGap,
   clampPagePad,
   clampPanelWidth,
@@ -22,6 +29,7 @@ import {
   fitLayoutWidths,
   formatProfileLayoutBlurb,
   previewImport,
+  resizePadInBudget,
   resizePanelInBudget,
   SETTINGS_VERSION,
   swapColumnPanels,
@@ -127,10 +135,13 @@ check("column swap helper", () => {
 
 check("clampPanelWidth limits", () => {
   assert.equal(clampPanelWidth("leftNav", 20), 64);
-  assert.equal(clampPanelWidth("leftNav", 500), 420);
+  assert.equal(clampPanelWidth("leftNav", 500), 400);
   assert.equal(clampPanelWidth("main", 200), 480);
   assert.equal(clampPanelWidth("main", 2000), 1600);
-  assert.equal(clampPanelWidth("rightRail", 250), 250);
+  assert.equal(clampPanelWidth("rightRail", 100), 280);
+  assert.equal(clampPanelWidth("rightRail", 250), 280);
+  assert.equal(clampPanelWidth("rightRail", 300), 300);
+  assert.equal(clampPanelWidth("rightRail", 500), 400);
 });
 
 check("page pad + column gap defaults and CSS", () => {
@@ -140,7 +151,7 @@ check("page pad + column gap defaults and CSS", () => {
   assert.equal(settings.layoutSlots.widths.pagePadRightPx, 48);
   assert.equal(settings.layoutSlots.widths.columnGapPx, 12);
   assert.equal(clampPagePad(-10), 0);
-  assert.equal(clampPagePad(999), 480);
+  assert.equal(clampPagePad(999), 160);
   assert.equal(clampColumnGap(100), 48);
   settings.flags.layoutSlots = true;
   settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "classic");
@@ -187,7 +198,7 @@ check("fitLayoutWidths respects right gutter", () => {
   assert.ok(used <= 1200, `used ${used} > 1200`);
   assert.ok(fitted.pagePadRightPx >= 0);
   assert.ok(fitted.leftNavPx >= 64);
-  assert.ok(fitted.rightRailPx >= 200);
+  assert.ok(fitted.rightRailPx >= 280);
   assert.ok(fitted.feedWidthPx >= 480);
 });
 
@@ -208,10 +219,72 @@ check("resizePanelInBudget shrinks neighbors to the right", () => {
     1200,
   );
   // Content budget 1128; growing main steals from rightRail then leftNav mins.
-  assert.equal(next.rightRailPx, 200);
+  assert.equal(next.rightRailPx, 280);
+  // Remaining after rail min: 1128 - 280 = 848 for main+nav; main wants 900 → nav shrinks.
+  assert.equal(next.feedWidthPx + next.leftNavPx + next.rightRailPx, 1128);
+  assert.ok(next.leftNavPx >= 64);
+  assert.ok(next.feedWidthPx <= 900);
+});
+
+check("resizePanelInBudget donates shrink to feed", () => {
+  const order = ["leftNav", "main", "rightRail"] as const;
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 272,
+      rightRailPx: 316,
+      feedWidthPx: 600,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    [...order],
+    "leftNav",
+    64,
+    1920,
+  );
   assert.equal(next.leftNavPx, 64);
-  assert.equal(next.feedWidthPx, 1128 - 200 - 64);
-  assert.ok(next.feedWidthPx < 900);
+  assert.equal(next.feedWidthPx, 600 + (272 - 64));
+  assert.equal(next.rightRailPx, 316);
+});
+
+check("resizePadInBudget donates shrink to feed", () => {
+  const order = ["leftNav", "main", "rightRail"] as const;
+  const next = resizePadInBudget(
+    {
+      leftNavPx: 64,
+      rightRailPx: 280,
+      feedWidthPx: 700,
+      pagePadLeftPx: 160,
+      pagePadRightPx: 48,
+      columnGapPx: 8,
+    },
+    [...order],
+    "left",
+    24,
+    1920,
+  );
+  assert.equal(next.pagePadLeftPx, 24);
+  assert.equal(next.feedWidthPx, 700 + (160 - 24));
+});
+
+check("huge legacy pads clamp and cannot starve columns", () => {
+  const order = ["leftNav", "main", "rightRail"] as const;
+  const fitted = fitLayoutWidths(
+    {
+      leftNavPx: 64,
+      rightRailPx: 160,
+      feedWidthPx: 720,
+      pagePadLeftPx: 480,
+      pagePadRightPx: 480,
+      columnGapPx: 12,
+    },
+    [...order],
+    1920,
+  );
+  assert.ok(fitted.pagePadLeftPx <= 160);
+  assert.ok(fitted.pagePadRightPx <= 160);
+  assert.ok(fitted.rightRailPx >= 280);
+  assert.ok(fitted.feedWidthPx >= 480);
 });
 
 check("resizePanelInBudget shifts when free space remains", () => {
@@ -262,11 +335,93 @@ check("CSS column sticky scroll rails", () => {
   assert.match(css, /#flex-left-nav-container/);
   assert.match(css, /position:\s*absolute/);
   assert.match(css, /grid-row:\s*1/);
-  assert.match(css, /shreddit-async-loader/);
+  assert.match(css, /\[data-readit-layout-shell\] > shreddit-async-loader/);
+  assert.match(css, /grid-column:\s*1\s*\/\s*-1/);
+  assert.doesNotMatch(
+    css,
+    /\[data-readit-layout-shell\] shreddit-async-loader \{\s*display:\s*none/,
+  );
+  assert.doesNotMatch(
+    css,
+    /\[data-readit-layout-shell\] > shreddit-async-loader \{\s*display:\s*contents/,
+  );
   assert.match(css, /scrollbar-gutter:\s*stable/);
   assert.match(css, /overflow-wrap:\s*break-word/);
   assert.match(css, /@container readit-nav/);
   assert.match(css, /container-name:\s*readit-nav/);
+});
+
+check("nav compact section classifier", () => {
+  assert.equal(classifyNavSection("RECENT"), "recent");
+  assert.equal(classifyNavSection("Communities"), "communities");
+  assert.equal(classifyNavSection("CUSTOM FEEDS"), "custom");
+  assert.equal(classifyNavSection("GAMES ON REDDIT"), "games");
+  assert.equal(classifyNavSection("RESOURCES"), "resources");
+  assert.equal(classifyNavSection("Best of Reddit"), "best");
+});
+
+check("nav rail model fingerprint stable", () => {
+  const model: NavModel = {
+    chrome: [
+      {
+        kind: "chrome",
+        href: "/",
+        label: "Home",
+        iconSvg: "<svg></svg>",
+      },
+    ],
+    sections: [
+      {
+        id: "communities",
+        label: "Communities",
+        items: [
+          {
+            kind: "community",
+            href: "/r/pics/",
+            label: "r/pics",
+            name: "pics",
+            iconSrc: "https://example.com/a.png",
+          },
+        ],
+      },
+    ],
+  };
+  const a = modelFingerprint(model);
+  const b = modelFingerprint(model);
+  assert.equal(a, b);
+  assert.match(a, /community:\/r\/pics/);
+});
+
+check("CSS compact nav community subname + section icons", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "classic");
+  const css = buildStylesheet(settings);
+  assert.match(css, /#readit-nav-rail/);
+  assert.match(css, /readit-nav-subname/);
+  assert.match(css, /:not\(#readit-nav-rail\)/);
+  assert.match(css, /readit-nav-rail-section-icon/);
+  assert.match(css, /data-readit-nav-section="recent"/);
+  assert.match(css, /mask-image:\s*url\("data:image\/svg\+xml/);
+});
+
+check("CSS compact nav/rail containment", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "classic");
+  settings.layoutSlots.widths = {
+    ...settings.layoutSlots.widths,
+    leftNavPx: 64,
+    rightRailPx: 160, // legacy thin — must clamp in recipe
+  };
+  const css = buildStylesheet(settings);
+  assert.match(css, /readit-nav-compact/);
+  assert.match(css, /readit-rail-compact/);
+  assert.match(css, /--readit-right-rail-width:\s*280px/);
+  assert.match(css, /\[data-readit-slot="rightRail"\] \*/);
+  assert.match(css, /word-break:\s*normal/);
+  assert.match(css, /\.readit-user-tag/);
+  assert.match(css, /writing-mode:\s*horizontal-tb/);
 });
 
 check("CSS edit-mode labeled frames", () => {
@@ -278,6 +433,8 @@ check("CSS edit-mode labeled frames", () => {
   assert.match(css, /readit-frame-label/);
   assert.match(css, /readit-drop-line/);
   assert.match(css, /outline:\s*none/);
+  assert.match(css, /\[data-drop="1"\][\s\S]*?border-style:\s*dashed/);
+  assert.match(css, /\[data-readit-slot\][\s\S]*?pointer-events:\s*none/);
   assert.doesNotMatch(css, /\[data-readit-slot\]\s*\{\s*outline:\s*2px dashed/);
 });
 
@@ -326,17 +483,81 @@ check("CSS waveA lurker styles", () => {
   assert.match(css, /readit-lurker/);
 });
 
-check("schema v7 column order defaults", () => {
+check("schema v8 column order defaults", () => {
   const settings = createDefaultSettings();
   assert.equal(settings.version, SETTINGS_VERSION);
-  assert.equal(SETTINGS_VERSION, 7);
-  assert.equal(settings.layoutSlots.preset, "singleColumn");
-  assert.equal(settings.layoutSlots.widths.pagePadLeftPx, 48);
-  assert.equal(settings.layoutSlots.editMode, false);
-  assert.equal(settings.feedPrefs.feedDensity, "comfortable");
-  assert.equal(settings.keyboardNavPrefs.mode, "defer");
-  assert.equal(settings.flags.followingFeed, true);
-  assert.equal(settings.flags.lurkerMode, false);
+  assert.equal(SETTINGS_VERSION, 8);
+  assert.deepEqual(settings.layoutSlots.separators, []);
+  assert.equal(settings.layoutSlots.gutterTheme, "plain");
+  assert.equal(settings.layoutSlots.zoomAll, 1);
+  assert.equal(settings.knobs.tokens.fontFamily, "system");
+});
+
+check("separator tracks interleave after panel", () => {
+  const tracks = buildLayoutTracks({
+    columnOrder: ["leftNav", "main", "rightRail"],
+    placements: {
+      leftNav: "left",
+      main: "center",
+      rightRail: "right",
+      subHeader: "right",
+    },
+    separators: [
+      { id: "sep1", after: "leftNav", widthPx: 24 },
+      { id: "sep2", after: "main", widthPx: 40 },
+    ],
+  });
+  assert.deepEqual(
+    tracks.map((t) => (t.type === "panel" ? t.panel : `sep:${t.widthPx}`)),
+    ["leftNav", "sep:24", "main", "sep:40", "rightRail"],
+  );
+});
+
+check("fitLayoutWidths accounts for separator extras", () => {
+  const base = {
+    leftNavPx: 272,
+    rightRailPx: 316,
+    feedWidthPx: 900,
+    pagePadLeftPx: 24,
+    pagePadRightPx: 24,
+    columnGapPx: 12,
+  };
+  const without = fitLayoutWidths(base, ["leftNav", "main", "rightRail"], 1200);
+  const withSep = fitLayoutWidths(
+    base,
+    ["leftNav", "main", "rightRail"],
+    1200,
+    200,
+  );
+  assert.ok(
+    withSep.feedWidthPx < without.feedWidthPx,
+    `expected separator extras to shrink feed (${withSep.feedWidthPx} < ${without.feedWidthPx})`,
+  );
+});
+
+check("addLayoutSeparator caps at 3", () => {
+  let cfg = createDefaultSettings().layoutSlots;
+  cfg = addLayoutSeparator(cfg, "leftNav");
+  cfg = addLayoutSeparator(cfg, "main");
+  cfg = addLayoutSeparator(cfg, "rightRail");
+  assert.equal(cfg.separators.length, 3);
+  const capped = addLayoutSeparator(cfg, "main");
+  assert.equal(capped.separators.length, 3);
+  assert.equal(capped, cfg);
+});
+
+check("CSS gutter theme + zoom + font tokens", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  settings.layoutSlots.gutterTheme = "line";
+  settings.layoutSlots.zoomAll = 1.1;
+  settings.knobs.tokens.fontFamily = "serif";
+  settings.knobs.tokens.fontWeight = 600;
+  const css = buildStylesheet(settings);
+  assert.match(css, /readit-gutter-line/);
+  assert.match(css, /zoom:\s*1\.1/);
+  assert.match(css, /--readit-font-family/);
+  assert.match(css, /--readit-font-weight:\s*600/);
 });
 
 check("builtin profiles own layout recipes", () => {

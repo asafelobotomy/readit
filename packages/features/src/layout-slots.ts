@@ -1,6 +1,7 @@
 import type {
   FeatureHealth,
   LayoutColumnPanel,
+  LayoutSeparator,
   LayoutSlotId,
   LayoutSlotsConfig,
   LayoutZone,
@@ -8,7 +9,11 @@ import type {
 } from "@readit/schema";
 import {
   applyLayoutPreset,
+  buildLayoutTracks,
+  clampSeparatorWidth,
+  createId,
   fitLayoutWidths,
+  MAX_LAYOUT_SEPARATORS,
   movePanelToIndex,
   normalizeColumnOrder,
   placementsFromColumnOrder,
@@ -20,6 +25,12 @@ import {
   type LayoutWidthBudget,
 } from "@readit/schema";
 import type { FeatureModule } from "./utils.js";
+import {
+  mountNavRail,
+  NAV_COMPACT_MAX_PX,
+  navRailNeedsRemount,
+  unmountNavRail,
+} from "./nav-rail.js";
 
 export type SlotDefinition = {
   id: LayoutSlotId;
@@ -253,7 +264,7 @@ export type LayoutPadsPersistDetail = {
 const RESIZE_HOST_ID = "readit-col-resize-host";
 
 type PagePadSide = "left" | "right";
-type FrameKind = "panel" | "pad";
+type FrameKind = "panel" | "pad" | "separator";
 
 type LiveWidths = LayoutWidthBudget;
 
@@ -304,18 +315,46 @@ function applyLiveColumnWidths(
   root.style.setProperty("--readit-page-pad-left", `${live.pagePadLeftPx}px`);
   root.style.setProperty("--readit-page-pad-right", `${live.pagePadRightPx}px`);
   root.style.setProperty("--readit-column-gap", `${live.columnGapPx}px`);
-  const tracks = visibleColumnPanels(settings)
-    .map((id) => `${panelWidthPx(id, live)}px`)
+
+  const shellReady =
+    !!root.querySelector?.("[data-readit-layout-shell]") ||
+    !!document.querySelector("[data-readit-layout-shell]");
+  const leftReady = !!document.querySelector('[data-readit-slot="leftNav"]');
+  if (!shellReady || !leftReady) {
+    root.classList.add("readit-layout-pending");
+    root.classList.remove("readit-nav-compact");
+    root.style.removeProperty("--readit-grid-cols");
+    return;
+  }
+  root.classList.remove("readit-layout-pending");
+
+  root.classList.toggle("readit-nav-compact", live.leftNavPx <= NAV_COMPACT_MAX_PX);
+  root.classList.toggle("readit-rail-compact", live.rightRailPx <= 320);
+  if (live.leftNavPx <= NAV_COMPACT_MAX_PX) mountNavRail();
+  else unmountNavRail();
+
+  const tracks = buildLayoutTracks(settings.layoutSlots)
+    .map((t) => {
+      if (t.type === "separator") return `${t.widthPx}px`;
+      return `${panelWidthPx(t.panel, live)}px`;
+    })
     .join(" ");
   if (tracks) root.style.setProperty("--readit-grid-cols", tracks);
+  syncSeparatorNodes(settings);
   const shell = document.querySelector(
     "[data-readit-layout-shell]",
   ) as HTMLElement | null;
   if (!shell) return;
-  // Prefer the CSS var (beats stylesheet !important literals via var()).
   shell.style.removeProperty("grid-template-columns");
   shell.style.paddingLeft = `${live.pagePadLeftPx}px`;
   shell.style.paddingRight = `${live.pagePadRightPx}px`;
+}
+
+function separatorExtraPx(settings: ReaditSettings): number {
+  return (settings.layoutSlots.separators || []).reduce(
+    (sum, s) => sum + clampSeparatorWidth(s.widthPx),
+    0,
+  );
 }
 
 /** Fit current settings to the viewport and paint CSS vars / shell tracks. */
@@ -324,14 +363,48 @@ export function applyFittedShellWidths(settings: ReaditSettings): LiveWidths {
     widthsFromSettings(settings),
     visibleColumnPanels(settings),
     viewportBudgetPx(),
+    separatorExtraPx(settings),
   );
   applyLiveColumnWidths(settings, fitted);
   return fitted;
 }
 
+function syncSeparatorNodes(settings: ReaditSettings): void {
+  const shell = document.querySelector(
+    "[data-readit-layout-shell]",
+  ) as HTMLElement | null;
+  if (!shell) return;
+  const wanted = new Set(
+    (settings.layoutSlots.separators || []).map((s) => s.id),
+  );
+  for (const el of [
+    ...shell.querySelectorAll("[data-readit-separator]"),
+  ]) {
+    const id = el.getAttribute("data-readit-separator");
+    if (!id || !wanted.has(id)) el.remove();
+  }
+  for (const sep of settings.layoutSlots.separators || []) {
+    let node = shell.querySelector(
+      `[data-readit-separator="${CSS.escape(sep.id)}"]`,
+    ) as HTMLElement | null;
+    if (!node) {
+      node = document.createElement("div");
+      node.setAttribute("data-readit-separator", sep.id);
+      node.setAttribute("aria-hidden", "true");
+      shell.appendChild(node);
+    }
+  }
+}
+
 function clearLiveColumnOverrides(): void {
   const root = document.documentElement;
   root.style.removeProperty("--readit-grid-cols");
+  root.classList.remove(
+    "readit-nav-compact",
+    "readit-rail-compact",
+    "readit-layout-pending",
+  );
+  unmountNavRail();
   const shell = document.querySelector(
     "[data-readit-layout-shell]",
   ) as HTMLElement | null;
@@ -339,6 +412,134 @@ function clearLiveColumnOverrides(): void {
   shell.style.removeProperty("grid-template-columns");
   shell.style.removeProperty("padding-left");
   shell.style.removeProperty("padding-right");
+}
+
+/** True when left+main+shell are stamped and ready for compact/grid chrome. */
+function layoutChromeReady(resolved: ResolvedSlot[]): boolean {
+  const left = resolved.find((s) => s.id === "leftNav")?.el;
+  const main = resolved.find((s) => s.id === "main")?.el;
+  const shell = document.querySelector("[data-readit-layout-shell]");
+  return !!(left && main && shell);
+}
+
+let layoutRecoveryObserver: MutationObserver | null = null;
+let layoutRecoveryTimer = 0;
+let layoutRecoveryPollTimer = 0;
+let layoutRecoverySettings: ReaditSettings | null = null;
+
+/** Drop compact/grid chrome immediately when stamps are gone (SPA mid-flight). */
+function softSuspendLayoutChromeIfNeeded(): boolean {
+  const leftStamped = !!document.querySelector('[data-readit-slot="leftNav"]');
+  const shell = !!document.querySelector("[data-readit-layout-shell]");
+  if (leftStamped && shell) {
+    document.documentElement.classList.remove("readit-layout-pending");
+    return false;
+  }
+  const root = document.documentElement;
+  root.classList.add("readit-layout-pending");
+  root.classList.remove("readit-nav-compact");
+  root.style.removeProperty("--readit-grid-cols");
+  return true;
+}
+
+function scheduleLayoutRecovery(settings: ReaditSettings, delayMs = 50): void {
+  layoutRecoverySettings = settings;
+  window.clearTimeout(layoutRecoveryTimer);
+  layoutRecoveryTimer = window.setTimeout(() => {
+    if (!layoutRecoverySettings) return;
+    recoverLayoutChrome(layoutRecoverySettings);
+  }, delayMs);
+}
+
+function recoverLayoutChrome(settings: ReaditSettings): void {
+  if (!settings.flags.layoutSlots || settings.paused) return;
+  if (softSuspendLayoutChromeIfNeeded()) {
+    // Keep trying to restamp while pending.
+    scheduleLayoutRecovery(settings, 120);
+  }
+  const resolved = stampLayoutSlots();
+  const ready = layoutChromeReady(resolved);
+  const root = document.documentElement;
+  root.classList.toggle("readit-layout-pending", !ready);
+  root.classList.toggle(
+    "readit-layout-degraded",
+    layoutSlotsHealth(resolved) === "degraded" ||
+      layoutSlotsHealth(resolved) === "broken",
+  );
+
+  if (!ready) {
+    root.style.removeProperty("--readit-grid-cols");
+    root.classList.remove("readit-nav-compact");
+    return;
+  }
+
+  syncLiveWidthsFromSettings(settings);
+  if (settings.layoutSlots.widths.leftNavPx <= NAV_COMPACT_MAX_PX) {
+    root.classList.add("readit-nav-compact");
+    mountNavRail();
+  } else if (navRailNeedsRemount()) {
+    mountNavRail();
+  }
+}
+
+function startLayoutRecoveryPoll(settings: ReaditSettings, ms = 2500): void {
+  layoutRecoverySettings = settings;
+  window.clearInterval(layoutRecoveryPollTimer);
+  const started = Date.now();
+  layoutRecoveryPollTimer = window.setInterval(() => {
+    if (!layoutRecoverySettings) {
+      window.clearInterval(layoutRecoveryPollTimer);
+      layoutRecoveryPollTimer = 0;
+      return;
+    }
+    recoverLayoutChrome(layoutRecoverySettings);
+    // Always run the full window — Reddit often replaces a healthy shell
+    // shortly after first paint during SPA / route transitions.
+    if (Date.now() - started > ms) {
+      window.clearInterval(layoutRecoveryPollTimer);
+      layoutRecoveryPollTimer = 0;
+    }
+  }, 80);
+}
+
+function mountLayoutRecoveryObserver(settings: ReaditSettings): void {
+  layoutRecoverySettings = settings;
+  if (layoutRecoveryObserver) return;
+  layoutRecoveryObserver = new MutationObserver(() => {
+    if (!layoutRecoverySettings) return;
+    // Sync suspend first to avoid a malformed compact frame without a rail.
+    if (softSuspendLayoutChromeIfNeeded()) {
+      scheduleLayoutRecovery(layoutRecoverySettings, 30);
+      return;
+    }
+    if (
+      layoutRecoverySettings.layoutSlots.widths.leftNavPx <= NAV_COMPACT_MAX_PX &&
+      navRailNeedsRemount()
+    ) {
+      scheduleLayoutRecovery(layoutRecoverySettings, 30);
+      return;
+    }
+    // Host may have been replaced with a new stamped-less node.
+    const left = document.querySelector("#left-sidebar-container");
+    if (left && !left.hasAttribute("data-readit-slot")) {
+      scheduleLayoutRecovery(layoutRecoverySettings, 30);
+    }
+  });
+  layoutRecoveryObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+function teardownLayoutRecoveryObserver(): void {
+  layoutRecoveryObserver?.disconnect();
+  layoutRecoveryObserver = null;
+  window.clearTimeout(layoutRecoveryTimer);
+  window.clearInterval(layoutRecoveryPollTimer);
+  layoutRecoveryTimer = 0;
+  layoutRecoveryPollTimer = 0;
+  layoutRecoverySettings = null;
+  document.documentElement.classList.remove("readit-layout-pending");
 }
 
 function ensureResizeHost(): HTMLElement {
@@ -394,6 +595,27 @@ function placePadHandle(
   handle.style.height = `${Math.round(Math.min(r.height, window.innerHeight - r.top))}px`;
 }
 
+/** Session selection for edit toolbox (panel ids + separator ids). */
+let editSelection = new Set<string>();
+
+export function getEditSelection(): string[] {
+  return [...editSelection];
+}
+
+function emitEditSelection(): void {
+  window.dispatchEvent(
+    new CustomEvent("readit:edit-selection", {
+      detail: { selected: getEditSelection() },
+    }),
+  );
+}
+
+function toggleEditSelection(id: string, on: boolean): void {
+  if (on) editSelection.add(id);
+  else editSelection.delete(id);
+  emitEditSelection();
+}
+
 function ensureFrame(
   host: HTMLElement,
   kind: FrameKind,
@@ -416,19 +638,46 @@ function ensureFrame(
     label.textContent = labelText;
     label.title =
       kind === "panel"
-        ? `Drag to move ${labelText}`
-        : `Drag to swap ${labelText} with the other pad`;
+        ? `Drag anywhere on ${labelText} to move`
+        : kind === "separator"
+          ? `Separator — resize from the edge`
+          : `Drag to swap ${labelText} with the other pad`;
     label.setAttribute(
       "aria-label",
       kind === "panel"
         ? `Move ${labelText} column`
-        : `Move ${labelText}`,
+        : kind === "separator"
+          ? `Separator ${labelText}`
+          : `Move ${labelText}`,
     );
     frame.appendChild(label);
+    if (kind === "panel" || kind === "separator") {
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "readit-frame-select";
+      check.title = "Select for Zoom / Font";
+      check.setAttribute("aria-label", `Select ${labelText}`);
+      check.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+      });
+      check.addEventListener("change", () => {
+        toggleEditSelection(id, check.checked);
+        frame!.dataset.selected = check.checked ? "1" : "0";
+      });
+      frame.appendChild(check);
+    }
     host.appendChild(frame);
   } else {
     const label = frame.querySelector(".readit-frame-label");
     if (label && label.textContent !== labelText) label.textContent = labelText;
+  }
+  const check = frame.querySelector(
+    ".readit-frame-select",
+  ) as HTMLInputElement | null;
+  if (check) {
+    const on = editSelection.has(id);
+    check.checked = on;
+    frame.dataset.selected = on ? "1" : "0";
   }
   return frame;
 }
@@ -463,27 +712,164 @@ function ensureDropLine(host: HTMLElement): HTMLElement {
   return line;
 }
 
+/** Blueprint geometry from shell + panel-owned widths (not flaky slot DOM boxes). */
+function computePanelGeometry(
+  settings: ReaditSettings,
+  live: LiveWidths,
+): {
+  panel: LayoutColumnPanel;
+  mid: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+}[] {
+  const panels = visibleColumnPanels(settings);
+  const shell = document.querySelector(
+    "[data-readit-layout-shell]",
+  ) as HTMLElement | null;
+  if (!(shell instanceof HTMLElement) || panels.length === 0) {
+    return collectPanelHitRects(panels).map((r) => ({
+      ...r,
+      width: r.right - r.left,
+    }));
+  }
+  const r = shell.getBoundingClientRect();
+  const top = Math.max(0, r.top);
+  const bottom = Math.max(top + 8, Math.min(r.bottom, window.innerHeight));
+  let x = r.left + live.pagePadLeftPx;
+  const gap = live.columnGapPx;
+  const out: {
+    panel: LayoutColumnPanel;
+    mid: number;
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    width: number;
+  }[] = [];
+  const tracks = buildLayoutTracks(settings.layoutSlots);
+  for (const track of tracks) {
+    if (track.type === "separator") {
+      x += track.widthPx + gap;
+      continue;
+    }
+    const width = panelWidthPx(track.panel, live);
+    if (width < 4) {
+      x += width + gap;
+      continue;
+    }
+    out.push({
+      panel: track.panel,
+      left: x,
+      right: x + width,
+      mid: x + width / 2,
+      top,
+      bottom,
+      width,
+    });
+    x += width + gap;
+  }
+  return out;
+}
+
+function computeSeparatorGeometry(
+  settings: ReaditSettings,
+  live: LiveWidths,
+): {
+  id: string;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+}[] {
+  const shell = document.querySelector(
+    "[data-readit-layout-shell]",
+  ) as HTMLElement | null;
+  if (!(shell instanceof HTMLElement)) return [];
+  const r = shell.getBoundingClientRect();
+  const top = Math.max(0, r.top);
+  const bottom = Math.max(top + 8, Math.min(r.bottom, window.innerHeight));
+  let x = r.left + live.pagePadLeftPx;
+  const gap = live.columnGapPx;
+  const out: {
+    id: string;
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+    width: number;
+  }[] = [];
+  for (const track of buildLayoutTracks(settings.layoutSlots)) {
+    if (track.type === "panel") {
+      x += panelWidthPx(track.panel, live) + gap;
+      continue;
+    }
+    const width = track.widthPx;
+    out.push({
+      id: track.id,
+      left: x,
+      right: x + width,
+      top,
+      bottom,
+      width,
+    });
+    x += width + gap;
+  }
+  return out;
+}
+
+export function addLayoutSeparator(
+  config: LayoutSlotsConfig,
+  after: LayoutColumnPanel = "main",
+): LayoutSlotsConfig {
+  const seps = config.separators || [];
+  if (seps.length >= MAX_LAYOUT_SEPARATORS) return config;
+  const next: LayoutSeparator = {
+    id: createId("sep"),
+    after,
+    widthPx: 24,
+  };
+  return {
+    ...config,
+    preset: "custom",
+    separators: [...seps, next],
+  };
+}
+
 function placeEditChrome(settings: ReaditSettings): void {
   if (!settings.layoutSlots.editMode) {
     removeResizeHost();
     return;
   }
+  if (!liveWidths) {
+    liveWidths = applyFittedShellWidths(settings);
+  }
   const host = ensureResizeHost();
   const panels = visibleColumnPanels(settings);
-  const needed = new Set(panels.map(String));
+  const sepIds = new Set(
+    (settings.layoutSlots.separators || []).map((s) => s.id),
+  );
+  const needed = new Set([...panels.map(String), ...sepIds]);
   for (const el of [...host.querySelectorAll(".readit-col-resize")]) {
     const id = el.getAttribute("data-readit-resize");
     if (!id || !needed.has(id)) el.remove();
   }
-  for (const el of [...host.querySelectorAll('.readit-layout-frame[data-kind="panel"]')]) {
+  for (const el of [
+    ...host.querySelectorAll(
+      '.readit-layout-frame[data-kind="panel"], .readit-layout-frame[data-kind="separator"]',
+    ),
+  ]) {
     const id = el.getAttribute("data-id");
     if (!id || !needed.has(id)) el.remove();
   }
 
-  const panelRects: { panel: LayoutColumnPanel; mid: number; left: number; right: number; top: number; bottom: number }[] =
-    [];
+  const panelRects = computePanelGeometry(settings, liveWidths);
 
-  for (const panel of panels) {
+  for (const geo of panelRects) {
+    const panel = geo.panel;
     let handle = host.querySelector(
       `.readit-col-resize[data-readit-resize="${panel}"]`,
     ) as HTMLButtonElement | null;
@@ -496,19 +882,8 @@ function placeEditChrome(settings: ReaditSettings): void {
       handle.title = `Drag edge to resize ${COLUMN_PANEL_LABELS[panel]}`;
       host.appendChild(handle);
     }
-    const slot = document.querySelector(`[data-readit-slot="${panel}"]`);
-    if (!(slot instanceof HTMLElement)) {
-      handle.style.display = "none";
-      const stale = host.querySelector(
-        `.readit-layout-frame[data-kind="panel"][data-id="${panel}"]`,
-      );
-      if (stale instanceof HTMLElement) stale.style.display = "none";
-      continue;
-    }
-    const r = slot.getBoundingClientRect();
-    const top = Math.max(0, r.top);
-    const height = Math.min(r.bottom, window.innerHeight) - top;
-    if (r.width < 8 || height < 8) {
+    const height = geo.bottom - geo.top;
+    if (geo.width < 8 || height < 8) {
       handle.style.display = "none";
       const stale = host.querySelector(
         `.readit-layout-frame[data-kind="panel"][data-id="${panel}"]`,
@@ -517,8 +892,8 @@ function placeEditChrome(settings: ReaditSettings): void {
       continue;
     }
     handle.style.display = "block";
-    handle.style.left = `${Math.round(r.right - 5)}px`;
-    handle.style.top = `${Math.round(top)}px`;
+    handle.style.left = `${Math.round(geo.right - 5)}px`;
+    handle.style.top = `${Math.round(geo.top)}px`;
     handle.style.height = `${Math.round(height)}px`;
 
     const frame = ensureFrame(
@@ -527,15 +902,34 @@ function placeEditChrome(settings: ReaditSettings): void {
       panel,
       COLUMN_PANEL_LABELS[panel],
     );
-    positionFrame(frame, r.left, top, r.width, height);
-    panelRects.push({
-      panel,
-      mid: r.left + r.width / 2,
-      left: r.left,
-      right: r.right,
-      top,
-      bottom: top + height,
-    });
+    positionFrame(frame, geo.left, geo.top, geo.width, height);
+  }
+
+  for (const geo of computeSeparatorGeometry(settings, liveWidths)) {
+    let handle = host.querySelector(
+      `.readit-col-resize[data-readit-resize="${geo.id}"]`,
+    ) as HTMLButtonElement | null;
+    if (!handle) {
+      handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "readit-col-resize";
+      handle.dataset.readitResize = geo.id;
+      handle.dataset.kind = "separator";
+      handle.setAttribute("aria-label", "Resize separator");
+      handle.title = "Drag edge to resize separator";
+      host.appendChild(handle);
+    }
+    const height = geo.bottom - geo.top;
+    if (geo.width < 4 || height < 8) {
+      handle.style.display = "none";
+      continue;
+    }
+    handle.style.display = "block";
+    handle.style.left = `${Math.round(geo.right - 5)}px`;
+    handle.style.top = `${Math.round(geo.top)}px`;
+    handle.style.height = `${Math.round(height)}px`;
+    const frame = ensureFrame(host, "separator", geo.id, "Sep");
+    positionFrame(frame, geo.left, geo.top, geo.width, height);
   }
 
   const shell = document.querySelector(
@@ -607,7 +1001,8 @@ type ColumnDragSession = {
   id: string;
   panels: LayoutColumnPanel[];
   dragFrame: HTMLElement | null;
-  pendingDropIndex: number;
+  /** Panel under the pointer to swap with (panel drags). */
+  pendingDropTarget: LayoutColumnPanel | null;
   pendingPadTarget: PagePadSide | null;
 };
 
@@ -629,6 +1024,12 @@ type ResizeSession =
       startX: number;
       startPad: number;
       baseline: LiveWidths;
+    }
+  | {
+      type: "separator";
+      id: string;
+      startX: number;
+      startW: number;
     };
 
 let resizeSession: ResizeSession | null = null;
@@ -695,20 +1096,28 @@ function collectPanelHitRects(
   return out;
 }
 
-function dropIndexForX(
-  panels: LayoutColumnPanel[],
-  rects: { panel: LayoutColumnPanel; mid: number }[],
+function dropTargetForX(
+  rects: { panel: LayoutColumnPanel; left: number; right: number }[],
   clientX: number,
   dragging: LayoutColumnPanel,
-): number {
-  if (rects.length === 0) return panels.indexOf(dragging);
-  // Insert relative to midpoints of other columns (stable while dragging).
-  const others = rects.filter((r) => r.panel !== dragging);
-  let index = 0;
-  for (const r of others) {
-    if (clientX > r.mid) index += 1;
+): LayoutColumnPanel | null {
+  for (const r of rects) {
+    if (r.panel === dragging) continue;
+    if (clientX >= r.left && clientX < r.right) return r.panel;
   }
-  return Math.max(0, Math.min(panels.length - 1, index));
+  // Nearest other column by midpoint if between gaps.
+  let best: LayoutColumnPanel | null = null;
+  let bestDist = Infinity;
+  for (const r of rects) {
+    if (r.panel === dragging) continue;
+    const mid = (r.left + r.right) / 2;
+    const dist = Math.abs(clientX - mid);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = r.panel;
+    }
+  }
+  return best;
 }
 
 function clearDropHints(host: HTMLElement): void {
@@ -720,6 +1129,18 @@ function clearDropHints(host: HTMLElement): void {
   }
   const line = host.querySelector(".readit-drop-line") as HTMLElement | null;
   if (line) line.style.display = "none";
+}
+
+function refreshChromeAfterOrder(settings: ReaditSettings): void {
+  layoutSettings = settings;
+  liveWidths = applyFittedShellWidths(settings);
+  // Two frames so grid tracks settle before measuring/placing blueprints.
+  window.cancelAnimationFrame(placeHandlesRaf);
+  placeHandlesRaf = window.requestAnimationFrame(() => {
+    placeHandlesRaf = window.requestAnimationFrame(() => {
+      placeEditChrome(settings);
+    });
+  });
 }
 
 function mountColumnResize(settings: ReaditSettings): void {
@@ -762,23 +1183,23 @@ function bindColumnEditListeners(): void {
 
     if (session.kind === "panel") {
       const typed = session.id as LayoutColumnPanel;
-      const from = session.panels.indexOf(typed);
-      if (
-        from >= 0 &&
-        session.pendingDropIndex >= 0 &&
-        session.pendingDropIndex !== from
-      ) {
-        const nextOrder = movePanelToIndex(
-          layoutSettings.layoutSlots.columnOrder,
-          typed,
-          session.pendingDropIndex,
-        );
-        window.dispatchEvent(
-          new CustomEvent("readit:layout-order", {
-            detail: { columnOrder: nextOrder } satisfies LayoutOrderPersistDetail,
-          }),
-        );
-      }
+      const target = session.pendingDropTarget;
+      if (!target || target === typed) return;
+      const nextOrder = swapColumnPanels(
+        layoutSettings.layoutSlots.columnOrder,
+        typed,
+        target,
+      );
+      const nextSettings: ReaditSettings = {
+        ...layoutSettings,
+        layoutSlots: applyColumnOrder(layoutSettings.layoutSlots, nextOrder),
+      };
+      refreshChromeAfterOrder(nextSettings);
+      window.dispatchEvent(
+        new CustomEvent("readit:layout-order", {
+          detail: { columnOrder: nextOrder } satisfies LayoutOrderPersistDetail,
+        }),
+      );
       return;
     }
 
@@ -801,13 +1222,21 @@ function bindColumnEditListeners(): void {
     )) {
       h.removeAttribute("data-active");
     }
+    const session = resizeSession;
     resizeSession = null;
-    if (!liveWidths) {
-      resizeDragging = false;
+    resizeDragging = false;
+    if (session?.type === "separator" && layoutSettings) {
+      window.dispatchEvent(
+        new CustomEvent("readit:layout-separators", {
+          detail: {
+            separators: layoutSettings.layoutSlots.separators || [],
+          },
+        }),
+      );
       return;
     }
+    if (!liveWidths) return;
     const detail: LayoutWidthsPersistDetail = { ...liveWidths };
-    resizeDragging = false;
     window.dispatchEvent(new CustomEvent("readit:layout-widths", { detail }));
   };
 
@@ -819,10 +1248,17 @@ function bindColumnEditListeners(): void {
     const host = ensureResizeHost();
 
     const label = t.closest(".readit-frame-label") as HTMLElement | null;
-    if (label) {
-      const kind = label.dataset.kind as FrameKind | undefined;
-      const id = label.dataset.id;
+    const frameHit = t.closest(".readit-layout-frame") as HTMLElement | null;
+    const dragFrom = label || frameHit;
+    if (dragFrom) {
+      const kind = (dragFrom.dataset.kind ||
+        frameHit?.dataset.kind) as FrameKind | undefined;
+      const id = dragFrom.dataset.id || frameHit?.dataset.id;
       if (!kind || !id) return;
+      if (kind === "separator") return;
+      // Don't start a column drag from the resize handle overlapping the frame edge.
+      if (t.closest(".readit-col-resize, .readit-pad-resize, .readit-frame-select"))
+        return;
       ev.preventDefault();
       ev.stopPropagation();
       const dragFrame = host.querySelector(
@@ -837,8 +1273,7 @@ function bindColumnEditListeners(): void {
         id,
         panels,
         dragFrame,
-        pendingDropIndex:
-          kind === "panel" ? panels.indexOf(id as LayoutColumnPanel) : -1,
+        pendingDropTarget: null,
         pendingPadTarget: null,
       };
       return;
@@ -867,13 +1302,31 @@ function bindColumnEditListeners(): void {
 
     const handle = t.closest(".readit-col-resize") as HTMLElement | null;
     if (!handle) return;
-    const panel = handle.dataset.readitResize as LayoutColumnPanel | undefined;
-    if (!panel) return;
+    const resizeId = handle.dataset.readitResize;
+    if (!resizeId) return;
+    const isSep =
+      handle.dataset.kind === "separator" ||
+      (layoutSettings.layoutSlots.separators || []).some(
+        (s) => s.id === resizeId,
+      );
     ev.preventDefault();
     ev.stopPropagation();
     resizeDragging = true;
     handle.dataset.active = "1";
     document.documentElement.classList.add("readit-col-resizing");
+    if (isSep) {
+      const sep = (layoutSettings.layoutSlots.separators || []).find(
+        (s) => s.id === resizeId,
+      );
+      resizeSession = {
+        type: "separator",
+        id: resizeId,
+        startX: ev.clientX,
+        startW: sep?.widthPx ?? 24,
+      };
+      return;
+    }
+    const panel = resizeId as LayoutColumnPanel;
     resizeSession = {
       type: "panel",
       panel,
@@ -909,8 +1362,7 @@ function bindColumnEditListeners(): void {
           dragFrame: host.querySelector(
             `.readit-layout-frame[data-kind="${kind}"][data-id="${id}"]`,
           ) as HTMLElement | null,
-          pendingDropIndex:
-            kind === "panel" ? panels.indexOf(id as LayoutColumnPanel) : -1,
+          pendingDropTarget: null,
           pendingPadTarget: null,
         };
         columnDragging = true;
@@ -925,31 +1377,20 @@ function bindColumnEditListeners(): void {
       if (session.dragFrame) session.dragFrame.dataset.dragging = "1";
       if (session.kind === "panel") {
         const typed = session.id as LayoutColumnPanel;
-        const rects = collectPanelHitRects(session.panels);
+        const rects =
+          liveWidths && layoutSettings
+            ? computePanelGeometry(layoutSettings, liveWidths)
+            : collectPanelHitRects(session.panels);
         panelHitRects = rects;
-        session.pendingDropIndex = dropIndexForX(
-          session.panels,
-          rects,
-          clientX,
-          typed,
-        );
-        const from = session.panels.indexOf(typed);
-        const line = ensureDropLine(host);
-        if (session.pendingDropIndex === from || rects.length === 0) {
-          line.style.display = "none";
-          return;
+        const target = dropTargetForX(rects, clientX, typed);
+        session.pendingDropTarget =
+          target && target !== typed ? target : null;
+        if (session.pendingDropTarget) {
+          const dropFrame = host.querySelector(
+            `.readit-layout-frame[data-kind="panel"][data-id="${session.pendingDropTarget}"]`,
+          ) as HTMLElement | null;
+          if (dropFrame) dropFrame.dataset.drop = "1";
         }
-        const ordered = [...rects].sort((a, b) => a.left - b.left);
-        const x =
-          session.pendingDropIndex >= ordered.length
-            ? ordered[ordered.length - 1]!.right
-            : ordered[session.pendingDropIndex]!.left;
-        const top = ordered[0]?.top ?? 0;
-        const bottom = ordered[0]?.bottom ?? window.innerHeight;
-        line.style.display = "block";
-        line.style.left = `${Math.round(x - 1)}px`;
-        line.style.top = `${Math.round(top)}px`;
-        line.style.height = `${Math.round(bottom - top)}px`;
         return;
       }
 
@@ -986,6 +1427,27 @@ function bindColumnEditListeners(): void {
         viewportBudgetPx(),
       );
       applyLiveColumnWidths(layoutSettings, liveWidths);
+      schedulePlaceHandles(layoutSettings);
+      return;
+    }
+
+    if (resizeSession.type === "separator") {
+      const sepId = resizeSession.id;
+      const desired = clampSeparatorWidth(
+        resizeSession.startW + (clientX - resizeSession.startX),
+      );
+      const seps = (layoutSettings.layoutSlots.separators || []).map((s) =>
+        s.id === sepId ? { ...s, widthPx: desired } : s,
+      );
+      layoutSettings = {
+        ...layoutSettings,
+        layoutSlots: {
+          ...layoutSettings.layoutSlots,
+          separators: seps,
+          preset: "custom",
+        },
+      };
+      liveWidths = applyFittedShellWidths(layoutSettings);
       schedulePlaceHandles(layoutSettings);
       return;
     }
@@ -1098,6 +1560,7 @@ function teardownLayoutGeometry(): void {
   resizeCleanup = null;
   fitCleanup?.();
   fitCleanup = null;
+  teardownLayoutRecoveryObserver();
   clearLiveColumnOverrides();
   liveWidths = null;
   layoutSettings = null;
@@ -1119,9 +1582,13 @@ export const layoutSlotsFeature: FeatureModule = {
       document.documentElement.classList.remove(
         "readit-layout-edit",
         "readit-layout-degraded",
+        "readit-layout-pending",
         "readit-col-resizing",
         "readit-col-dragging",
+        "readit-nav-compact",
+        "readit-rail-compact",
       );
+      unmountNavRail();
       delete document.documentElement.dataset.readitLayout;
       delete document.documentElement.dataset.readitColumns;
       teardownLayoutGeometry();
@@ -1129,6 +1596,7 @@ export const layoutSlotsFeature: FeatureModule = {
     }
     const resolved = stampLayoutSlots();
     const health = layoutSlotsHealth(resolved);
+    const ready = layoutChromeReady(resolved);
     document.documentElement.dataset.readitLayout =
       ctx.settings.layoutSlots.preset;
     document.documentElement.dataset.readitColumns =
@@ -1141,8 +1609,29 @@ export const layoutSlotsFeature: FeatureModule = {
       "readit-layout-degraded",
       health === "degraded" || health === "broken",
     );
+    document.documentElement.classList.toggle(
+      "readit-layout-pending",
+      !ready,
+    );
+    mountLayoutRecoveryObserver(ctx.settings);
     mountViewportFit(ctx.settings);
     mountColumnResize(ctx.settings);
+    if (!ready) {
+      document.documentElement.style.removeProperty("--readit-grid-cols");
+      document.documentElement.classList.remove("readit-nav-compact");
+      scheduleLayoutRecovery(ctx.settings, 40);
+      startLayoutRecoveryPoll(ctx.settings, 3000);
+      return;
+    }
+    if (
+      ctx.settings.layoutSlots.widths.leftNavPx <= NAV_COMPACT_MAX_PX ||
+      document.documentElement.classList.contains("readit-nav-compact") ||
+      navRailNeedsRemount()
+    ) {
+      mountNavRail();
+    }
+    // Keep polling through Reddit's delayed shell replacement.
+    startLayoutRecoveryPoll(ctx.settings, 2800);
   },
   teardown() {
     clearLayoutSlotMarks();
@@ -1151,9 +1640,13 @@ export const layoutSlotsFeature: FeatureModule = {
     document.documentElement.classList.remove(
       "readit-layout-edit",
       "readit-layout-degraded",
+      "readit-layout-pending",
       "readit-col-resizing",
       "readit-col-dragging",
+      "readit-nav-compact",
+      "readit-rail-compact",
     );
+    unmountNavRail();
     teardownLayoutGeometry();
   },
   health: () => layoutSlotsHealth(resolveSlots()),
