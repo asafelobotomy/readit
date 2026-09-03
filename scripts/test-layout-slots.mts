@@ -8,6 +8,8 @@ import { isEditableTarget } from "../packages/features/src/reader-creator.ts";
 import {
   applyLayoutPreset,
   addLayoutSeparator,
+  moveLayoutSeparator,
+  removeLayoutSeparator,
   layoutSlotsHealth,
   presetToPlacements,
   resolveSlots,
@@ -322,6 +324,8 @@ check("CSS column resize handle styles", () => {
   settings.layoutSlots.editMode = true;
   const css = buildStylesheet(settings);
   assert.match(css, /readit-col-resize/);
+  assert.match(css, /readit-frame-remove/);
+  assert.match(css, /data-edge="left"/);
   assert.match(css, /cursor:\s*col-resize/);
 });
 
@@ -544,6 +548,57 @@ check("addLayoutSeparator caps at 3", () => {
   const capped = addLayoutSeparator(cfg, "main");
   assert.equal(capped.separators.length, 3);
   assert.equal(capped, cfg);
+});
+
+check("moveLayoutSeparator relocates after another panel", () => {
+  let cfg = createDefaultSettings().layoutSlots;
+  cfg = addLayoutSeparator(cfg, "leftNav");
+  const id = cfg.separators[0]!.id;
+  cfg = moveLayoutSeparator(cfg, id, "main");
+  assert.equal(cfg.separators[0]!.after, "main");
+  const tracks = buildLayoutTracks({
+    columnOrder: ["leftNav", "main", "rightRail"],
+    placements: {
+      leftNav: "left",
+      main: "center",
+      rightRail: "right",
+      subHeader: "right",
+    },
+    separators: cfg.separators,
+  });
+  assert.deepEqual(
+    tracks.map((t) => (t.type === "panel" ? t.panel : "sep")),
+    ["leftNav", "main", "sep", "rightRail"],
+  );
+});
+
+check("removeLayoutSeparator drops by id", () => {
+  let cfg = createDefaultSettings().layoutSlots;
+  cfg = addLayoutSeparator(cfg, "main");
+  cfg = addLayoutSeparator(cfg, "leftNav");
+  const id = cfg.separators[0]!.id;
+  cfg = removeLayoutSeparator(cfg, id);
+  assert.equal(cfg.separators.length, 1);
+  assert.notEqual(cfg.separators[0]!.id, id);
+});
+
+check("resizePanelInBudget left edge steals from left neighbors", () => {
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 200,
+      rightRailPx: 300,
+      feedWidthPx: 600,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "main",
+    800,
+    1200,
+    "left",
+  );
+  assert.ok(next.leftNavPx < 200 || next.feedWidthPx <= 800);
 });
 
 check("CSS gutter theme + zoom + font tokens", () => {

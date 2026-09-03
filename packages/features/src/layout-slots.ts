@@ -640,14 +640,14 @@ function ensureFrame(
       kind === "panel"
         ? `Drag anywhere on ${labelText} to move`
         : kind === "separator"
-          ? `Separator — resize from the edge`
+          ? `Drag to place between columns · resize from either edge`
           : `Drag to swap ${labelText} with the other pad`;
     label.setAttribute(
       "aria-label",
       kind === "panel"
         ? `Move ${labelText} column`
         : kind === "separator"
-          ? `Separator ${labelText}`
+          ? `Move separator ${labelText}`
           : `Move ${labelText}`,
     );
     frame.appendChild(label);
@@ -665,6 +665,33 @@ function ensureFrame(
         frame!.dataset.selected = check.checked ? "1" : "0";
       });
       frame.appendChild(check);
+    }
+    if (kind === "separator") {
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "readit-frame-remove";
+      remove.textContent = "×";
+      remove.title = "Remove separator";
+      remove.setAttribute("aria-label", "Remove separator");
+      remove.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!layoutSettings) return;
+        const nextSlots = removeLayoutSeparator(
+          layoutSettings.layoutSlots,
+          id,
+        );
+        layoutSettings = {
+          ...layoutSettings,
+          layoutSlots: nextSlots,
+        };
+        editSelection.delete(id);
+        emitEditSelection();
+        liveWidths = applyFittedShellWidths(layoutSettings);
+        schedulePlaceHandles(layoutSettings);
+        dispatchSeparatorsPersist(nextSlots.separators || []);
+      });
+      frame.appendChild(remove);
     }
     host.appendChild(frame);
   } else {
@@ -839,6 +866,79 @@ export function addLayoutSeparator(
   };
 }
 
+/** Place an existing separator after a different column (between columns). */
+export function moveLayoutSeparator(
+  config: LayoutSlotsConfig,
+  sepId: string,
+  after: LayoutColumnPanel,
+): LayoutSlotsConfig {
+  const seps = config.separators || [];
+  if (!seps.some((s) => s.id === sepId)) return config;
+  return {
+    ...config,
+    preset: "custom",
+    separators: seps.map((s) => (s.id === sepId ? { ...s, after } : s)),
+  };
+}
+
+export function removeLayoutSeparator(
+  config: LayoutSlotsConfig,
+  sepId: string,
+): LayoutSlotsConfig {
+  const seps = config.separators || [];
+  if (!seps.some((s) => s.id === sepId)) return config;
+  return {
+    ...config,
+    preset: "custom",
+    separators: seps.filter((s) => s.id !== sepId),
+  };
+}
+
+function dispatchSeparatorsPersist(separators: LayoutSeparator[]): void {
+  window.dispatchEvent(
+    new CustomEvent("readit:layout-separators", {
+      detail: { separators },
+    }),
+  );
+}
+
+function placeColResizeHandle(
+  host: HTMLElement,
+  id: string,
+  edge: "left" | "right",
+  geo: { left: number; right: number; top: number; bottom: number; width: number },
+  opts: { kind?: "separator"; label: string },
+): void {
+  const sel = `.readit-col-resize[data-readit-resize="${CSS.escape(id)}"][data-edge="${edge}"]`;
+  let handle = host.querySelector(sel) as HTMLButtonElement | null;
+  if (!handle) {
+    handle = document.createElement("button");
+    handle.type = "button";
+    handle.className = "readit-col-resize";
+    handle.dataset.readitResize = id;
+    handle.dataset.edge = edge;
+    if (opts.kind === "separator") handle.dataset.kind = "separator";
+    handle.setAttribute(
+      "aria-label",
+      `Resize ${opts.label} (${edge} edge)`,
+    );
+    handle.title = `Drag ${edge} edge to resize ${opts.label}`;
+    host.appendChild(handle);
+  }
+  const height = geo.bottom - geo.top;
+  if (geo.width < 4 || height < 8) {
+    handle.style.display = "none";
+    return;
+  }
+  handle.style.display = "block";
+  handle.style.left =
+    edge === "right"
+      ? `${Math.round(geo.right - 5)}px`
+      : `${Math.round(geo.left - 5)}px`;
+  handle.style.top = `${Math.round(geo.top)}px`;
+  handle.style.height = `${Math.round(height)}px`;
+}
+
 function placeEditChrome(settings: ReaditSettings): void {
   if (!settings.layoutSlots.editMode) {
     removeResizeHost();
@@ -870,64 +970,47 @@ function placeEditChrome(settings: ReaditSettings): void {
 
   for (const geo of panelRects) {
     const panel = geo.panel;
-    let handle = host.querySelector(
-      `.readit-col-resize[data-readit-resize="${panel}"]`,
-    ) as HTMLButtonElement | null;
-    if (!handle) {
-      handle = document.createElement("button");
-      handle.type = "button";
-      handle.className = "readit-col-resize";
-      handle.dataset.readitResize = panel;
-      handle.setAttribute("aria-label", `Resize ${COLUMN_PANEL_LABELS[panel]}`);
-      handle.title = `Drag edge to resize ${COLUMN_PANEL_LABELS[panel]}`;
-      host.appendChild(handle);
-    }
     const height = geo.bottom - geo.top;
     if (geo.width < 8 || height < 8) {
-      handle.style.display = "none";
+      for (const edge of ["left", "right"] as const) {
+        const h = host.querySelector(
+          `.readit-col-resize[data-readit-resize="${panel}"][data-edge="${edge}"]`,
+        );
+        if (h instanceof HTMLElement) h.style.display = "none";
+      }
       const stale = host.querySelector(
         `.readit-layout-frame[data-kind="panel"][data-id="${panel}"]`,
       );
       if (stale instanceof HTMLElement) stale.style.display = "none";
       continue;
     }
-    handle.style.display = "block";
-    handle.style.left = `${Math.round(geo.right - 5)}px`;
-    handle.style.top = `${Math.round(geo.top)}px`;
-    handle.style.height = `${Math.round(height)}px`;
+    const label = COLUMN_PANEL_LABELS[panel];
+    placeColResizeHandle(host, panel, "left", geo, { label });
+    placeColResizeHandle(host, panel, "right", geo, { label });
 
-    const frame = ensureFrame(
-      host,
-      "panel",
-      panel,
-      COLUMN_PANEL_LABELS[panel],
-    );
+    const frame = ensureFrame(host, "panel", panel, label);
     positionFrame(frame, geo.left, geo.top, geo.width, height);
   }
 
   for (const geo of computeSeparatorGeometry(settings, liveWidths)) {
-    let handle = host.querySelector(
-      `.readit-col-resize[data-readit-resize="${geo.id}"]`,
-    ) as HTMLButtonElement | null;
-    if (!handle) {
-      handle = document.createElement("button");
-      handle.type = "button";
-      handle.className = "readit-col-resize";
-      handle.dataset.readitResize = geo.id;
-      handle.dataset.kind = "separator";
-      handle.setAttribute("aria-label", "Resize separator");
-      handle.title = "Drag edge to resize separator";
-      host.appendChild(handle);
-    }
     const height = geo.bottom - geo.top;
     if (geo.width < 4 || height < 8) {
-      handle.style.display = "none";
+      for (const edge of ["left", "right"] as const) {
+        const h = host.querySelector(
+          `.readit-col-resize[data-readit-resize="${CSS.escape(geo.id)}"][data-edge="${edge}"]`,
+        );
+        if (h instanceof HTMLElement) h.style.display = "none";
+      }
       continue;
     }
-    handle.style.display = "block";
-    handle.style.left = `${Math.round(geo.right - 5)}px`;
-    handle.style.top = `${Math.round(geo.top)}px`;
-    handle.style.height = `${Math.round(height)}px`;
+    placeColResizeHandle(host, geo.id, "left", geo, {
+      kind: "separator",
+      label: "separator",
+    });
+    placeColResizeHandle(host, geo.id, "right", geo, {
+      kind: "separator",
+      label: "separator",
+    });
     const frame = ensureFrame(host, "separator", geo.id, "Sep");
     positionFrame(frame, geo.left, geo.top, geo.width, height);
   }
@@ -1013,6 +1096,7 @@ type ResizeSession =
       type: "panel";
       panel: LayoutColumnPanel;
       panels: LayoutColumnPanel[];
+      edge: "left" | "right";
       startX: number;
       startW: number;
       baseline: LiveWidths;
@@ -1028,6 +1112,7 @@ type ResizeSession =
   | {
       type: "separator";
       id: string;
+      edge: "left" | "right";
       startX: number;
       startW: number;
     };
@@ -1120,6 +1205,27 @@ function dropTargetForX(
   return best;
 }
 
+/** Separator sits after the chosen column (in the gap to its right). */
+function dropTargetForSeparator(
+  rects: { panel: LayoutColumnPanel; left: number; right: number }[],
+  clientX: number,
+): LayoutColumnPanel | null {
+  if (rects.length === 0) return null;
+  const sorted = [...rects].sort((a, b) => a.left - b.left);
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i]!;
+    if (clientX < r.left) {
+      return i === 0 ? r.panel : sorted[i - 1]!.panel;
+    }
+    if (clientX >= r.left && clientX < r.right) {
+      const mid = (r.left + r.right) / 2;
+      if (clientX < mid && i > 0) return sorted[i - 1]!.panel;
+      return r.panel;
+    }
+  }
+  return sorted[sorted.length - 1]!.panel;
+}
+
 function clearDropHints(host: HTMLElement): void {
   for (const el of host.querySelectorAll(".readit-layout-frame[data-drop]")) {
     el.removeAttribute("data-drop");
@@ -1203,6 +1309,21 @@ function bindColumnEditListeners(): void {
       return;
     }
 
+    if (session.kind === "separator") {
+      const target = session.pendingDropTarget;
+      if (!target) return;
+      const nextSlots = moveLayoutSeparator(
+        layoutSettings.layoutSlots,
+        session.id,
+        target,
+      );
+      layoutSettings = { ...layoutSettings, layoutSlots: nextSlots };
+      liveWidths = applyFittedShellWidths(layoutSettings);
+      schedulePlaceHandles(layoutSettings);
+      dispatchSeparatorsPersist(nextSlots.separators || []);
+      return;
+    }
+
     if (liveWidths && session.pendingPadTarget) {
       window.dispatchEvent(
         new CustomEvent("readit:layout-pads", {
@@ -1226,13 +1347,7 @@ function bindColumnEditListeners(): void {
     resizeSession = null;
     resizeDragging = false;
     if (session?.type === "separator" && layoutSettings) {
-      window.dispatchEvent(
-        new CustomEvent("readit:layout-separators", {
-          detail: {
-            separators: layoutSettings.layoutSlots.separators || [],
-          },
-        }),
-      );
+      dispatchSeparatorsPersist(layoutSettings.layoutSlots.separators || []);
       return;
     }
     if (!liveWidths) return;
@@ -1255,9 +1370,12 @@ function bindColumnEditListeners(): void {
         frameHit?.dataset.kind) as FrameKind | undefined;
       const id = dragFrom.dataset.id || frameHit?.dataset.id;
       if (!kind || !id) return;
-      if (kind === "separator") return;
-      // Don't start a column drag from the resize handle overlapping the frame edge.
-      if (t.closest(".readit-col-resize, .readit-pad-resize, .readit-frame-select"))
+      // Don't start a column drag from the resize handle / select / remove.
+      if (
+        t.closest(
+          ".readit-col-resize, .readit-pad-resize, .readit-frame-select, .readit-frame-remove",
+        )
+      )
         return;
       ev.preventDefault();
       ev.stopPropagation();
@@ -1318,19 +1436,29 @@ function bindColumnEditListeners(): void {
       const sep = (layoutSettings.layoutSlots.separators || []).find(
         (s) => s.id === resizeId,
       );
+      const edge =
+        handle.dataset.edge === "left" || handle.dataset.edge === "right"
+          ? handle.dataset.edge
+          : "right";
       resizeSession = {
         type: "separator",
         id: resizeId,
+        edge,
         startX: ev.clientX,
         startW: sep?.widthPx ?? 24,
       };
       return;
     }
     const panel = resizeId as LayoutColumnPanel;
+    const edge =
+      handle.dataset.edge === "left" || handle.dataset.edge === "right"
+        ? handle.dataset.edge
+        : "right";
     resizeSession = {
       type: "panel",
       panel,
       panels,
+      edge,
       startX: ev.clientX,
       startW: panelWidthPx(panel, liveWidths),
       baseline: { ...liveWidths },
@@ -1375,14 +1503,21 @@ function bindColumnEditListeners(): void {
       const session = columnDragSession;
       clearDropHints(host);
       if (session.dragFrame) session.dragFrame.dataset.dragging = "1";
-      if (session.kind === "panel") {
-        const typed = session.id as LayoutColumnPanel;
+      if (session.kind === "panel" || session.kind === "separator") {
+        const typed =
+          session.kind === "panel"
+            ? (session.id as LayoutColumnPanel)
+            : null;
         const rects =
           liveWidths && layoutSettings
             ? computePanelGeometry(layoutSettings, liveWidths)
             : collectPanelHitRects(session.panels);
         panelHitRects = rects;
-        const target = dropTargetForX(rects, clientX, typed);
+        // Separators drop "after" the hovered column (between that column and the next).
+        const target =
+          session.kind === "separator"
+            ? dropTargetForSeparator(rects, clientX)
+            : dropTargetForX(rects, clientX, typed!);
         session.pendingDropTarget =
           target && target !== typed ? target : null;
         if (session.pendingDropTarget) {
@@ -1390,6 +1525,14 @@ function bindColumnEditListeners(): void {
             `.readit-layout-frame[data-kind="panel"][data-id="${session.pendingDropTarget}"]`,
           ) as HTMLElement | null;
           if (dropFrame) dropFrame.dataset.drop = "1";
+          const geo = rects.find((r) => r.panel === session.pendingDropTarget);
+          if (geo) {
+            const line = ensureDropLine(host);
+            line.style.display = "block";
+            line.style.left = `${Math.round(geo.right - 1)}px`;
+            line.style.top = `${Math.round(geo.top)}px`;
+            line.style.height = `${Math.round(geo.bottom - geo.top)}px`;
+          }
         }
         return;
       }
@@ -1433,9 +1576,11 @@ function bindColumnEditListeners(): void {
 
     if (resizeSession.type === "separator") {
       const sepId = resizeSession.id;
-      const desired = clampSeparatorWidth(
-        resizeSession.startW + (clientX - resizeSession.startX),
-      );
+      const delta =
+        resizeSession.edge === "right"
+          ? clientX - resizeSession.startX
+          : resizeSession.startX - clientX;
+      const desired = clampSeparatorWidth(resizeSession.startW + delta);
       const seps = (layoutSettings.layoutSlots.separators || []).map((s) =>
         s.id === sepId ? { ...s, widthPx: desired } : s,
       );
@@ -1452,12 +1597,17 @@ function bindColumnEditListeners(): void {
       return;
     }
 
+    const delta =
+      resizeSession.edge === "right"
+        ? clientX - resizeSession.startX
+        : resizeSession.startX - clientX;
     liveWidths = resizePanelInBudget(
       resizeSession.baseline,
       resizeSession.panels,
       resizeSession.panel,
-      resizeSession.startW + (clientX - resizeSession.startX),
+      resizeSession.startW + delta,
       viewportBudgetPx(),
+      resizeSession.edge,
     );
     applyLiveColumnWidths(layoutSettings, liveWidths);
     schedulePlaceHandles(layoutSettings);

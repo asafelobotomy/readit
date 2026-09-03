@@ -529,8 +529,11 @@ export function fitLayoutWidths(
 
 /**
  * Grow/shrink one panel. Extra width first eats free space (neighbors shift
- * toward the opposite gutter). If the shell is full, columns to the right of
- * the handle shrink down to their mins; the handle itself is clamped last.
+ * toward the opposite gutter). If the shell is full, columns on the far side of
+ * the active edge shrink down to their mins; the handle itself is clamped last.
+ *
+ * @param edge Which vertical edge is being dragged. Right edge steals from
+ * columns to the right; left edge steals from columns to the left.
  */
 export function resizePanelInBudget(
   widths: LayoutWidthBudget,
@@ -538,6 +541,7 @@ export function resizePanelInBudget(
   panel: LayoutColumnPanel,
   desiredPx: number,
   viewportPx: number,
+  edge: "left" | "right" = "right",
 ): LayoutWidthBudget {
   const order = visibleOrder.filter(Boolean);
   const idx = order.indexOf(panel);
@@ -574,8 +578,14 @@ export function resizePanelInBudget(
     gaps;
   let excess = sumPanelWidths(order, next) - budget;
   if (excess > 0) {
-    for (let i = order.length - 1; i > idx && excess > 0; i--) {
-      excess -= stealWidthFromPanel(next, order[i]!, excess);
+    if (edge === "right") {
+      for (let i = order.length - 1; i > idx && excess > 0; i--) {
+        excess -= stealWidthFromPanel(next, order[i]!, excess);
+      }
+    } else {
+      for (let i = idx - 1; i >= 0 && excess > 0; i--) {
+        excess -= stealWidthFromPanel(next, order[i]!, excess);
+      }
     }
     if (excess > 0) {
       excess -= stealWidthFromPanel(next, panel, excess);
