@@ -42,27 +42,6 @@ const GUTTER_THEMES: { id: GutterTheme; label: string }[] = [
   { id: "inset", label: "Inset" },
 ];
 
-function measureToolboxPosition(): { top: number; left: number } {
-  const search =
-    document.querySelector("faceplate-search-input") ||
-    document.querySelector("#search-input") ||
-    document.querySelector('input[type="search"]') ||
-    document.querySelector('[placeholder*="Search" i]');
-  if (search instanceof Element) {
-    const r = search.getBoundingClientRect();
-    if (r.width > 40 && r.top >= 0) {
-      return {
-        top: Math.max(8, Math.round(r.top + r.height / 2 - 18)),
-        left: Math.min(
-          window.innerWidth - 420,
-          Math.round(r.right + 12),
-        ),
-      };
-    }
-  }
-  return { top: 56, left: Math.max(16, Math.round(window.innerWidth / 2 - 200)) };
-}
-
 type Props = {
   settings: ReaditSettings;
   commit: (
@@ -72,24 +51,10 @@ type Props = {
 };
 
 export function EditToolbox({ settings, commit }: Props) {
-  const [pos, setPos] = useState(() => measureToolboxPosition());
   const [selected, setSelected] = useState<string[]>(() => getEditSelection());
   const cfg = settings.layoutSlots;
   const tokens = settings.knobs.tokens;
   const sepCount = cfg.separators?.length ?? 0;
-
-  useEffect(() => {
-    const rem = () => setPos(measureToolboxPosition());
-    rem();
-    window.addEventListener("resize", rem);
-    window.addEventListener("wxt:locationchange", rem);
-    const t = window.setInterval(rem, 1200);
-    return () => {
-      window.removeEventListener("resize", rem);
-      window.removeEventListener("wxt:locationchange", rem);
-      window.clearInterval(t);
-    };
-  }, []);
 
   useEffect(() => {
     const onSel = (ev: Event) => {
@@ -100,15 +65,15 @@ export function EditToolbox({ settings, commit }: Props) {
     return () => window.removeEventListener("readit:edit-selection", onSel);
   }, []);
 
-  const selectedPanels = selected.filter((id) =>
-    id === "leftNav" || id === "main" || id === "rightRail",
+  const selectedPanels = selected.filter(
+    (id) => id === "leftNav" || id === "main" || id === "rightRail",
   ) as LayoutColumnPanel[];
   const zoomTarget: "all" | "selected" =
     selectedPanels.length > 0 ? "selected" : "all";
 
   const currentZoom =
     zoomTarget === "all"
-      ? cfg.zoomAll ?? 1
+      ? (cfg.zoomAll ?? 1)
       : clampZoom(
           cfg.zoomByPanel?.[selectedPanels[0]!] ?? cfg.zoomAll ?? 1,
         );
@@ -116,9 +81,9 @@ export function EditToolbox({ settings, commit }: Props) {
   return (
     <div
       class="readit-edit-toolbox"
-      style={{ top: `${pos.top}px`, left: `${pos.left}px` }}
       role="toolbar"
       aria-label="readit layout edit"
+      data-readit-edit-island="1"
     >
       <div class="readit-edit-toolbox-group" title="Layout modes">
         {LAYOUT_PRESETS.map((p) => (
@@ -216,7 +181,7 @@ export function EditToolbox({ settings, commit }: Props) {
           class="readit-edit-chip"
           onClick={() => {
             const next = clampZoom(currentZoom - 0.05);
-            void applyZoom(commit, settings, selectedPanels, next);
+            void applyZoom(commit, selectedPanels, next);
           }}
         >
           −
@@ -227,7 +192,7 @@ export function EditToolbox({ settings, commit }: Props) {
           class="readit-edit-chip"
           onClick={() => {
             const next = clampZoom(currentZoom + 0.05);
-            void applyZoom(commit, settings, selectedPanels, next);
+            void applyZoom(commit, selectedPanels, next);
           }}
         >
           +
@@ -242,11 +207,10 @@ export function EditToolbox({ settings, commit }: Props) {
           title={
             sepCount >= MAX_LAYOUT_SEPARATORS
               ? "Maximum 3 separators"
-              : "Add blank separator after selected column (or main)"
+              : "Add separator after the selected column (or main) — drag to move between columns"
           }
           onClick={() => {
-            const after: LayoutColumnPanel =
-              selectedPanels[0] || "main";
+            const after: LayoutColumnPanel = selectedPanels[0] || "main";
             void commit("Add separator", (s) => ({
               ...s,
               layoutSlots: addLayoutSeparator(s.layoutSlots, after),
@@ -294,7 +258,6 @@ export function EditToolbox({ settings, commit }: Props) {
 
 async function applyZoom(
   commit: Props["commit"],
-  _settings: ReaditSettings,
   selectedPanels: LayoutColumnPanel[],
   next: number,
 ): Promise<void> {

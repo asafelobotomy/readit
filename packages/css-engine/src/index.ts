@@ -1029,6 +1029,29 @@ html.readit-layout-edit .readit-frame-select {
   accent-color: var(--readit-accent);
   cursor: pointer;
 }
+html.readit-layout-edit .readit-layout-frame[data-kind="separator"] .readit-frame-select {
+  right: 28px;
+}
+html.readit-layout-edit .readit-frame-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 3;
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  font: 700 16px/1 ui-sans-serif, system-ui, sans-serif;
+  color: #fff;
+  background: color-mix(in srgb, #b91c1c 88%, #000);
+  cursor: pointer;
+}
+html.readit-layout-edit .readit-frame-remove:hover {
+  background: #dc2626;
+}
 html.readit-layout-edit .readit-layout-frame[data-selected="1"] {
   box-shadow: inset 0 0 0 2px var(--readit-accent);
   background: color-mix(in srgb, var(--readit-accent) 12%, transparent);
@@ -1084,6 +1107,15 @@ html.readit-layout-edit .readit-pad-resize[data-active="1"]::after {
   opacity: 1;
   width: 3px;
   left: 3.5px;
+}
+html.readit-layout-edit .readit-col-resize[data-edge="left"]::after {
+  left: auto;
+  right: 4px;
+}
+html.readit-layout-edit .readit-col-resize[data-edge="left"]:hover::after,
+html.readit-layout-edit .readit-col-resize[data-edge="left"][data-active="1"]::after {
+  left: auto;
+  right: 3.5px;
 }
 html.readit-layout-edit.readit-col-resizing,
 html.readit-layout-edit.readit-col-resizing * {

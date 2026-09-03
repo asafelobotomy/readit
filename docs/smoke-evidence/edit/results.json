@@ -1,0 +1,161 @@
+{
+  "at": "2026-09-03T11:06:51.947Z",
+  "mode": "cdp-puppeteer",
+  "cdpEndpoint": "http://127.0.0.1:9222",
+  "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
+  "results": [
+    {
+      "id": "edit.unit",
+      "status": "pass",
+      "detail": "test:layout"
+    },
+    {
+      "id": "edit.shell_home",
+      "status": "pass",
+      "detail": "{\"host\":true,\"fab\":true,\"active\":true}"
+    },
+    {
+      "id": "edit.fab_stack_open",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"labels\":[\"Edit Mode\",\"Settings\",\"GitHub\",\"Ko-fi\"],\"menu\":true}"
+    },
+    {
+      "id": "edit.fab_stack_toggle",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "edit.fab_settings_drawer",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "edit.open_studio_event",
+      "status": "pass",
+      "detail": "{\"drawer\":true,\"edit\":false,\"toolbox\":false}"
+    },
+    {
+      "id": "edit.enter_edit_mode",
+      "status": "pass",
+      "detail": "{\"entered\":true,\"edit\":true}"
+    },
+    {
+      "id": "edit.toolbox_present",
+      "status": "pass",
+      "detail": "{\"entered\":true,\"toolbox\":true,\"island\":true,\"geom\":{\"top\":873,\"bottom\":947,\"left\":480,\"width\":950,\"height\":74,\"nearBottom\":true,\"notTopSearch\":true,\"centeredish\":true},\"chips\":[\"Classic\",\"Nav right\",\"Dual L\",\"Dual R\",\"Single\",\"−\",\"+\",\"+ Sep (3/3)\",\"Done\"],\"selects\":3,\"frames\":8,\"checks\":6}"
+    },
+    {
+      "id": "edit.toolbox_bottom_island",
+      "status": "pass",
+      "detail": "{\"top\":873,\"bottom\":947,\"left\":480,\"width\":950,\"height\":74,\"nearBottom\":true,\"notTopSearch\":true,\"centeredish\":true}"
+    },
+    {
+      "id": "edit.toolbox_groups",
+      "status": "pass",
+      "detail": "{\"chips\":[\"Classic\",\"Nav right\",\"Dual L\",\"Dual R\",\"Single\",\"−\",\"+\",\"+ Sep (3/3)\",\"Done\"],\"selects\":3}"
+    },
+    {
+      "id": "edit.frames_and_checkboxes",
+      "status": "pass",
+      "detail": "{\"frames\":8,\"checks\":6,\"panels\":3}"
+    },
+    {
+      "id": "edit.preset.classic",
+      "status": "pass",
+      "detail": "{\"layout\":\"classic\",\"active\":\"Classic\"}"
+    },
+    {
+      "id": "edit.preset.nav_right",
+      "status": "pass",
+      "detail": "{\"layout\":\"navRight\",\"recipe\":true}"
+    },
+    {
+      "id": "edit.preset.single",
+      "status": "pass",
+      "detail": "singleColumn"
+    },
+    {
+      "id": "edit.font_family_serif",
+      "status": "pass",
+      "detail": "ui-serif, Georgia, Cambria, Times New Roman, Times, serif"
+    },
+    {
+      "id": "edit.font_weight_bold",
+      "status": "pass",
+      "detail": "700"
+    },
+    {
+      "id": "edit.font_scale",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":\"1.2\",\"after\":\"1.2\"}"
+    },
+    {
+      "id": "edit.zoom_all_step",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"labelBefore\":\"Zoom All 100%\",\"labelAfter\":\"Zoom All 105%\",\"hasZoomCss\":true}"
+    },
+    {
+      "id": "edit.zoom_label_sel",
+      "status": "pass",
+      "detail": "{\"labels\":\"Zoom Sel | 105%\",\"selLabel\":true,\"panelZoom\":true,\"selected\":true}"
+    },
+    {
+      "id": "edit.zoom_selected_step",
+      "status": "pass",
+      "detail": "{\"labels\":\"Zoom Sel | 105%\",\"selLabel\":true,\"panelZoom\":true,\"selected\":true}"
+    },
+    {
+      "id": "edit.separator_add",
+      "status": "pass",
+      "detail": "{\"label\":\"+ Sep (3/3)\",\"disabled\":true,\"nodes\":3,\"fourthWasDisabled\":true}"
+    },
+    {
+      "id": "edit.separator_max_3",
+      "status": "pass",
+      "detail": "{\"label\":\"+ Sep (3/3)\",\"disabled\":true,\"nodes\":3,\"fourthWasDisabled\":true}"
+    },
+    {
+      "id": "edit.column_dual_resize",
+      "status": "pass",
+      "detail": "{\"panelLeft\":3,\"panelRight\":3,\"sepLeft\":3,\"sepRight\":3,\"removeBtns\":3}"
+    },
+    {
+      "id": "edit.separator_dual_resize",
+      "status": "pass",
+      "detail": "{\"panelLeft\":3,\"panelRight\":3,\"sepLeft\":3,\"sepRight\":3,\"removeBtns\":3}"
+    },
+    {
+      "id": "edit.separator_remove_x",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"before\":3,\"after\":2}"
+    },
+    {
+      "id": "edit.gutter_theme_line",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "edit.done_exits",
+      "status": "pass",
+      "detail": "{\"edit\":false,\"toolbox\":false,\"frames\":0}"
+    },
+    {
+      "id": "edit.esc_exits",
+      "status": "pass",
+      "detail": "{\"edit\":false,\"toolbox\":false}"
+    },
+    {
+      "id": "edit.manual.island_vs_fab",
+      "status": "skip",
+      "detail": "visual"
+    },
+    {
+      "id": "edit.manual.github_kofi",
+      "status": "skip",
+      "detail": "external tabs"
+    }
+  ],
+  "pass": 28,
+  "fail": 0,
+  "skip": 2
+}
