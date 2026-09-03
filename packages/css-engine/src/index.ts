@@ -7,18 +7,35 @@ import type {
   MediaMode,
   ReaditSettings,
 } from "@readit/schema";
-import { normalizeColumnOrder } from "@readit/schema";
+import {
+  clampColumnGap,
+  clampPagePad,
+  clampPanelWidth,
+  clampZoom,
+  buildLayoutTracks,
+  normalizeColumnOrder,
+} from "@readit/schema";
 
 const STYLE_ID = "readit-css-engine";
 
 export function tokensToCssVars(tokens: CssTokens): Record<string, string> {
   const gap = 8 + Math.round((1 - tokens.density) * 16);
   const pad = 6 + Math.round((1 - tokens.density) * 10);
+  const family =
+    tokens.fontFamily === "serif"
+      ? "ui-serif, Georgia, Cambria, Times New Roman, Times, serif"
+      : tokens.fontFamily === "mono"
+        ? "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+        : tokens.fontFamily === "sans"
+          ? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+          : "inherit";
   return {
     "--readit-feed-width": `${tokens.feedWidthPx}px`,
     "--readit-gap": `${gap}px`,
     "--readit-pad": `${pad}px`,
     "--readit-font-scale": String(tokens.fontScale),
+    "--readit-font-family": family,
+    "--readit-font-weight": String(tokens.fontWeight ?? 400),
     "--readit-radius": `${tokens.radiusPx}px`,
     "--readit-accent": tokens.accent,
   };
@@ -261,6 +278,7 @@ html.readit-active #subgrid-container .main-container {
 html.readit-active shreddit-feed,
 html.readit-active shreddit-post {
   font-size: calc(1rem * var(--readit-font-scale));
+  font-family: var(--readit-font-family, inherit);
 }
 
 html.readit-active shreddit-post {
@@ -365,6 +383,8 @@ function panelWidthRules(
   switch (panel) {
     case "leftNav":
       return `html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] {
+  /* Beat Reddit Tailwind .hidden (nav is m:block-only below breakpoint). */
+  display: block !important;
   grid-column: ${column} !important;
   grid-row: 1 !important;
   width: var(--readit-left-nav-width) !important;
@@ -377,7 +397,8 @@ function panelWidthRules(
   height: calc(100vh - var(--readit-chrome-top, 56px)) !important;
   max-height: calc(100vh - var(--readit-chrome-top, 56px)) !important;
   overflow-x: clip !important;
-  overflow-y: visible !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
   isolation: isolate !important;
   z-index: 3 !important;
   container-type: inline-size !important;
@@ -420,6 +441,18 @@ html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] #left-sideba
   overflow-y: visible !important;
   box-sizing: border-box !important;
   padding-inline: 8px !important;
+}
+/* Progressive tighten as the column narrows (before full icon-rail mode). */
+@container readit-nav (max-width: 160px) {
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] > div,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] #flex-left-nav-container {
+    padding-inline: 4px !important;
+    scrollbar-gutter: auto !important;
+  }
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] reddit-sidebar-nav,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] #left-sidebar {
+    padding-inline: 4px !important;
+  }
 }
 html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] #flex-left-nav-contents,
 html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] nav,
@@ -473,60 +506,287 @@ html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] div:has(> rp
   left: auto !important;
   width: auto !important;
 }
-/* Icon rail — shrink past ~label width and keep only avatars / icons */
-@container readit-nav (max-width: 104px) {
-  reddit-sidebar-nav,
-  #left-sidebar {
-    padding-inline: 2px !important;
-  }
-  #flex-left-nav-container,
-  [data-readit-slot="leftNav"] > div {
-    padding-inline: 2px !important;
+/* Icon rail — shrink past ~label width; center icons/avatars without clipping.
+   Selectors must match or beat the panel rules above (container query alone loses). */
+@container readit-nav (max-width: 168px) {
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] > div,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] #flex-left-nav-container {
+    padding-inline: 0 !important;
     scrollbar-gutter: auto !important;
   }
-  a,
-  button,
-  summary {
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] reddit-sidebar-nav,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] #left-sidebar {
+    padding-inline: 0 !important;
+  }
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] button,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] summary {
+    display: flex !important;
     justify-content: center !important;
     align-items: center !important;
     padding-inline: 0 !important;
+    margin-inline: 0 !important;
     gap: 0 !important;
     white-space: nowrap !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     font-size: 0 !important;
     line-height: 0 !important;
     color: transparent !important;
   }
-  a svg,
-  a img,
-  a i,
-  a [avatar],
-  a faceplate-img,
-  button svg,
-  button img,
-  button i,
-  summary svg,
-  summary i {
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] li,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] faceplate-tracker,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] faceplate-expandable-section-helper {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding-inline: 0 !important;
+    margin-inline: 0 !important;
+  }
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] left-nav-community-item,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] [role="listitem"] {
+    display: flex !important;
+    justify-content: center !important;
+    padding-inline: 0 !important;
+    margin-inline: 0 !important;
+  }
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a > span,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a [class*="truncate"],
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] li span {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a svg,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a img,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a i,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a [avatar],
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a faceplate-img,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] button svg,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] button img,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] button i,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] summary svg,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] summary i {
     font-size: 16px !important;
     line-height: normal !important;
     color: inherit !important;
-    max-width: 32px !important;
-    max-height: 32px !important;
+    width: min(28px, 70cqi) !important;
+    height: min(28px, 70cqi) !important;
+    max-width: min(28px, 70cqi) !important;
+    max-height: min(28px, 70cqi) !important;
+    margin-inline: auto !important;
+    object-fit: cover !important;
+    flex-shrink: 0 !important;
   }
-  a > span.flex.items-center.gap-xs {
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a faceplate-img,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a [avatar] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    border-radius: 50% !important;
+  }
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a faceplate-img img,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a [avatar] img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
+  }
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a > span.flex.items-center.gap-xs {
     justify-content: center !important;
     gap: 0 !important;
     flex: 0 0 auto !important;
     overflow: visible !important;
+    width: auto !important;
+    max-width: 100% !important;
   }
-  a > span.flex.items-center.gap-xs > span:not(:has(img, svg, [avatar], faceplate-img, i)) {
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a > span.flex.items-center.gap-xs > span:not(:has(img, svg, [avatar], faceplate-img, i)) {
     display: none !important;
   }
-  a > span.flex.items-center.shrink-0,
-  summary span:not(:has(svg, i)),
-  div:has(> rpl-tooltip) {
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a > span.flex.items-center.shrink-0,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] summary span:not(:has(svg, i)),
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] div:has(> rpl-tooltip),
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] .readit-user-tag,
+  html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] [data-readit-has-note="true"]::before {
     display: none !important;
+    content: none !important;
   }
+}
+/* Compact nav: hide Reddit DOM; #readit-nav-rail owns the icon rail UI. */
+html.readit-active.readit-layout-slots.readit-nav-compact [data-readit-slot="leftNav"] {
+  position: sticky !important;
+  top: var(--readit-chrome-top, 56px) !important;
+  height: calc(100vh - var(--readit-chrome-top, 56px)) !important;
+  max-height: calc(100vh - var(--readit-chrome-top, 56px)) !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  scrollbar-gutter: auto !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact [data-readit-slot="leftNav"] > :not(#readit-nav-rail) {
+  /* Keep in DOM for scraping, but invisible and non-interactive */
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact #readit-nav-rail {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 4px !important;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  box-sizing: border-box !important;
+  padding: 6px 2px 12px !important;
+  margin: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  color: inherit !important;
+  z-index: 2 !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-chrome,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-body,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 2px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section {
+  margin-top: 6px !important;
+  padding-top: 6px !important;
+  border-top: 1px solid color-mix(in srgb, CanvasText 12%, transparent) !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-item,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-head {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 2px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  padding: 6px 2px !important;
+  margin: 0 !important;
+  text-decoration: none !important;
+  color: inherit !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-item:hover,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-item:focus-visible {
+  background: color-mix(in srgb, CanvasText 8%, transparent) !important;
+  outline: none !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-icon,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-icon img,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-icon svg,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-glyph {
+  width: 28px !important;
+  height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  margin: 0 auto !important;
+  flex-shrink: 0 !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+  display: block !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-icon-svg,
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-icon-svg svg {
+  border-radius: 0 !important;
+  color: inherit !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-glyph {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font: 700 12px/1 ui-sans-serif, system-ui, sans-serif !important;
+  background: color-mix(in srgb, CanvasText 14%, transparent) !important;
+  border-radius: 8px !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-subname {
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  font-synthesis: weight !important;
+  line-height: 1.15 !important;
+  color: CanvasText !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  text-align: center !important;
+  padding-inline: 1px !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
+  white-space: normal !important;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+  overflow: hidden !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon {
+  display: block !important;
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0 auto !important;
+  flex-shrink: 0 !important;
+  background-color: color-mix(in srgb, CanvasText 78%, transparent) !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-position: center !important;
+  mask-position: center !important;
+  -webkit-mask-size: contain !important;
+  mask-size: contain !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="recent"] {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/></svg>") !important;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/></svg>") !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="communities"] {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='9' cy='8' r='3'/><circle cx='17' cy='9' r='2.5'/><path d='M3 19c0-3 3-5 6-5s6 2 6 5'/><path d='M14 19c.3-2 2-3.5 4.5-3.5 1.2 0 2.3.4 3 1'/></svg>") !important;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='9' cy='8' r='3'/><circle cx='17' cy='9' r='2.5'/><path d='M3 19c0-3 3-5 6-5s6 2 6 5'/><path d='M14 19c.3-2 2-3.5 4.5-3.5 1.2 0 2.3.4 3 1'/></svg>") !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="custom"] {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M4 6h16M4 12h10M4 18h13'/></svg>") !important;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M4 6h16M4 12h10M4 18h13'/></svg>") !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="games"] {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><rect x='2' y='8' width='20' height='10' rx='4'/><path d='M8 12h2m-1-1v2M16 12h.01M18 12h.01'/></svg>") !important;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><rect x='2' y='8' width='20' height='10' rx='4'/><path d='M8 12h2m-1-1v2M16 12h.01M18 12h.01'/></svg>") !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="resources"] {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M4 5h7a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H4z'/><path d='M20 5h-7a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h7z'/></svg>") !important;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M4 5h7a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h7z'/></svg>") !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="best"] {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M12 3l2.2 5.5L20 10l-4.5 3.5L17 20l-5-3.2L7 20l1.5-6.5L4 10l5.8-1.5z'/></svg>") !important;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><path d='M12 3l2.2 5.5L20 10l-4.5 3.5L17 20l-5-3.2L7 20l1.5-6.5L4 10l5.8-1.5z'/></svg>") !important;
+}
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="moderation"],
+html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-section-icon[data-readit-nav-section="other"] {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='12' cy='12' r='3'/><path d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/></svg>") !important;
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'><circle cx='12' cy='12' r='3'/><path d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/></svg>") !important;
 }`;
     case "main":
       return `html.readit-active.readit-layout-slots [data-readit-slot="main"],
@@ -572,15 +832,19 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] [slot="title"] 
   overflow-wrap: break-word !important;
   word-break: break-word !important;
 }
+/* Cap replaced media to the feed column — never force height:auto on
+   iframes/players (collapses Devvit webviews and aspect-ratio shells). */
 html.readit-active.readit-layout-slots [data-readit-slot="main"] img,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] video,
-html.readit-active.readit-layout-slots [data-readit-slot="main"] canvas,
+html.readit-active.readit-layout-slots [data-readit-slot="main"] canvas {
+  max-width: 100% !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
 html.readit-active.readit-layout-slots [data-readit-slot="main"] iframe,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] shreddit-player,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] [slot="post-media-container"] {
   max-width: 100% !important;
-  height: auto !important;
-  object-fit: contain !important;
 }
 html.readit-active.readit-layout-slots [data-readit-slot="main"] img.absolute,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] [class*="absolute"] img {
@@ -592,6 +856,7 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] [class*="absolu
 }`;
     case "rightRail":
       return `html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] {
+  display: block !important;
   grid-column: ${column} !important;
   grid-row: 1 !important;
   width: var(--readit-right-rail-width) !important;
@@ -611,8 +876,18 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] [class*="absolu
   z-index: 3 !important;
   padding-inline: 8px !important;
   max-width: 100% !important;
-  overflow-wrap: break-word !important;
-  word-break: break-word !important;
+  container-type: inline-size !important;
+  container-name: readit-rail !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"],
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] *,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] *::before,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] *::after {
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  word-wrap: normal !important;
+  hyphens: none !important;
+  writing-mode: horizontal-tb !important;
 }
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] img,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] video,
@@ -621,6 +896,38 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] iframe {
   max-width: 100% !important;
   height: auto !important;
   object-fit: contain !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] h1,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] h2,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] h3,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] button,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] a,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] p,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] li,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] span,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] label {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] {
+  padding-inline: 6px !important;
+  scrollbar-gutter: auto !important;
+}
+html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+/* Multi-line titles: clamp instead of letter-stack or hard clip */
+html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] h3,
+html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] a[href*="/comments/"] {
+  white-space: normal !important;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+  overflow: hidden !important;
 }`;
     default: {
       const _exhaustive: never = panel;
@@ -635,12 +942,12 @@ function layoutSlotRecipes(
 ): string {
   const { placements, widths, preset } = config;
   const order = normalizeColumnOrder(config.columnOrder);
-  const leftW = widths.leftNavPx;
-  const rightW = widths.rightRailPx;
-  const feedW = feedWidthPx;
-  const padL = widths.pagePadLeftPx ?? 24;
-  const padR = widths.pagePadRightPx ?? 24;
-  const gap = widths.columnGapPx ?? 12;
+  const leftW = clampPanelWidth("leftNav", widths.leftNavPx);
+  const rightW = clampPanelWidth("rightRail", widths.rightRailPx);
+  const feedW = clampPanelWidth("main", feedWidthPx);
+  const padL = clampPagePad(widths.pagePadLeftPx ?? 24);
+  const padR = clampPagePad(widths.pagePadRightPx ?? 24);
+  const gap = clampColumnGap(widths.columnGapPx ?? 12);
 
   const parts: string[] = [
     LAYOUT_RECIPE_MARKER,
@@ -666,7 +973,8 @@ html.readit-layout-edit .readit-layout-frame {
   border-radius: 4px;
   background: color-mix(in srgb, var(--readit-accent) 8%, transparent);
   z-index: 2147482990;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: grab;
   touch-action: none;
   overflow: hidden;
 }
@@ -679,11 +987,15 @@ html.readit-layout-edit .readit-layout-frame[data-kind="panel"] {
   z-index: 2147482992;
 }
 html.readit-layout-edit .readit-layout-frame[data-drop="1"] {
+  border-style: dashed;
+  border-width: 2px;
   border-color: var(--readit-accent);
   background: color-mix(in srgb, var(--readit-accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--readit-accent) 40%, transparent);
 }
 html.readit-layout-edit .readit-layout-frame[data-dragging="1"] {
   opacity: 0.45;
+  cursor: grabbing;
 }
 html.readit-layout-edit .readit-frame-label {
   position: absolute;
@@ -704,6 +1016,27 @@ html.readit-layout-edit .readit-frame-label {
 }
 html.readit-layout-edit .readit-frame-label:active {
   cursor: grabbing;
+}
+html.readit-layout-edit .readit-frame-select {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--readit-accent);
+  cursor: pointer;
+}
+html.readit-layout-edit .readit-layout-frame[data-selected="1"] {
+  box-shadow: inset 0 0 0 2px var(--readit-accent);
+  background: color-mix(in srgb, var(--readit-accent) 12%, transparent);
+}
+/* Block Reddit links/buttons under edit chrome so the whole card is draggable. */
+html.readit-layout-edit [data-readit-slot],
+html.readit-layout-edit [data-readit-slot] * {
+  pointer-events: none !important;
 }
 html.readit-layout-edit .readit-drop-line {
   position: fixed;
@@ -784,11 +1117,8 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] {
   width: 100% !important;
   margin-inline: auto !important;
 }`);
-    return parts.join("\n\n");
-  }
-
-  // dual* kept as stacking recipes (phase-1 permutation is the primary path)
-  if (preset === "dualLeft" || preset === "dualRight") {
+  } else if (preset === "dualLeft" || preset === "dualRight") {
+    // dual* kept as stacking recipes (phase-1 permutation is the primary path)
     parts.push(`/* readit-layout:${preset} */`);
     const stackSide = preset === "dualLeft" ? "flex-start" : "flex-end";
     parts.push(`html.readit-active.readit-layout-slots [data-readit-layout-shell] {
@@ -807,21 +1137,29 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] {
   max-width: var(--readit-right-rail-width) !important;
   flex: 0 0 var(--readit-right-rail-width) !important;
 }`);
-    return parts.join("\n\n");
-  }
-
+  } else {
   parts.push(`/* readit-layout:columns ${order.join("|")} */`);
 
-  const visible = order.filter((id) => placements[id] !== "hidden");
-  const tracks = visible
-    .map((id) => panelTrack(id, widths, feedW))
+  const tracksList = buildLayoutTracks({
+    columnOrder: order,
+    separators: config.separators || [],
+    placements,
+  });
+  const tracks = tracksList
+    .map((t) =>
+      t.type === "panel"
+        ? panelTrack(t.panel, widths, feedW)
+        : `${t.widthPx}px`,
+    )
     .join(" ");
 
   parts.push(`html.readit-active.readit-layout-slots [data-readit-layout-shell] {
   display: grid !important;
   grid-template-columns: var(--readit-grid-cols, ${tracks || "minmax(0, 1fr)"}) !important;
   grid-template-rows: auto !important;
-  grid-auto-flow: column !important;
+  grid-auto-flow: row !important;
+  grid-auto-columns: unset !important;
+  grid-auto-rows: auto !important;
   column-gap: var(--readit-column-gap, 12px) !important;
   row-gap: 0 !important;
   justify-content: start !important;
@@ -832,24 +1170,92 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] {
   padding-left: var(--readit-page-pad-left, 24px) !important;
   padding-right: var(--readit-page-pad-right, 24px) !important;
   overflow-x: clip !important;
+  position: relative !important;
 }
 /* Flatten Reddit nesting so nav / feed / rail become peer grid items */
 html.readit-active.readit-layout-slots [data-readit-layout-shell] > #subgrid-container,
 html.readit-active.readit-layout-slots [data-readit-layout-shell] .main-container {
   display: contents !important;
 }
-/* Extra shreddit loaders must not steal a grid cell / create a second row */
-html.readit-active.readit-layout-slots [data-readit-layout-shell] shreddit-async-loader {
-  display: none !important;
+/* Direct-child loaders: span the full grid so they don't steal a single track
+   (which previously wrapped the layout onto a second row). Never use
+   display:none (hides SPA subreddit content → stuck snoo) or display:contents
+   on this custom element (Chromium collapses slotted children to 0×0). */
+html.readit-active.readit-layout-slots [data-readit-layout-shell] > shreddit-async-loader {
+  display: block !important;
+  grid-column: 1 / -1 !important;
+  grid-row: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+/* Unknown shell peers (ads, drawers) — flatten so they don't add auto-columns */
+html.readit-active.readit-layout-slots [data-readit-layout-shell] > :not([data-readit-slot]):not([data-readit-separator]):not(#subgrid-container):not(.main-container):not(shreddit-async-loader) {
+  display: contents !important;
+}
+html.readit-active.readit-layout-slots [data-readit-layout-shell] #subgrid-container > :not([data-readit-slot]):not(.main-container):not(#main-content):not([id*="right-sidebar"]) {
+  display: contents !important;
+}
+html.readit-active.readit-layout-slots [data-readit-separator] {
+  display: block !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+  align-self: stretch !important;
+  pointer-events: none !important;
+  background: transparent !important;
+}
+/* Pending SPA restamp: don't force compact hide / sticky chrome on unstamped nav */
+html.readit-active.readit-layout-slots.readit-layout-pending.readit-nav-compact #left-sidebar-container:not([data-readit-slot]),
+html.readit-active.readit-layout-slots.readit-layout-pending #left-sidebar-container:not([data-readit-slot]) {
+  position: sticky !important;
 }`);
 
-  visible.forEach((panel, i) => {
-    parts.push(panelWidthRules(panel, i + 1));
+  tracksList.forEach((track, i) => {
+    const col = i + 1;
+    if (track.type === "panel") {
+      parts.push(panelWidthRules(track.panel, col));
+    } else {
+      parts.push(`html.readit-active.readit-layout-slots [data-readit-separator="${track.id}"] {
+  grid-column: ${col} !important;
+  width: ${track.widthPx}px !important;
+  max-width: ${track.widthPx}px !important;
+}`);
+    }
   });
 
   if (placements.leftNav === "hidden") parts.push(hide("leftNav"));
   if (placements.rightRail === "hidden") parts.push(hide("rightRail"));
   if (placements.subHeader === "hidden") parts.push(hide("subHeader"));
+  }
+
+  // Zoom — either global on shell, or per-panel (not both compounded).
+  const zoomAll = clampZoom(config.zoomAll ?? 1);
+  const panelZooms = config.zoomByPanel || {};
+  const hasPanelZoom = (["leftNav", "main", "rightRail"] as const).some(
+    (p) => typeof panelZooms[p] === "number",
+  );
+  if (!hasPanelZoom && zoomAll !== 1) {
+    parts.push(`html.readit-active.readit-layout-slots [data-readit-layout-shell] {
+  zoom: ${zoomAll};
+}`);
+  } else if (hasPanelZoom) {
+    for (const panel of ["leftNav", "main", "rightRail"] as const) {
+      const z = clampZoom(
+        typeof panelZooms[panel] === "number" ? panelZooms[panel]! : zoomAll,
+      );
+      if (z === 1) continue;
+      parts.push(`html.readit-active.readit-layout-slots [data-readit-slot="${panel}"] {
+  zoom: ${z};
+}`);
+    }
+  }
+
+  parts.push(`html.readit-active {
+  font-family: var(--readit-font-family, inherit);
+}
+html.readit-active.readit-layout-slots [data-readit-slot] {
+  font-weight: var(--readit-font-weight, inherit);
+}`);
 
   return parts.join("\n\n");
 }
@@ -878,6 +1284,35 @@ export function buildStylesheet(settings: ReaditSettings): string {
         settings.knobs.tokens.feedWidthPx,
       ),
     );
+    parts.push(`/* gutter themes */
+html.readit-active.readit-layout-slots.readit-gutter-line [data-readit-layout-shell] {
+  box-shadow:
+    inset var(--readit-page-pad-left, 24px) 0 0 0 color-mix(in srgb, CanvasText 8%, transparent),
+    inset calc(-1 * var(--readit-page-pad-right, 24px)) 0 0 0 color-mix(in srgb, CanvasText 8%, transparent);
+}
+html.readit-active.readit-layout-slots.readit-gutter-soft [data-readit-layout-shell] {
+  background-image:
+    linear-gradient(90deg, color-mix(in srgb, CanvasText 6%, transparent), transparent var(--readit-page-pad-left, 24px)),
+    linear-gradient(270deg, color-mix(in srgb, CanvasText 6%, transparent), transparent var(--readit-page-pad-right, 24px));
+  background-repeat: no-repeat;
+}
+html.readit-active.readit-layout-slots.readit-gutter-paper [data-readit-layout-shell] {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 11px,
+      color-mix(in srgb, CanvasText 5%, transparent) 12px
+    );
+  background-size: var(--readit-page-pad-left, 24px) 100%, var(--readit-page-pad-right, 24px) 100%;
+  background-position: left top, right top;
+  background-repeat: no-repeat;
+}
+html.readit-active.readit-layout-slots.readit-gutter-inset [data-readit-layout-shell] {
+  box-shadow:
+    inset 8px 0 16px -10px color-mix(in srgb, CanvasText 35%, transparent),
+    inset -8px 0 16px -10px color-mix(in srgb, CanvasText 35%, transparent);
+}`);
   }
 
   for (const rule of settings.elementRules) {
@@ -940,11 +1375,14 @@ export function applyStylesheet(settings: ReaditSettings): void {
 
   for (const cls of Array.from(root.classList)) {
     if (cls.startsWith("readit-layout-preset-")) root.classList.remove(cls);
+    if (cls.startsWith("readit-gutter-")) root.classList.remove(cls);
   }
   if (!settings.paused && settings.flags.layoutSlots) {
     const preset: LayoutPreset = settings.layoutSlots.preset;
     root.classList.add(`readit-layout-preset-${preset}`);
     root.dataset.readitLayout = preset;
+    const gutter = settings.layoutSlots.gutterTheme || "plain";
+    root.classList.add(`readit-gutter-${gutter}`);
   } else {
     delete root.dataset.readitLayout;
   }
@@ -959,6 +1397,7 @@ export function applyStylesheet(settings: ReaditSettings): void {
     root.style.removeProperty("--readit-page-pad-right");
     root.style.removeProperty("--readit-column-gap");
     root.style.removeProperty("--readit-grid-cols");
+    root.classList.remove("readit-nav-compact", "readit-rail-compact");
     return;
   }
 
@@ -967,20 +1406,25 @@ export function applyStylesheet(settings: ReaditSettings): void {
   }
   if (settings.flags.layoutSlots) {
     const w = settings.layoutSlots.widths;
+    const leftNavPx = clampPanelWidth("leftNav", w.leftNavPx);
+    const rightRailPx = clampPanelWidth("rightRail", w.rightRailPx);
+    const pagePadLeftPx = clampPagePad(w.pagePadLeftPx ?? 24);
+    const pagePadRightPx = clampPagePad(w.pagePadRightPx ?? 24);
+    const columnGapPx = clampColumnGap(w.columnGapPx ?? 12);
     const order = settings.layoutSlots.columnOrder;
     const visible = order.filter(
       (id) => settings.layoutSlots.placements[id] !== "hidden",
     );
-    const feed = settings.knobs.tokens.feedWidthPx;
+    const feed = clampPanelWidth("main", settings.knobs.tokens.feedWidthPx);
     const tracks = visible
       .map((id) => {
         switch (id) {
           case "leftNav":
-            return `${w.leftNavPx}px`;
+            return `${leftNavPx}px`;
           case "main":
             return `${feed}px`;
           case "rightRail":
-            return `${w.rightRailPx}px`;
+            return `${rightRailPx}px`;
           default: {
             const _exhaustive: never = id;
             return _exhaustive;
@@ -988,21 +1432,23 @@ export function applyStylesheet(settings: ReaditSettings): void {
         }
       })
       .join(" ");
-    root.style.setProperty("--readit-left-nav-width", `${w.leftNavPx}px`);
-    root.style.setProperty("--readit-right-rail-width", `${w.rightRailPx}px`);
-    root.style.setProperty(
-      "--readit-page-pad-left",
-      `${w.pagePadLeftPx ?? 24}px`,
-    );
-    root.style.setProperty(
-      "--readit-page-pad-right",
-      `${w.pagePadRightPx ?? 24}px`,
-    );
-    root.style.setProperty(
-      "--readit-column-gap",
-      `${w.columnGapPx ?? 12}px`,
-    );
+    root.style.setProperty("--readit-left-nav-width", `${leftNavPx}px`);
+    root.style.setProperty("--readit-right-rail-width", `${rightRailPx}px`);
+    root.style.setProperty("--readit-page-pad-left", `${pagePadLeftPx}px`);
+    root.style.setProperty("--readit-page-pad-right", `${pagePadRightPx}px`);
+    root.style.setProperty("--readit-column-gap", `${columnGapPx}px`);
     if (tracks) root.style.setProperty("--readit-grid-cols", tracks);
+    // Compact/rail-compact classes are owned by layout-slots after the shell +
+    // rail are stamped — setting them here (esp. from early.js) hides Reddit's
+    // nav before #readit-nav-rail exists and malforms the page on load/SPA.
+  } else {
+    root.style.removeProperty("--readit-left-nav-width");
+    root.style.removeProperty("--readit-right-rail-width");
+    root.style.removeProperty("--readit-page-pad-left");
+    root.style.removeProperty("--readit-page-pad-right");
+    root.style.removeProperty("--readit-column-gap");
+    root.style.removeProperty("--readit-grid-cols");
+    root.classList.remove("readit-nav-compact", "readit-rail-compact");
   }
 }
 

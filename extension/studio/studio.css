@@ -11,11 +11,51 @@
   z-index: 2147483646;
 }
 
-.readit-fab {
+.readit-fab-wrap {
   pointer-events: auto;
   position: fixed;
   right: 16px;
   bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 1;
+}
+
+.readit-fab-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  min-width: 132px;
+}
+
+.readit-fab-action {
+  pointer-events: auto;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  background: #1a1a1b;
+  color: #f2f2f2;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.readit-fab-action:hover {
+  background: #ff4500;
+  border-color: #ff4500;
+  color: #fff;
+}
+
+.readit-fab {
+  pointer-events: auto;
+  position: relative;
+  right: auto;
+  bottom: auto;
   width: 48px;
   height: 48px;
   border-radius: 999px;
@@ -30,6 +70,91 @@
 
 .readit-fab:hover {
   background: #ff4500;
+}
+
+.readit-edit-toolbox {
+  pointer-events: auto;
+  position: fixed;
+  z-index: 2147483645;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: min(720px, calc(100vw - 24px));
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #444;
+  background: color-mix(in srgb, #0f0f10 92%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.readit-edit-toolbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+  border-right: 1px solid #333;
+}
+
+.readit-edit-toolbox-group:last-of-type {
+  border-right: 0;
+}
+
+.readit-edit-chip {
+  border: 1px solid #555;
+  background: #1c1c1e;
+  color: #eee;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.readit-edit-chip:hover:not(:disabled) {
+  border-color: #ff4500;
+}
+
+.readit-edit-chip[data-active="true"],
+.readit-edit-chip.primary {
+  background: #ff4500;
+  border-color: #ff4500;
+  color: #fff;
+}
+
+.readit-edit-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.readit-edit-select {
+  border: 1px solid #555;
+  background: #1c1c1e;
+  color: #eee;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 11px;
+  max-width: 110px;
+}
+
+.readit-edit-label {
+  font-size: 11px;
+  color: #bbb;
+  white-space: nowrap;
+}
+
+.readit-edit-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #bbb;
+}
+
+.readit-edit-zoom input[type="range"] {
+  width: 72px;
 }
 
 .readit-drawer {

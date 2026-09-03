@@ -17,7 +17,10 @@ import {
 import {
   createId,
   formatProfileLayoutBlurb,
+  LAYOUT_WIDTH_LIMITS,
   normalizeColumnOrder,
+  resizePadInBudget,
+  resizePanelInBudget,
   type CqsTier,
   type ElementRule,
   type FilterRule,
@@ -42,6 +45,7 @@ import {
 } from "../lib/settings";
 import type { StudioApi } from "./mount";
 import { STUDIO_LOCALES, t } from "./i18n";
+import { EditToolbox, KOFI_URL, REPO_URL } from "./EditToolbox";
 
 type Tab =
   | "simple"
@@ -77,6 +81,7 @@ const COLUMN_POSITION_LABELS = ["Left", "Center", "Right"] as const;
 
 export function StudioApp({ api }: { api: StudioApi }) {
   const [open, setOpen] = useState(false);
+  const [fabMenu, setFabMenu] = useState(false);
   const [tab, setTab] = useState<Tab>("simple");
   const [settings, setSettings] = useState<ReaditSettings>(api.getSettings());
   const [toast, setToast] = useState<string | null>(null);
@@ -195,12 +200,41 @@ export function StudioApp({ api }: { api: StudioApi }) {
   }, [picker]);
 
   useEffect(() => {
+    if (!fabMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setFabMenu(false);
+      }
+    };
+    const onClick = (e: MouseEvent) => {
+      const t = e.target;
+      if (
+        t instanceof Element &&
+        t.closest(".readit-fab-wrap, .readit-fab-menu")
+      ) {
+        return;
+      }
+      setFabMenu(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [fabMenu]);
+
+  useEffect(() => {
     if (!settings.layoutSlots.editMode || settings.paused) {
       setCtxMenu(null);
       return;
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (fabMenu) {
+        setFabMenu(false);
+        return;
+      }
       setCtxMenu((prev) => {
         if (prev) return null;
         void commit("Exit layout edit", (s) => ({
@@ -234,7 +268,7 @@ export function StudioApp({ api }: { api: StudioApi }) {
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("click", onClick, true);
     };
-  }, [settings.layoutSlots.editMode, settings.paused]);
+  }, [settings.layoutSlots.editMode, settings.paused, fabMenu]);
 
   const health = useMemo(() => api.getHealth(), [settings, open]);
   const slotHealth = useMemo(() => {
@@ -247,15 +281,81 @@ export function StudioApp({ api }: { api: StudioApi }) {
 
   return (
     <>
-      <button
-        type="button"
-        class="readit-fab"
-        title={settings.paused ? "readit paused — click to open" : "Open readit studio"}
-        style={settings.paused ? { opacity: 0.55 } : undefined}
-        onClick={() => setOpen(true)}
-      >
-        r
-      </button>
+      <div class="readit-fab-wrap">
+        {fabMenu && (
+          <div class="readit-fab-menu" role="menu">
+            <button
+              type="button"
+              class="readit-fab-action"
+              role="menuitem"
+              onClick={() => {
+                setFabMenu(false);
+                void commit("Enter layout edit", (s) => ({
+                  ...s,
+                  flags: { ...s.flags, layoutSlots: true },
+                  layoutSlots: { ...s.layoutSlots, editMode: true },
+                }));
+              }}
+            >
+              Edit Mode
+            </button>
+            <button
+              type="button"
+              class="readit-fab-action"
+              role="menuitem"
+              onClick={() => {
+                setFabMenu(false);
+                setOpen(true);
+              }}
+            >
+              Settings
+            </button>
+            <button
+              type="button"
+              class="readit-fab-action"
+              role="menuitem"
+              onClick={() => {
+                setFabMenu(false);
+                window.open(REPO_URL, "_blank", "noopener,noreferrer");
+              }}
+            >
+              GitHub
+            </button>
+            <button
+              type="button"
+              class="readit-fab-action"
+              role="menuitem"
+              onClick={() => {
+                setFabMenu(false);
+                window.open(KOFI_URL, "_blank", "noopener,noreferrer");
+              }}
+            >
+              Ko-fi
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          class="readit-fab"
+          title={
+            settings.paused
+              ? "readit paused — click to open"
+              : fabMenu
+                ? "Close menu"
+                : "readit actions"
+          }
+          style={settings.paused ? { opacity: 0.55 } : undefined}
+          aria-expanded={fabMenu}
+          aria-haspopup="menu"
+          onClick={() => setFabMenu((v) => !v)}
+        >
+          r
+        </button>
+      </div>
+
+      {settings.layoutSlots.editMode && !settings.paused && (
+        <EditToolbox settings={settings} commit={commit} />
+      )}
 
       {open && !settings.paused && (
         <div
@@ -303,8 +403,8 @@ export function StudioApp({ api }: { api: StudioApi }) {
 
       {settings.layoutSlots.editMode && !settings.paused && (
         <div class="readit-picker-banner">
-          Column edit unlocked — drag labels to reorder, edges to resize (Esc
-          locks)
+          Column edit unlocked — drag anywhere on a column card to reorder; edges
+          to resize (Esc locks)
         </div>
       )}
 
@@ -655,7 +755,8 @@ function LayoutTab({
         </div>
         <p class="readit-muted" style={{ marginTop: 4 }}>
           Off by default so browsing never nudges the layout. Turn on, then drag
-          column / pad labels on the page to reorder; drag edges to resize.
+          anywhere on a column / pad card on the page to reorder; drag edges to
+          resize. Links are disabled while editing.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
           {LAYOUT_PRESETS.map((p) => (
@@ -679,13 +780,13 @@ function LayoutTab({
         <h2>Columns</h2>
         {!canMove && (
           <p class="readit-muted">
-            Enable “Allow moving columns”, then drag labels on the page.
+            Enable “Allow moving columns”, then drag a column card on the page.
           </p>
         )}
         {canMove && (
           <p class="readit-muted">
-            On-page: drag a column label to another slot, or drag Left/Right pad
-            labels across the page to swap gutters.
+            On-page: drag a column card onto another to swap (dashed target), or
+            drag Left/Right pad labels across the page to swap gutters.
           </p>
         )}
         <div class="readit-zone-board">
@@ -707,25 +808,62 @@ function LayoutTab({
         <p class="readit-muted">
           Panel-owned — travel with the panel when moved. Outer pads fill blank
           viewport edges (default 24px). Drag edges on-page when “Allow moving
-          columns” is on.
+          columns” is on. Nav {LAYOUT_WIDTH_LIMITS.leftNav.min}–{LAYOUT_WIDTH_LIMITS.leftNav.max}px
+          (icon rail ≤168px: avatars + bold names under, section icons, hover tips); Rail {LAYOUT_WIDTH_LIMITS.rightRail.min}–{LAYOUT_WIDTH_LIMITS.rightRail.max}px
+          (widgets stay readable).
+          Thinning nav/rail grows the feed up to {LAYOUT_WIDTH_LIMITS.main.max}px.
+          Pads max {LAYOUT_WIDTH_LIMITS.pagePad.max}px so gutters cannot starve columns.
         </p>
         <div class="readit-row">
           <span>Nav ({cfg.widths.leftNavPx}px)</span>
           <input
             type="range"
-            min={64}
-            max={420}
+            min={LAYOUT_WIDTH_LIMITS.leftNav.min}
+            max={LAYOUT_WIDTH_LIMITS.leftNav.max}
             value={cfg.widths.leftNavPx}
             disabled={cfg.placements.leftNav === "hidden"}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
-              void onCommit("Nav width", (s) => ({
-                ...s,
-                layoutSlots: {
-                  ...s.layoutSlots,
-                  widths: { ...s.layoutSlots.widths, leftNavPx: v },
-                },
-              }));
+              void onCommit("Nav width", (s) => {
+                const order = normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
+                  (id) => s.layoutSlots.placements[id] !== "hidden",
+                );
+                const fitted = resizePanelInBudget(
+                  {
+                    leftNavPx: s.layoutSlots.widths.leftNavPx,
+                    rightRailPx: s.layoutSlots.widths.rightRailPx,
+                    feedWidthPx: s.knobs.tokens.feedWidthPx,
+                    pagePadLeftPx: s.layoutSlots.widths.pagePadLeftPx ?? 24,
+                    pagePadRightPx: s.layoutSlots.widths.pagePadRightPx ?? 24,
+                    columnGapPx: s.layoutSlots.widths.columnGapPx ?? 12,
+                  },
+                  order,
+                  "leftNav",
+                  v,
+                  window.innerWidth || document.documentElement.clientWidth || 0,
+                );
+                return {
+                  ...s,
+                  knobs: {
+                    ...s.knobs,
+                    tokens: {
+                      ...s.knobs.tokens,
+                      feedWidthPx: fitted.feedWidthPx,
+                    },
+                  },
+                  layoutSlots: {
+                    ...s.layoutSlots,
+                    widths: {
+                      ...s.layoutSlots.widths,
+                      leftNavPx: fitted.leftNavPx,
+                      rightRailPx: fitted.rightRailPx,
+                      pagePadLeftPx: fitted.pagePadLeftPx,
+                      pagePadRightPx: fitted.pagePadRightPx,
+                      columnGapPx: fitted.columnGapPx,
+                    },
+                  },
+                };
+              });
             }}
           />
         </div>
@@ -733,8 +871,8 @@ function LayoutTab({
           <span>Feed ({settings.knobs.tokens.feedWidthPx}px)</span>
           <input
             type="range"
-            min={480}
-            max={1600}
+            min={LAYOUT_WIDTH_LIMITS.main.min}
+            max={LAYOUT_WIDTH_LIMITS.main.max}
             value={settings.knobs.tokens.feedWidthPx}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
@@ -752,19 +890,52 @@ function LayoutTab({
           <span>Rail ({cfg.widths.rightRailPx}px)</span>
           <input
             type="range"
-            min={200}
-            max={420}
+            min={LAYOUT_WIDTH_LIMITS.rightRail.min}
+            max={LAYOUT_WIDTH_LIMITS.rightRail.max}
             value={cfg.widths.rightRailPx}
             disabled={cfg.placements.rightRail === "hidden"}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
-              void onCommit("Rail width", (s) => ({
-                ...s,
-                layoutSlots: {
-                  ...s.layoutSlots,
-                  widths: { ...s.layoutSlots.widths, rightRailPx: v },
-                },
-              }));
+              void onCommit("Rail width", (s) => {
+                const order = normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
+                  (id) => s.layoutSlots.placements[id] !== "hidden",
+                );
+                const fitted = resizePanelInBudget(
+                  {
+                    leftNavPx: s.layoutSlots.widths.leftNavPx,
+                    rightRailPx: s.layoutSlots.widths.rightRailPx,
+                    feedWidthPx: s.knobs.tokens.feedWidthPx,
+                    pagePadLeftPx: s.layoutSlots.widths.pagePadLeftPx ?? 24,
+                    pagePadRightPx: s.layoutSlots.widths.pagePadRightPx ?? 24,
+                    columnGapPx: s.layoutSlots.widths.columnGapPx ?? 12,
+                  },
+                  order,
+                  "rightRail",
+                  v,
+                  window.innerWidth || document.documentElement.clientWidth || 0,
+                );
+                return {
+                  ...s,
+                  knobs: {
+                    ...s.knobs,
+                    tokens: {
+                      ...s.knobs.tokens,
+                      feedWidthPx: fitted.feedWidthPx,
+                    },
+                  },
+                  layoutSlots: {
+                    ...s.layoutSlots,
+                    widths: {
+                      ...s.layoutSlots.widths,
+                      leftNavPx: fitted.leftNavPx,
+                      rightRailPx: fitted.rightRailPx,
+                      pagePadLeftPx: fitted.pagePadLeftPx,
+                      pagePadRightPx: fitted.pagePadRightPx,
+                      columnGapPx: fitted.columnGapPx,
+                    },
+                  },
+                };
+              });
             }}
           />
         </div>
@@ -772,18 +943,51 @@ function LayoutTab({
           <span>Left pad ({cfg.widths.pagePadLeftPx ?? 24}px)</span>
           <input
             type="range"
-            min={0}
-            max={480}
+            min={LAYOUT_WIDTH_LIMITS.pagePad.min}
+            max={LAYOUT_WIDTH_LIMITS.pagePad.max}
             value={cfg.widths.pagePadLeftPx ?? 24}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
-              void onCommit("Left page pad", (s) => ({
-                ...s,
-                layoutSlots: {
-                  ...s.layoutSlots,
-                  widths: { ...s.layoutSlots.widths, pagePadLeftPx: v },
-                },
-              }));
+              void onCommit("Left page pad", (s) => {
+                const order = normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
+                  (id) => s.layoutSlots.placements[id] !== "hidden",
+                );
+                const fitted = resizePadInBudget(
+                  {
+                    leftNavPx: s.layoutSlots.widths.leftNavPx,
+                    rightRailPx: s.layoutSlots.widths.rightRailPx,
+                    feedWidthPx: s.knobs.tokens.feedWidthPx,
+                    pagePadLeftPx: s.layoutSlots.widths.pagePadLeftPx ?? 24,
+                    pagePadRightPx: s.layoutSlots.widths.pagePadRightPx ?? 24,
+                    columnGapPx: s.layoutSlots.widths.columnGapPx ?? 12,
+                  },
+                  order,
+                  "left",
+                  v,
+                  window.innerWidth || document.documentElement.clientWidth || 0,
+                );
+                return {
+                  ...s,
+                  knobs: {
+                    ...s.knobs,
+                    tokens: {
+                      ...s.knobs.tokens,
+                      feedWidthPx: fitted.feedWidthPx,
+                    },
+                  },
+                  layoutSlots: {
+                    ...s.layoutSlots,
+                    widths: {
+                      ...s.layoutSlots.widths,
+                      leftNavPx: fitted.leftNavPx,
+                      rightRailPx: fitted.rightRailPx,
+                      pagePadLeftPx: fitted.pagePadLeftPx,
+                      pagePadRightPx: fitted.pagePadRightPx,
+                      columnGapPx: fitted.columnGapPx,
+                    },
+                  },
+                };
+              });
             }}
           />
         </div>
@@ -791,18 +995,51 @@ function LayoutTab({
           <span>Right pad ({cfg.widths.pagePadRightPx ?? 24}px)</span>
           <input
             type="range"
-            min={0}
-            max={480}
+            min={LAYOUT_WIDTH_LIMITS.pagePad.min}
+            max={LAYOUT_WIDTH_LIMITS.pagePad.max}
             value={cfg.widths.pagePadRightPx ?? 24}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
-              void onCommit("Right page pad", (s) => ({
-                ...s,
-                layoutSlots: {
-                  ...s.layoutSlots,
-                  widths: { ...s.layoutSlots.widths, pagePadRightPx: v },
-                },
-              }));
+              void onCommit("Right page pad", (s) => {
+                const order = normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
+                  (id) => s.layoutSlots.placements[id] !== "hidden",
+                );
+                const fitted = resizePadInBudget(
+                  {
+                    leftNavPx: s.layoutSlots.widths.leftNavPx,
+                    rightRailPx: s.layoutSlots.widths.rightRailPx,
+                    feedWidthPx: s.knobs.tokens.feedWidthPx,
+                    pagePadLeftPx: s.layoutSlots.widths.pagePadLeftPx ?? 24,
+                    pagePadRightPx: s.layoutSlots.widths.pagePadRightPx ?? 24,
+                    columnGapPx: s.layoutSlots.widths.columnGapPx ?? 12,
+                  },
+                  order,
+                  "right",
+                  v,
+                  window.innerWidth || document.documentElement.clientWidth || 0,
+                );
+                return {
+                  ...s,
+                  knobs: {
+                    ...s.knobs,
+                    tokens: {
+                      ...s.knobs.tokens,
+                      feedWidthPx: fitted.feedWidthPx,
+                    },
+                  },
+                  layoutSlots: {
+                    ...s.layoutSlots,
+                    widths: {
+                      ...s.layoutSlots.widths,
+                      leftNavPx: fitted.leftNavPx,
+                      rightRailPx: fitted.rightRailPx,
+                      pagePadLeftPx: fitted.pagePadLeftPx,
+                      pagePadRightPx: fitted.pagePadRightPx,
+                      columnGapPx: fitted.columnGapPx,
+                    },
+                  },
+                };
+              });
             }}
           />
         </div>
@@ -866,7 +1103,7 @@ function LayoutTab({
         >
           {cfg.editMode
             ? "Editing on page — Esc to lock"
-            : "Edit on page (drag labels + edges)"}
+            : "Edit on page (drag cards + edges)"}
         </button>
       </div>
     </>

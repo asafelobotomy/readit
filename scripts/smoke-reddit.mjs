@@ -167,12 +167,16 @@ async function studioEval(page, fn, ...args) {
 
 async function openStudio(page) {
   await studioEval(page, () => {
-    const host = document.querySelector("readit-studio");
-    const root = host?.shadowRoot;
+    const root = document.querySelector("readit-studio")?.shadowRoot;
     if (!root) return;
-    if (!root.querySelector(".readit-drawer")) {
+    if (root.querySelector(".readit-drawer")) return;
+    if (!root.querySelector(".readit-fab-menu")) {
       root.querySelector(".readit-fab")?.click();
     }
+    const settingsBtn = [...(root.querySelectorAll(".readit-fab-action") || [])].find(
+      (b) => /^Settings$/i.test((b.textContent || "").trim()),
+    );
+    settingsBtn?.click();
   });
   await sleep(500);
 }
@@ -385,6 +389,44 @@ try {
   if (!fabInShadow.fab) {
     throw new Error("FAB missing — aborting remaining studio probes");
   }
+
+  // FAB upward action stack + Edit Mode toolbox
+  const fabStack = await studioEval(page, async () => {
+    const root = document.querySelector("readit-studio")?.shadowRoot;
+    if (!root) return { ok: false, reason: "no shadow" };
+    root.querySelector(".readit-fab")?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const labels = [...(root.querySelectorAll(".readit-fab-action") || [])].map(
+      (b) => (b.textContent || "").trim(),
+    );
+    const need = ["Edit Mode", "Settings", "GitHub", "Ko-fi"];
+    const stackOk = need.every((n) => labels.includes(n));
+    const editBtn = [...(root.querySelectorAll(".readit-fab-action") || [])].find(
+      (b) => (b.textContent || "").trim() === "Edit Mode",
+    );
+    editBtn?.click();
+    await new Promise((r) => setTimeout(r, 700));
+    const toolbox = !!root.querySelector(".readit-edit-toolbox");
+    const editCls = document.documentElement.classList.contains("readit-layout-edit");
+    const done = [...(root.querySelectorAll(".readit-edit-chip") || [])].find(
+      (b) => /^Done$/i.test((b.textContent || "").trim()),
+    );
+    done?.click();
+    await new Promise((r) => setTimeout(r, 500));
+    const toolboxGone = !root.querySelector(".readit-edit-toolbox");
+    return {
+      ok: stackOk && toolbox && editCls && toolboxGone,
+      labels,
+      toolbox,
+      editCls,
+      toolboxGone,
+    };
+  });
+  record(
+    "shell.fab_menu_edit_toolbox",
+    fabStack.ok ? "pass" : "fail",
+    JSON.stringify(fabStack),
+  );
 
   await openStudio(page);
   const drawer = await studioEval(
