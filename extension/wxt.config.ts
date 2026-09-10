@@ -17,9 +17,17 @@ export default defineConfig({
     name: "readit",
     description:
       "Profile-first New Reddit workspace for readers, creators, and mods — live in-page customization.",
-    permissions: ["storage", "activeTab", "tabs"],
+    permissions: ["storage", "activeTab"],
     host_permissions: ["*://*.reddit.com/*"],
     optional_permissions: [],
+    web_accessible_resources: [
+      {
+        // Mascot art rendered into the Reddit page (header, profile cards)
+        // must be reachable from the reddit.com origin's own DOM.
+        resources: ["mascots/*"],
+        matches: ["*://*.reddit.com/*"],
+      },
+    ],
     icons: {
       "16": "icon/16.png",
       "32": "icon/32.png",

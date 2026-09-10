@@ -3,19 +3,22 @@ import {
   appendCqsSnapshot,
   createFeatureRuntime,
   currentSubreddit,
+  syncSidebarsHide,
 } from "@readit/features";
 import type {
   CqsRiskEvent,
   CqsSnapshot,
   LayoutColumnPanel,
+  LayoutPreset,
   ReaditSettings,
 } from "@readit/schema";
 import {
+  applyLayoutPreset,
   normalizeColumnOrder,
   placementsFromColumnOrder,
 } from "@readit/schema";
 import { createShadowRootUi } from "wxt/utils/content-script-ui/shadow-root";
-import { loadSettings, saveSettings, watchSettings } from "../lib/settings";
+import { loadSettings, mutateSettings, watchSettings } from "../lib/settings";
 import { mountStudio } from "../studio/mount";
 import "../studio/studio.css";
 
@@ -75,7 +78,9 @@ export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
   cssInjectionMode: "ui",
   async main(ctx) {
-    const runtime = createFeatureRuntime();
+    const runtime = createFeatureRuntime({
+      mascotUrl: (icon) => browser.runtime.getURL(`/mascots/${icon}.png`),
+    });
     let settings = await loadSettings();
     runtime.applyAll(withSubOverride(settings));
 
@@ -89,177 +94,168 @@ export default defineContentScript({
 
     watchSettings(reapply);
 
-    let persistBusy = false;
     ctx.addEventListener(window, "readit:layout-widths", (ev) => {
-      void (async () => {
-          const detail = (
-          ev as CustomEvent<{
-            leftNavPx?: number;
-            rightRailPx?: number;
-            feedWidthPx?: number;
-            pagePadLeftPx?: number;
-            pagePadRightPx?: number;
-            columnGapPx?: number;
-          }>
-        ).detail;
-        if (!detail || persistBusy) return;
-        persistBusy = true;
-        try {
-          const current = await loadSettings();
-          const next = await saveSettings({
-            ...current,
-            layoutSlots: {
-              ...current.layoutSlots,
-              widths: {
-                ...current.layoutSlots.widths,
-                leftNavPx:
-                  detail.leftNavPx ?? current.layoutSlots.widths.leftNavPx,
-                rightRailPx:
-                  detail.rightRailPx ?? current.layoutSlots.widths.rightRailPx,
-                pagePadLeftPx:
-                  detail.pagePadLeftPx ??
-                  current.layoutSlots.widths.pagePadLeftPx ??
-                  24,
-                pagePadRightPx:
-                  detail.pagePadRightPx ??
-                  current.layoutSlots.widths.pagePadRightPx ??
-                  24,
-                columnGapPx:
-                  detail.columnGapPx ??
-                  current.layoutSlots.widths.columnGapPx ??
-                  12,
-              },
-            },
-            knobs: {
-              ...current.knobs,
-              tokens: {
-                ...current.knobs.tokens,
-                feedWidthPx:
-                  detail.feedWidthPx ?? current.knobs.tokens.feedWidthPx,
-              },
-            },
-          });
-          reapply(next);
-        } finally {
-          persistBusy = false;
-        }
-      })();
+      const detail = (
+        ev as CustomEvent<{
+          leftNavPx?: number;
+          rightRailPx?: number;
+          feedWidthPx?: number;
+          pagePadLeftPx?: number;
+          pagePadRightPx?: number;
+          columnGapPx?: number;
+        }>
+      ).detail;
+      if (!detail) return;
+      void mutateSettings((current) => ({
+        ...current,
+        layoutSlots: {
+          ...current.layoutSlots,
+          widths: {
+            ...current.layoutSlots.widths,
+            leftNavPx:
+              detail.leftNavPx ?? current.layoutSlots.widths.leftNavPx,
+            rightRailPx:
+              detail.rightRailPx ?? current.layoutSlots.widths.rightRailPx,
+            pagePadLeftPx:
+              detail.pagePadLeftPx ??
+              current.layoutSlots.widths.pagePadLeftPx ??
+              24,
+            pagePadRightPx:
+              detail.pagePadRightPx ??
+              current.layoutSlots.widths.pagePadRightPx ??
+              24,
+            columnGapPx:
+              detail.columnGapPx ?? current.layoutSlots.widths.columnGapPx ?? 12,
+          },
+        },
+        knobs: {
+          ...current.knobs,
+          tokens: {
+            ...current.knobs.tokens,
+            feedWidthPx:
+              detail.feedWidthPx ?? current.knobs.tokens.feedWidthPx,
+          },
+        },
+      })).then(reapply);
     });
 
     ctx.addEventListener(window, "readit:layout-order", (ev) => {
-      void (async () => {
-        const detail = (
-          ev as CustomEvent<{ columnOrder?: LayoutColumnPanel[] }>
-        ).detail;
-        if (!detail?.columnOrder?.length || persistBusy) return;
-        persistBusy = true;
-        try {
-          const current = await loadSettings();
-          const columnOrder = normalizeColumnOrder(detail.columnOrder);
-          const next = await saveSettings({
-            ...current,
-            flags: { ...current.flags, layoutSlots: true },
-            layoutSlots: {
-              ...current.layoutSlots,
-              preset: "custom",
+      const detail = (
+        ev as CustomEvent<{ columnOrder?: LayoutColumnPanel[] }>
+      ).detail;
+      if (!detail?.columnOrder?.length) return;
+      void mutateSettings((current) => {
+        const columnOrder = normalizeColumnOrder(detail.columnOrder!);
+        return {
+          ...current,
+          flags: { ...current.flags, layoutSlots: true },
+          layoutSlots: {
+            ...current.layoutSlots,
+            preset: "custom",
+            columnOrder,
+            placements: placementsFromColumnOrder(
               columnOrder,
-              placements: placementsFromColumnOrder(
-                columnOrder,
-                current.layoutSlots.placements,
-              ),
-            },
-          });
-          reapply(next);
-        } finally {
-          persistBusy = false;
-        }
-      })();
+              current.layoutSlots.placements,
+            ),
+          },
+        };
+      }).then(reapply);
     });
 
     ctx.addEventListener(window, "readit:layout-pads", (ev) => {
-      void (async () => {
-        const detail = (
-          ev as CustomEvent<{
-            pagePadLeftPx?: number;
-            pagePadRightPx?: number;
-          }>
-        ).detail;
-        if (!detail || persistBusy) return;
-        persistBusy = true;
-        try {
-          const current = await loadSettings();
-          const next = await saveSettings({
-            ...current,
-            layoutSlots: {
-              ...current.layoutSlots,
-              widths: {
-                ...current.layoutSlots.widths,
-                pagePadLeftPx:
-                  detail.pagePadLeftPx ??
-                  current.layoutSlots.widths.pagePadLeftPx ??
-                  24,
-                pagePadRightPx:
-                  detail.pagePadRightPx ??
-                  current.layoutSlots.widths.pagePadRightPx ??
-                  24,
-              },
-            },
-          });
-          reapply(next);
-        } finally {
-          persistBusy = false;
-        }
-      })();
+      const detail = (
+        ev as CustomEvent<{
+          pagePadLeftPx?: number;
+          pagePadRightPx?: number;
+        }>
+      ).detail;
+      if (!detail) return;
+      void mutateSettings((current) => ({
+        ...current,
+        layoutSlots: {
+          ...current.layoutSlots,
+          widths: {
+            ...current.layoutSlots.widths,
+            pagePadLeftPx:
+              detail.pagePadLeftPx ??
+              current.layoutSlots.widths.pagePadLeftPx ??
+              24,
+            pagePadRightPx:
+              detail.pagePadRightPx ??
+              current.layoutSlots.widths.pagePadRightPx ??
+              24,
+          },
+        },
+      })).then(reapply);
     });
 
     ctx.addEventListener(window, "readit:layout-separators", (ev) => {
-      void (async () => {
-        const detail = (
-          ev as CustomEvent<{
-            separators?: ReaditSettings["layoutSlots"]["separators"];
-          }>
-        ).detail;
-        if (!detail?.separators || persistBusy) return;
-        persistBusy = true;
-        try {
-          const current = await loadSettings();
-          const next = await saveSettings({
-            ...current,
-            layoutSlots: {
-              ...current.layoutSlots,
-              preset: "custom",
-              separators: detail.separators.slice(0, 3),
-            },
-          });
-          reapply(next);
-        } finally {
-          persistBusy = false;
+      const detail = (
+        ev as CustomEvent<{
+          separators?: ReaditSettings["layoutSlots"]["separators"];
+        }>
+      ).detail;
+      if (!detail?.separators) return;
+      void mutateSettings((current) => ({
+        ...current,
+        layoutSlots: {
+          ...current.layoutSlots,
+          preset: "custom",
+          separators: detail.separators!.slice(0, 3),
+        },
+      })).then(reapply);
+    });
+
+    ctx.addEventListener(window, "readit:layout-width-locks", (ev) => {
+      const detail = (
+        ev as CustomEvent<{
+          widthLocks?: Record<string, boolean>;
+        }>
+      ).detail;
+      if (!detail?.widthLocks) return;
+      void mutateSettings((current) => ({
+        ...current,
+        layoutSlots: {
+          ...current.layoutSlots,
+          widthLocks: detail.widthLocks!,
+        },
+      })).then(reapply);
+    });
+
+    ctx.addEventListener(window, "readit:layout-preset", (ev) => {
+      const detail = (ev as CustomEvent<{ preset?: LayoutPreset }>).detail;
+      const preset = detail?.preset;
+      if (!preset) return;
+      void mutateSettings((current) => {
+        let next: ReaditSettings = {
+          ...current,
+          flags: { ...current.flags, layoutSlots: true },
+          layoutSlots: applyLayoutPreset(current.layoutSlots, preset),
+        };
+        if (preset === "singleColumn") {
+          next = syncSidebarsHide(next, true);
+        } else if (
+          current.layoutSlots.preset === "singleColumn" ||
+          current.knobs.hide.sidebars
+        ) {
+          next = syncSidebarsHide(next, false);
         }
-      })();
+        return next;
+      }).then(reapply);
     });
 
     ctx.addEventListener(window, "readit:cqs-persist", (ev) => {
-      void (async () => {
-        const detail = (ev as CustomEvent<CqsPersistDetail>).detail;
-        if (!detail || persistBusy) return;
-        if (detail.type === "submit_stamps") return;
-        persistBusy = true;
-        try {
-          const current = await loadSettings();
-          let next = current;
-          if (detail.type === "snapshot") {
-            next = appendCqsSnapshot(current, detail.snapshot);
-          } else if (detail.type === "risk") {
-            next = appendCqsRiskEvent(current, detail.event);
-          }
-          if (next !== current) {
-            next = await saveSettings(next);
-            reapply(next);
-          }
-        } finally {
-          persistBusy = false;
+      const detail = (ev as CustomEvent<CqsPersistDetail>).detail;
+      if (!detail || detail.type === "submit_stamps") return;
+      void mutateSettings((current) => {
+        if (detail.type === "snapshot") {
+          return appendCqsSnapshot(current, detail.snapshot);
         }
-      })();
+        if (detail.type === "risk") {
+          return appendCqsRiskEvent(current, detail.event);
+        }
+        return current;
+      }).then(reapply);
     });
 
     ctx.addEventListener(window, "wxt:locationchange", () => {

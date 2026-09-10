@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { CSSProperties } from "preact";
-import type { ReaditSettings } from "@readit/schema";
+import { resolveProfileIcon, type ReaditSettings } from "@readit/schema";
 import {
   loadSettings,
   patchSettings,
@@ -40,29 +40,45 @@ function Popup() {
 
       <label style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
         Active profile
-        <select
-          style={{
-            display: "block",
-            width: "100%",
-            marginTop: 4,
-            padding: 6,
-            borderRadius: 6,
-            border: "1px solid #444",
-            background: "#1a1a1b",
-            color: "#eee",
-          }}
-          value={settings.activeProfileId}
-          onChange={async (e) => {
-            const next = await switchProfile(e.currentTarget.value);
-            setSettings(next);
-          }}
-        >
-          {settings.profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+          {(() => {
+            const active = settings.profiles.find(
+              (p) => p.id === settings.activeProfileId,
+            );
+            const icon = active && resolveProfileIcon(active, settings);
+            return icon ? (
+              <img
+                src={`/mascots/${icon}.png`}
+                alt=""
+                width={28}
+                height={24}
+                style={{ objectFit: "contain", flexShrink: 0 }}
+              />
+            ) : null;
+          })()}
+          <select
+            style={{
+              display: "block",
+              width: "100%",
+              padding: 6,
+              borderRadius: 6,
+              border: "1px solid #444",
+              background: "#1a1a1b",
+              color: "#eee",
+            }}
+            value={settings.activeProfileId}
+            onChange={async (e) => {
+              const next = await switchProfile(e.currentTarget.value);
+              setSettings(next);
+            }}
+          >
+            {settings.profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </label>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

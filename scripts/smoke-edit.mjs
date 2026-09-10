@@ -706,7 +706,9 @@ try {
   });
   record(
     "edit.column_dual_resize",
-    (dual.panelLeft || 0) >= 3 && (dual.panelRight || 0) >= 3 ? "pass" : "fail",
+    // Outer edges that abut page pads are owned by pad handles — expect an
+    // interior L/R pair on the remaining column edges (2+ with 3 panels).
+    (dual.panelLeft || 0) >= 2 && (dual.panelRight || 0) >= 2 ? "pass" : "fail",
     JSON.stringify(dual),
   );
   record(

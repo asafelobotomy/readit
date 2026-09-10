@@ -55,17 +55,36 @@ export async function saveSettings(
   return settings;
 }
 
+/**
+ * Serializes read-modify-write cycles within this JS context so concurrent
+ * callers (e.g. two quick Studio edits, or a Studio commit racing a content-script
+ * persist handler) queue instead of racing on a stale `loadSettings()` snapshot —
+ * a race that previously let the second writer silently clobber the first.
+ */
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+export async function mutateSettings(
+  mutator: (
+    current: ReaditSettings,
+  ) => ReaditSettings | Promise<ReaditSettings>,
+): Promise<ReaditSettings> {
+  const run = writeQueue.catch(() => undefined).then(async () => {
+    const current = await loadSettings();
+    const next = await mutator(current);
+    return saveSettings(next);
+  });
+  writeQueue = run.catch(() => undefined);
+  return run;
+}
+
 export async function patchSettings(
   patch: Partial<ReaditSettings>,
 ): Promise<ReaditSettings> {
-  const current = await loadSettings();
-  const next = { ...current, ...patch };
-  return saveSettings(next);
+  return mutateSettings((current) => ({ ...current, ...patch }));
 }
 
 export async function switchProfile(profileId: string): Promise<ReaditSettings> {
-  const current = await loadSettings();
-  return saveSettings(applyProfile(current, profileId));
+  return mutateSettings((current) => applyProfile(current, profileId));
 }
 
 export async function exportSettings(): Promise<ExportBundle> {

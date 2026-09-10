@@ -769,7 +769,8 @@ export function renderNavRail(
 }
 
 let railObservers: MutationObserver[] = [];
-const watchedShadowRoots = new Set<ShadowRoot>();
+/** Shadow roots we're watching, mapped to their observer so detached ones can be pruned. */
+const watchedShadowRoots = new Map<ShadowRoot, MutationObserver>();
 let railRefreshTimer = 0;
 let joinClickBound = false;
 let pageshowBound = false;
@@ -781,14 +782,27 @@ let observedNavRoot: HTMLElement | null = null;
 function disconnectRailObservers(): void {
   for (const obs of railObservers) obs.disconnect();
   railObservers = [];
+  for (const obs of watchedShadowRoots.values()) obs.disconnect();
   watchedShadowRoots.clear();
 }
 
-function watchNodeForRail(
+/** Reddit re-renders the community list (join/leave, accordion) without a
+ * full SPA nav, replacing controller/item elements and orphaning their old
+ * shadow roots — drop any whose host has left the document. */
+function pruneDetachedShadowObservers(): void {
+  for (const [shadow, obs] of watchedShadowRoots) {
+    if (!shadow.host.isConnected) {
+      obs.disconnect();
+      watchedShadowRoots.delete(shadow);
+    }
+  }
+}
+
+function watchNode(
   node: Node,
   onChange: () => void,
   attributeFilter: string[],
-): void {
+): MutationObserver {
   const obs = new MutationObserver(onChange);
   obs.observe(node, {
     childList: true,
@@ -796,7 +810,15 @@ function watchNodeForRail(
     attributes: true,
     attributeFilter,
   });
-  railObservers.push(obs);
+  return obs;
+}
+
+function watchNodeForRail(
+  node: Node,
+  onChange: () => void,
+  attributeFilter: string[],
+): void {
+  railObservers.push(watchNode(node, onChange, attributeFilter));
 }
 
 /** Light DOM + community controller / item shadow roots (joined list lives there). */
@@ -822,25 +844,25 @@ function attachCommunityShadowObservers(
   root: HTMLElement,
   onChange: () => void,
 ): void {
+  pruneDetachedShadowObservers();
   for (const controller of root.querySelectorAll(
     "left-nav-communities-controller",
   )) {
     const shadow = controller.shadowRoot;
     if (shadow && !watchedShadowRoots.has(shadow)) {
-      watchedShadowRoots.add(shadow);
-      watchNodeForRail(shadow, onChange, [
-        "href",
-        "src",
-        "avatarsrc",
-        "prefixedname",
-      ]);
+      watchedShadowRoots.set(
+        shadow,
+        watchNode(shadow, onChange, ["href", "src", "avatarsrc", "prefixedname"]),
+      );
     }
     if (!shadow) continue;
     for (const item of shadow.querySelectorAll("left-nav-community-item")) {
       const itemShadow = item.shadowRoot;
       if (itemShadow && !watchedShadowRoots.has(itemShadow)) {
-        watchedShadowRoots.add(itemShadow);
-        watchNodeForRail(itemShadow, onChange, ["href", "src"]);
+        watchedShadowRoots.set(
+          itemShadow,
+          watchNode(itemShadow, onChange, ["href", "src"]),
+        );
       }
     }
   }
@@ -958,6 +980,14 @@ export function unmountNavRail(doc: Document = document): void {
   observedNavRoot = null;
   lastFingerprint = "";
   doc.getElementById(NAV_RAIL_ID)?.remove();
+  if (joinClickBound) {
+    document.removeEventListener("click", onJoinLeaveClick, true);
+    joinClickBound = false;
+  }
+  if (pageshowBound) {
+    window.removeEventListener("pageshow", onPageShow);
+    pageshowBound = false;
+  }
 }
 
 /** True when compact rail should be present but is missing from the live DOM. */
@@ -966,19 +996,6 @@ export function navRailNeedsRemount(doc: Document = document): boolean {
   const host = findRailHost(doc);
   if (!(host instanceof HTMLElement)) return true;
   return !doc.getElementById(NAV_RAIL_ID);
-}
-
-/** @deprecated Prefer mountNavRail — kept for export compatibility. */
-export function stampNavCompact(doc: Document = document): number {
-  const model = scrapeNavModel(doc);
-  return (
-    model.chrome.length +
-    model.sections.reduce((n, s) => n + 1 + s.items.length, 0)
-  );
-}
-
-export function clearNavCompactStamps(_doc: Document = document): void {
-  /* stamps removed — rail owns compact UI */
 }
 
 export function mountNavCompactObserver(): void {

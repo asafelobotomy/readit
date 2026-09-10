@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-03T08:38:50.649Z",
+  "at": "2026-09-06T22:46:29.681Z",
   "mode": "cdp-puppeteer",
   "cdpEndpoint": "http://127.0.0.1:9222",
   "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
@@ -27,7 +27,7 @@
     {
       "id": "nav.wide.not_compact",
       "status": "pass",
-      "detail": "{\"compact\":false,\"navW\":272,\"navVar\":\"272px\"}"
+      "detail": "{\"compact\":false,\"navW\":240,\"navVar\":\"240px\"}"
     },
     {
       "id": "nav.wide.labels_visible",
@@ -42,7 +42,7 @@
     {
       "id": "nav.compact.class_mid",
       "status": "pass",
-      "detail": "{\"midSet\":{\"ok\":true,\"before\":\"272\",\"after\":\"140\",\"nextVal\":\"140\",\"min\":\"64\",\"max\":\"400\"},\"compact\":true,\"navW\":140}"
+      "detail": "{\"midSet\":{\"ok\":true,\"before\":\"240\",\"after\":\"140\",\"nextVal\":\"140\",\"min\":\"64\",\"max\":\"400\"},\"compact\":true,\"navW\":140}"
     },
     {
       "id": "nav.visual.min_shot",
@@ -56,13 +56,13 @@
     },
     {
       "id": "nav.compact.class_min",
-      "status": "pass",
-      "detail": "{\"minSet\":{\"ok\":true,\"before\":\"140\",\"after\":\"64\",\"nextVal\":\"64\",\"min\":\"64\",\"max\":\"400\"},\"compact\":true,\"navW\":64}"
+      "status": "fail",
+      "detail": "{\"minSet\":{\"ok\":false,\"reason\":\"no range for Nav (\",\"labels\":[]},\"compact\":true,\"navW\":140}"
     },
     {
       "id": "nav.compact.width_var",
-      "status": "pass",
-      "detail": "{\"navVar\":\"64px\",\"navW\":64}"
+      "status": "fail",
+      "detail": "{\"navVar\":\"140px\",\"navW\":140}"
     },
     {
       "id": "nav.community.stamped",
@@ -72,7 +72,7 @@
     {
       "id": "nav.community.name_accuracy",
       "status": "pass",
-      "detail": "[{\"expect\":\"AutoForgeTheGame\",\"subText\":\"AutoForgeTheGame\",\"nameOk\":true},{\"expect\":\"GamesOnReddit\",\"subText\":\"GamesOnReddit\",\"nameOk\":true},{\"expect\":\"pics\",\"subText\":\"pics\",\"nameOk\":true},{\"expect\":\"news\",\"subText\":\"news\",\"nameOk\":true},{\"expect\":\"AskReddit\",\"subText\":\"AskReddit\",\"nameOk\":true},{\"expect\":\"NoStupidQuestions\",\"subText\":\"NoStupidQuestions\",\"nameOk\":true},{\"expect\":\"askteddit\",\"subText\":\"askteddit\",\"nameOk\":true},{\"expect\":\"EliteTransGirls\",\"subText\":\"EliteTransGirls\",\"nameOk\":true},{\"expect\":\"FetishHaven\",\"subText\":\"FetishHaven\",\"nameOk\":true},{\"expect\":\"girlcockheaven\",\"subText\":\"girlcockheaven\",\"nameOk\":true},{\"expect\":\"PlayhouseSellersForum\",\"subText\":\"PlayhouseSellersForum\",\"nameOk\":true},{\"expect\":\"StraightTransGirls\",\"subText\":\"StraightTransGirls\",\"nameOk\":true}]"
+      "detail": "[{\"expect\":\"AutoForgeTheGame\",\"subText\":\"AutoForgeTheGame\",\"nameOk\":true},{\"expect\":\"GamesOnReddit\",\"subText\":\"GamesOnReddit\",\"nameOk\":true},{\"expect\":\"pics\",\"subText\":\"pics\",\"nameOk\":true},{\"expect\":\"news\",\"subText\":\"news\",\"nameOk\":true},{\"expect\":\"AskReddit\",\"subText\":\"AskReddit\",\"nameOk\":true},{\"expect\":\"cherry_jammm_\",\"subText\":\"cherry_jammm_\",\"nameOk\":true},{\"expect\":\"awesometransgirls\",\"subText\":\"awesometransgirls\",\"nameOk\":true},{\"expect\":\"BathroomSelfies_\",\"subText\":\"BathroomSelfies_\",\"nameOk\":true},{\"expect\":\"BeautifulBareFeet\",\"subText\":\"BeautifulBareFeet\",\"nameOk\":true},{\"expect\":\"brasize\",\"subText\":\"brasize\",\"nameOk\":true},{\"expect\":\"BreedableTrap\",\"subText\":\"BreedableTrap\",\"nameOk\":true},{\"expect\":\"EliteTransGirls\",\"subText\":\"EliteTransGirls\",\"nameOk\":true}]"
     },
     {
       "id": "nav.community.tooltip",
@@ -107,7 +107,7 @@
     {
       "id": "nav.align.no_sideways_ellipsis",
       "status": "pass",
-      "detail": "{\"sampleText\":\"AutoForgeTheGame D GamesOnReddit pics news AskReddit NoStupidQuestions askteddit E EliteTransGirls F FetishHaven G girlcockheaven P PlayhouseSellersForum StraightTransGirls T Tgirls T TgirlsCum T TgirlsOnOnlyfans T Tgirl\",\"sidewaysEllipsis\":false}"
+      "detail": "{\"sampleText\":\"AutoForgeTheGame D GamesOnReddit pics news AskReddit cherry_jammm_ awesometransgirls BathroomSelfies_ BeautifulBareFeet brasize BreedableTrap EliteTransGirls FantasticTrans FeetAny Femcock FetishHaven girlcockheaven horn\",\"sidewaysEllipsis\":false}"
     },
     {
       "id": "nav.chrome.icons_kept",
@@ -117,12 +117,12 @@
     {
       "id": "nav.section.stamped",
       "status": "pass",
-      "detail": "[{\"tag\":\"DIV\",\"section\":\"games\",\"title\":\"GAMES ON REDDIT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"recent\",\"title\":\"RECENT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"communities\",\"title\":\"COMMUNITIES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"resources\",\"title\":\"RESOURCES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true}]"
+      "detail": "[{\"tag\":\"DIV\",\"section\":\"games\",\"title\":\"GAMES ON REDDIT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"recent\",\"title\":\"RECENT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"communities\",\"title\":\"COMMUNITIES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"resources\",\"title\":\"RESOURCES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"moderation\",\"title\":\"MODERATION\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true}]"
     },
     {
       "id": "nav.section.icon_pseudo",
       "status": "pass",
-      "detail": "[{\"tag\":\"DIV\",\"section\":\"games\",\"title\":\"GAMES ON REDDIT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"recent\",\"title\":\"RECENT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"communities\",\"title\":\"COMMUNITIES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"resources\",\"title\":\"RESOURCES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true}]"
+      "detail": "[{\"tag\":\"DIV\",\"section\":\"games\",\"title\":\"GAMES ON REDDIT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"recent\",\"title\":\"RECENT\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"communities\",\"title\":\"COMMUNITIES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"resources\",\"title\":\"RESOURCES\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true},{\"tag\":\"DIV\",\"section\":\"moderation\",\"title\":\"MODERATION\",\"beforeDisplay\":\"block\",\"beforeW\":22,\"beforeH\":22,\"hasMask\":true}]"
     },
     {
       "id": "nav.clutter.tags_hidden",
@@ -135,7 +135,7 @@
       "detail": "{\"stars\":[]}"
     }
   ],
-  "pass": 24,
-  "fail": 2,
+  "pass": 22,
+  "fail": 4,
   "skip": 0
 }
