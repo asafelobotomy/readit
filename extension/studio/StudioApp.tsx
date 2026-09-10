@@ -10,17 +10,27 @@ import {
   LAYOUT_SLOTS,
   latestCqsTier,
   resolveSlots,
+  separatorExtraPx,
+  separatorTrackCount,
+  setChromeTopNavHeight,
+  setChromeTopNavZone,
   setSlotZone,
   syncSidebarsHide,
   toReddIt,
 } from "@readit/features";
 import {
+  budgetColumnOrder,
+  CHROME_HEIGHT_LIMITS,
   createId,
   formatProfileLayoutBlurb,
+  isStackedPair,
   LAYOUT_WIDTH_LIMITS,
+  mirrorStackedWidths,
   normalizeColumnOrder,
   resizePadInBudget,
   resizePanelInBudget,
+  resolveProfileIcon,
+  widthLockSet,
   type CqsTier,
   type ElementRule,
   type FilterRule,
@@ -28,6 +38,7 @@ import {
   type LayoutSlotId,
   type LayoutZone,
   type MarkReadMode,
+  type ProfileIconId,
   type ReaditSettings,
   type StudioLocale,
   type UserNote,
@@ -37,8 +48,8 @@ import {
   exportSettings,
   importSettings,
   loadSettings,
+  mutateSettings,
   patchSettings,
-  saveSettings,
   switchProfile,
   validateImport,
   watchSettings,
@@ -78,6 +89,17 @@ const LAYOUT_PRESETS: { id: LayoutPreset; label: string }[] = [
 ];
 
 const COLUMN_POSITION_LABELS = ["Left", "Center", "Right"] as const;
+
+function mascotUrl(icon: ProfileIconId): string {
+  return browser.runtime.getURL(`/mascots/${icon}.png`);
+}
+
+/** Backstop against unbounded storage growth — keeps the most recent `max` entries.
+ * `newest` says where new entries land: "end" (push) or "start" (unshift). */
+function capList<T>(list: T[], max = 500, newest: "end" | "start" = "end"): T[] {
+  if (list.length <= max) return list;
+  return newest === "end" ? list.slice(list.length - max) : list.slice(0, max);
+}
 
 export function StudioApp({ api }: { api: StudioApi }) {
   const [open, setOpen] = useState(false);
@@ -140,9 +162,12 @@ export function StudioApp({ api }: { api: StudioApi }) {
     label: string,
     mutator: (s: ReaditSettings) => ReaditSettings,
   ) => {
-    const before = await loadSettings();
+    let before!: ReaditSettings;
+    const next = await mutateSettings((current) => {
+      before = current;
+      return mutator(current);
+    });
     pushUndo(label, before);
-    const next = await saveSettings(mutator(before));
     setSettings(next);
     flash(label);
   };
@@ -153,7 +178,7 @@ export function StudioApp({ api }: { api: StudioApi }) {
       flash("Nothing to undo");
       return;
     }
-    const next = await saveSettings(entry.settings);
+    const next = await mutateSettings(() => entry.settings);
     setSettings(next);
     flash(`Undid: ${entry.label}`);
   };
@@ -186,7 +211,7 @@ export function StudioApp({ api }: { api: StudioApi }) {
       };
       await commit("Hide element", (s) => ({
         ...s,
-        elementRules: [...s.elementRules, rule],
+        elementRules: capList([...s.elementRules, rule]),
         flags: { ...s.flags, elementRules: true },
       }));
       setPicker(false);
@@ -472,7 +497,7 @@ export function StudioApp({ api }: { api: StudioApi }) {
                 action.type === "hideEl" ? "Hide element" : "Dim element",
                 (s) => ({
                   ...s,
-                  elementRules: [...s.elementRules, rule],
+                  elementRules: capList([...s.elementRules, rule]),
                   flags: { ...s.flags, elementRules: true },
                 }),
               );
@@ -527,6 +552,7 @@ export function StudioApp({ api }: { api: StudioApi }) {
                   key={id}
                   type="button"
                   class="readit-tab"
+                  data-studio-tab={id}
                   data-active={String(tab === id)}
                   onClick={() => setTab(id)}
                 >
@@ -764,6 +790,7 @@ function LayoutTab({
               key={p.id}
               type="button"
               class="readit-tab"
+              data-preset={p.id}
               data-active={String(cfg.preset === p.id)}
               onClick={() => applyPreset(p.id)}
             >
@@ -803,21 +830,73 @@ function LayoutTab({
         </div>
       </div>
 
+
+      <div class="readit-section">
+        <h2>Page chrome</h2>
+        <p class="readit-muted">
+          Move the Reddit header top/bottom and resize its height. Sticky columns
+          follow --readit-chrome-top / --readit-chrome-bottom.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+          {(
+            [
+              ["top", "Header top"],
+              ["bottom", "Header bottom"],
+              ["hidden", "Header hide"],
+            ] as const
+          ).map(([zone, label]) => (
+            <button
+              key={zone}
+              type="button"
+              class="readit-tab"
+              data-chrome-zone={zone}
+              data-active={String((cfg.chrome?.topNav ?? "top") === zone)}
+              onClick={() =>
+                void onCommit(`Header ${zone}`, (s) => ({
+                  ...s,
+                  layoutSlots: setChromeTopNavZone(s.layoutSlots, zone),
+                }))
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div class="readit-row" style={{ marginTop: 8 }}>
+          <span>Header height ({cfg.chrome?.topNavPx ?? 56}px)</span>
+          <input
+            type="range"
+            data-width="chrome-top"
+            min={CHROME_HEIGHT_LIMITS.topNav.min}
+            max={CHROME_HEIGHT_LIMITS.topNav.max}
+            value={cfg.chrome?.topNavPx ?? 56}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              void onCommit("Header height", (s) => ({
+                ...s,
+                layoutSlots: setChromeTopNavHeight(s.layoutSlots, v),
+              }));
+            }}
+          />
+        </div>
+      </div>
+
       <div class="readit-section">
         <h2>Widths</h2>
         <p class="readit-muted">
-          Panel-owned — travel with the panel when moved. Outer pads fill blank
-          viewport edges (default 24px). Drag edges on-page when “Allow moving
-          columns” is on. Nav {LAYOUT_WIDTH_LIMITS.leftNav.min}–{LAYOUT_WIDTH_LIMITS.leftNav.max}px
-          (icon rail ≤168px: avatars + bold names under, section icons, hover tips); Rail {LAYOUT_WIDTH_LIMITS.rightRail.min}–{LAYOUT_WIDTH_LIMITS.rightRail.max}px
-          (widgets stay readable).
-          Thinning nav/rail grows the feed up to {LAYOUT_WIDTH_LIMITS.main.max}px.
-          Pads max {LAYOUT_WIDTH_LIMITS.pagePad.max}px so gutters cannot starve columns.
+          Panel-owned — travel with the panel when moved. Outer pads share the
+          leftover viewport equally so columns stay centered (default 24px each
+          until fitted). Drag edges on-page when “Allow moving columns” is on.
+          Nav & Rail share {LAYOUT_WIDTH_LIMITS.leftNav.min}–{LAYOUT_WIDTH_LIMITS.leftNav.max}px
+          (icon/compact ≤168px). Feed {LAYOUT_WIDTH_LIMITS.main.min}–{LAYOUT_WIDTH_LIMITS.main.max}px.
+          Separators {LAYOUT_WIDTH_LIMITS.separator.min}–{LAYOUT_WIDTH_LIMITS.separator.max}px.
+          Pads {LAYOUT_WIDTH_LIMITS.pagePad.min}–{LAYOUT_WIDTH_LIMITS.pagePad.max}px (mirrored when unlocked).
         </p>
         <div class="readit-row">
           <span>Nav ({cfg.widths.leftNavPx}px)</span>
           <input
             type="range"
+            data-width="nav"
             min={LAYOUT_WIDTH_LIMITS.leftNav.min}
             max={LAYOUT_WIDTH_LIMITS.leftNav.max}
             value={cfg.widths.leftNavPx}
@@ -825,22 +904,36 @@ function LayoutTab({
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
               void onCommit("Nav width", (s) => {
-                const order = normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
-                  (id) => s.layoutSlots.placements[id] !== "hidden",
+                const placements = s.layoutSlots.placements;
+                const order = budgetColumnOrder(
+                  normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
+                    (id) => placements[id] !== "hidden",
+                  ),
+                  placements,
                 );
-                const fitted = resizePanelInBudget(
-                  {
-                    leftNavPx: s.layoutSlots.widths.leftNavPx,
-                    rightRailPx: s.layoutSlots.widths.rightRailPx,
-                    feedWidthPx: s.knobs.tokens.feedWidthPx,
-                    pagePadLeftPx: s.layoutSlots.widths.pagePadLeftPx ?? 24,
-                    pagePadRightPx: s.layoutSlots.widths.pagePadRightPx ?? 24,
-                    columnGapPx: s.layoutSlots.widths.columnGapPx ?? 12,
-                  },
-                  order,
-                  "leftNav",
-                  v,
-                  window.innerWidth || document.documentElement.clientWidth || 0,
+                const fitted = mirrorStackedWidths(
+                  resizePanelInBudget(
+                    mirrorStackedWidths(
+                      {
+                        leftNavPx: s.layoutSlots.widths.leftNavPx,
+                        rightRailPx: s.layoutSlots.widths.rightRailPx,
+                        feedWidthPx: s.knobs.tokens.feedWidthPx,
+                        pagePadLeftPx: s.layoutSlots.widths.pagePadLeftPx ?? 24,
+                        pagePadRightPx: s.layoutSlots.widths.pagePadRightPx ?? 24,
+                        columnGapPx: s.layoutSlots.widths.columnGapPx ?? 12,
+                      },
+                      placements,
+                    ),
+                    order,
+                    "leftNav",
+                    v,
+                    window.innerWidth || document.documentElement.clientWidth || 0,
+                    "right",
+                    separatorExtraPx(s),
+                    widthLockSet(s.layoutSlots.widthLocks),
+                    separatorTrackCount(s),
+                  ),
+                  placements,
                 );
                 return {
                   ...s,
@@ -871,6 +964,7 @@ function LayoutTab({
           <span>Feed ({settings.knobs.tokens.feedWidthPx}px)</span>
           <input
             type="range"
+            data-width="feed"
             min={LAYOUT_WIDTH_LIMITS.main.min}
             max={LAYOUT_WIDTH_LIMITS.main.max}
             value={settings.knobs.tokens.feedWidthPx}
@@ -890,15 +984,20 @@ function LayoutTab({
           <span>Rail ({cfg.widths.rightRailPx}px)</span>
           <input
             type="range"
+            data-width="rail"
             min={LAYOUT_WIDTH_LIMITS.rightRail.min}
             max={LAYOUT_WIDTH_LIMITS.rightRail.max}
             value={cfg.widths.rightRailPx}
-            disabled={cfg.placements.rightRail === "hidden"}
+            disabled={cfg.placements.rightRail === "hidden" || isStackedPair(cfg.placements)}
             onChange={(e) => {
               const v = Number(e.currentTarget.value);
               void onCommit("Rail width", (s) => {
-                const order = normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
-                  (id) => s.layoutSlots.placements[id] !== "hidden",
+                const placements = s.layoutSlots.placements;
+                const order = budgetColumnOrder(
+                  normalizeColumnOrder(s.layoutSlots.columnOrder).filter(
+                    (id) => placements[id] !== "hidden",
+                  ),
+                  placements,
                 );
                 const fitted = resizePanelInBudget(
                   {
@@ -913,6 +1012,10 @@ function LayoutTab({
                   "rightRail",
                   v,
                   window.innerWidth || document.documentElement.clientWidth || 0,
+                  "right",
+                  separatorExtraPx(s),
+                    widthLockSet(s.layoutSlots.widthLocks),
+                    separatorTrackCount(s),
                 );
                 return {
                   ...s,
@@ -943,6 +1046,7 @@ function LayoutTab({
           <span>Left pad ({cfg.widths.pagePadLeftPx ?? 24}px)</span>
           <input
             type="range"
+            data-width="pad-left"
             min={LAYOUT_WIDTH_LIMITS.pagePad.min}
             max={LAYOUT_WIDTH_LIMITS.pagePad.max}
             value={cfg.widths.pagePadLeftPx ?? 24}
@@ -965,6 +1069,9 @@ function LayoutTab({
                   "left",
                   v,
                   window.innerWidth || document.documentElement.clientWidth || 0,
+                  separatorExtraPx(s),
+                    widthLockSet(s.layoutSlots.widthLocks),
+                    separatorTrackCount(s),
                 );
                 return {
                   ...s,
@@ -995,6 +1102,7 @@ function LayoutTab({
           <span>Right pad ({cfg.widths.pagePadRightPx ?? 24}px)</span>
           <input
             type="range"
+            data-width="pad-right"
             min={LAYOUT_WIDTH_LIMITS.pagePad.min}
             max={LAYOUT_WIDTH_LIMITS.pagePad.max}
             value={cfg.widths.pagePadRightPx ?? 24}
@@ -1017,6 +1125,9 @@ function LayoutTab({
                   "right",
                   v,
                   window.innerWidth || document.documentElement.clientWidth || 0,
+                  separatorExtraPx(s),
+                    widthLockSet(s.layoutSlots.widthLocks),
+                    separatorTrackCount(s),
                 );
                 return {
                   ...s,
@@ -1047,6 +1158,7 @@ function LayoutTab({
           <span>Column gap ({cfg.widths.columnGapPx ?? 12}px)</span>
           <input
             type="range"
+            data-width="gap"
             min={0}
             max={48}
             value={cfg.widths.columnGapPx ?? 12}
@@ -1239,6 +1351,9 @@ function SimpleTab({
         <p class="readit-muted">{t(settings.studioLocale, "brandBlurb")}</p>
         {settings.profiles.map((p) => {
           const layoutBlurb = formatProfileLayoutBlurb(p);
+          const icon = resolveProfileIcon(p, settings);
+          const nsfwForced =
+            p.id === "creator-desk" && settings.knobs.showOnlyNsfw;
           return (
             <div
               key={p.id}
@@ -1246,9 +1361,81 @@ function SimpleTab({
               data-active={String(p.id === settings.activeProfileId)}
               onClick={() => onProfile(p.id)}
             >
-              <strong>{p.name}</strong>
-              <span>{p.description}</span>
-              {layoutBlurb && <span class="readit-muted">{layoutBlurb}</span>}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {icon && (
+                  <img
+                    src={mascotUrl(icon)}
+                    alt=""
+                    width={40}
+                    height={34}
+                    style={{ objectFit: "contain", flexShrink: 0 }}
+                  />
+                )}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <strong>{p.name}</strong>
+                  <span>{p.description}</span>
+                  {layoutBlurb && (
+                    <span class="readit-muted">{layoutBlurb}</span>
+                  )}
+                </div>
+              </div>
+              {p.id === "creator-desk" && (
+                <label
+                  class="readit-row"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={settings.knobs.showOnlyNsfw}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      void onCommit("Show only NSFW", (s) => ({
+                        ...s,
+                        knobs: { ...s.knobs, showOnlyNsfw: checked },
+                      }));
+                    }}
+                  />
+                  Show only NSFW (hides feed posts Reddit hasn't flagged 18+)
+                </label>
+              )}
+              {p.iconOptions.length > 1 && (
+                <div
+                  style={{ display: "flex", gap: 6, marginTop: 6 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {p.iconOptions.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      class="readit-btn"
+                      disabled={nsfwForced}
+                      data-active={String(icon === opt)}
+                      title={
+                        nsfwForced
+                          ? "Icon follows 'Show only NSFW' while it's on"
+                          : `Use ${opt} icon`
+                      }
+                      onClick={() =>
+                        void onCommit(`Icon: ${opt}`, (s) => ({
+                          ...s,
+                          profileIconChoice: {
+                            ...s.profileIconChoice,
+                            [p.id]: opt,
+                          },
+                        }))
+                      }
+                    >
+                      <img
+                        src={mascotUrl(opt)}
+                        alt={opt}
+                        width={24}
+                        height={20}
+                        style={{ objectFit: "contain" }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -1751,7 +1938,7 @@ function AdvancedTab({
           onAdd={(sub, width) =>
             void onCommit("Sub override", (s) => ({
               ...s,
-              subredditOverrides: [
+              subredditOverrides: capList([
                 ...s.subredditOverrides.filter(
                   (o) => o.subreddit.toLowerCase() !== sub.toLowerCase(),
                 ),
@@ -1759,7 +1946,7 @@ function AdvancedTab({
                   subreddit: sub,
                   tokens: { feedWidthPx: width },
                 },
-              ],
+              ]),
             }))
           }
         />
@@ -1828,7 +2015,7 @@ function CurateTab({
             };
             void onCommit("Add filter", (s) => ({
               ...s,
-              filters: [...s.filters, rule],
+              filters: capList([...s.filters, rule]),
               flags: { ...s.flags, filters: true },
             }));
             setPattern("");
@@ -1876,7 +2063,7 @@ function CurateTab({
               if (!sub) return;
               void onCommit(`Block r/${sub}`, (s) => ({
                 ...s,
-                filters: [
+                filters: capList([
                   ...s.filters,
                   {
                     id: createId("flt"),
@@ -1884,7 +2071,7 @@ function CurateTab({
                     pattern: sub,
                     enabled: true,
                   },
-                ],
+                ]),
                 flags: { ...s.flags, filters: true },
               }));
             }}
@@ -1899,7 +2086,7 @@ function CurateTab({
               if (!user) return;
               void onCommit(`Block u/${user}`, (s) => ({
                 ...s,
-                filters: [
+                filters: capList([
                   ...s.filters,
                   {
                     id: createId("flt"),
@@ -1907,7 +2094,7 @@ function CurateTab({
                     pattern: user,
                     enabled: true,
                   },
-                ],
+                ]),
                 flags: { ...s.flags, filters: true },
               }));
             }}
@@ -2112,10 +2299,10 @@ function CreateTab({
             if (!title.trim() || !body.trim()) return;
             void onCommit("Add canned reply", (s) => ({
               ...s,
-              cannedReplies: [
+              cannedReplies: capList([
                 ...s.cannedReplies,
                 { id: createId("cr"), title: title.trim(), body: body.trim() },
-              ],
+              ]),
               flags: { ...s.flags, cannedReplies: true },
             }));
             setTitle("");
@@ -2307,7 +2494,7 @@ function ModTab({
             if (!macroTitle.trim() || !macroBody.trim()) return;
             void onCommit("Add macro", (s) => ({
               ...s,
-              modMacros: [
+              modMacros: capList([
                 ...s.modMacros,
                 {
                   id: createId("mm"),
@@ -2315,7 +2502,7 @@ function ModTab({
                   body: macroBody.trim(),
                   kind: "removal",
                 },
-              ],
+              ]),
               flags: { ...s.flags, modMacros: true },
             }));
             setMacroTitle("");
@@ -2378,7 +2565,7 @@ function ModTab({
             };
             void onCommit("Add usernote", (s) => ({
               ...s,
-              usernotes: [...s.usernotes, entry],
+              usernotes: capList([...s.usernotes, entry]),
               flags: { ...s.flags, modUsernotes: true, modHighlight: true },
             }));
             setUser("");
@@ -2421,16 +2608,20 @@ function LibraryTab({
             document.title;
           void onCommit("Save page", (s) => ({
             ...s,
-            savedItems: [
-              {
-                id: createId("sv"),
-                url: location.href,
-                title,
-                folderId: "queue",
-                addedAt: Date.now(),
-              },
-              ...s.savedItems,
-            ],
+            savedItems: capList(
+              [
+                {
+                  id: createId("sv"),
+                  url: location.href,
+                  title,
+                  folderId: "queue",
+                  addedAt: Date.now(),
+                },
+                ...s.savedItems,
+              ],
+              500,
+              "start",
+            ),
             flags: { ...s.flags, savedLibrary: true },
           }));
         }}

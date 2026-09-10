@@ -34,6 +34,13 @@ function profileLayoutRecipe(
       gutterTheme: "plain",
       zoomAll: 1,
       zoomByPanel: {},
+      widthLocks: {},
+      chrome: {
+        topNav: "top",
+        bottomChrome: "hidden",
+        topNavPx: 56,
+        bottomChromePx: 0,
+      },
     },
     preset,
   );
@@ -75,6 +82,7 @@ const focusReader: ProfilePack = {
     showNotes: true,
     queueDensity: false,
     macroBar: false,
+    showOnlyNsfw: false,
   },
   flags: {
     hideNoise: true,
@@ -101,6 +109,7 @@ const focusReader: ProfilePack = {
     commentUx: false,
     followingFeed: true,
     lurkerMode: false,
+    headerMascot: true,
   },
   layoutSlots: profileLayoutRecipe("singleColumn", {
     leftNavPx: 272,
@@ -109,6 +118,8 @@ const focusReader: ProfilePack = {
     pagePadRightPx: 48,
     columnGapPx: 12,
   }),
+  icon: "turle",
+  iconOptions: ["turle", "bear"],
 };
 
 const densePower: ProfilePack = {
@@ -150,6 +161,7 @@ const densePower: ProfilePack = {
     showNotes: true,
     queueDensity: false,
     macroBar: false,
+    showOnlyNsfw: false,
   },
   flags: {
     hideNoise: true,
@@ -177,6 +189,7 @@ const densePower: ProfilePack = {
     commentUx: false,
     followingFeed: true,
     lurkerMode: false,
+    headerMascot: true,
   },
   layoutSlots: profileLayoutRecipe("classic", {
     leftNavPx: 240,
@@ -185,6 +198,8 @@ const densePower: ProfilePack = {
     pagePadRightPx: 16,
     columnGapPx: 8,
   }),
+  icon: "robot",
+  iconOptions: ["robot"],
 };
 
 const creatorDesk: ProfilePack = {
@@ -223,6 +238,7 @@ const creatorDesk: ProfilePack = {
     showNotes: true,
     queueDensity: false,
     macroBar: false,
+    showOnlyNsfw: false,
   },
   flags: {
     hideNoise: true,
@@ -249,6 +265,7 @@ const creatorDesk: ProfilePack = {
     commentUx: false,
     followingFeed: false,
     lurkerMode: false,
+    headerMascot: true,
   },
   layoutSlots: profileLayoutRecipe("classic", {
     leftNavPx: 272,
@@ -257,6 +274,9 @@ const creatorDesk: ProfilePack = {
     pagePadRightPx: 24,
     columnGapPx: 12,
   }),
+  icon: "star",
+  /** nsfw is not user-selectable here — it auto-swaps in when knobs.showOnlyNsfw is on. */
+  iconOptions: ["star", "egirl"],
 };
 
 const minimalMedia: ProfilePack = {
@@ -295,6 +315,7 @@ const minimalMedia: ProfilePack = {
     showNotes: true,
     queueDensity: false,
     macroBar: false,
+    showOnlyNsfw: false,
   },
   flags: {
     hideNoise: true,
@@ -321,6 +342,7 @@ const minimalMedia: ProfilePack = {
     commentUx: false,
     followingFeed: true,
     lurkerMode: false,
+    headerMascot: true,
   },
   layoutSlots: profileLayoutRecipe("classic", {
     leftNavPx: 260,
@@ -329,6 +351,8 @@ const minimalMedia: ProfilePack = {
     pagePadRightPx: 32,
     columnGapPx: 12,
   }),
+  icon: "base",
+  iconOptions: ["base"],
 };
 
 const modDesk: ProfilePack = {
@@ -367,6 +391,7 @@ const modDesk: ProfilePack = {
     showNotes: true,
     queueDensity: true,
     macroBar: true,
+    showOnlyNsfw: false,
   },
   flags: {
     hideNoise: true,
@@ -393,6 +418,7 @@ const modDesk: ProfilePack = {
     commentUx: false,
     followingFeed: false,
     lurkerMode: false,
+    headerMascot: true,
   },
   layoutSlots: profileLayoutRecipe("navRight", {
     leftNavPx: 240,
@@ -401,6 +427,8 @@ const modDesk: ProfilePack = {
     pagePadRightPx: 16,
     columnGapPx: 8,
   }),
+  icon: "mod",
+  iconOptions: ["mod"],
 };
 
 export const BUILTIN_PROFILES: ProfilePack[] = [
@@ -495,6 +523,7 @@ export function createDefaultSettings(): ReaditSettings {
     featureHealth: {},
     toolboxDetected: false,
     syncLightweight: false,
+    profileIconChoice: {},
   };
 }
 

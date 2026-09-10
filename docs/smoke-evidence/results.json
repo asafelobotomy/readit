@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-03T08:36:27.554Z",
+  "at": "2026-09-04T06:35:05.194Z",
   "mode": "cdp-puppeteer",
   "cdpEndpoint": "http://127.0.0.1:9222",
   "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
@@ -43,7 +43,7 @@
     {
       "id": "shell.fab_present",
       "status": "pass",
-      "detail": "{\"host\":true,\"fab\":true,\"classes\":[\"theme-beta\",\"readit-active\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-slots\",\"theme-dark\",\"readit-layout-preset-classic\",\"readit-layout-degraded\",\"readit-nav-compact\",\"readit-rail-compact\"],\"toolbox\":\"0\",\"styleTag\":true}"
+      "detail": "{\"host\":true,\"fab\":true,\"classes\":[\"theme-beta\",\"readit-active\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-slots\",\"theme-dark\",\"readit-layout-preset-classic\",\"readit-gutter-plain\",\"readit-layout-degraded\"],\"toolbox\":\"0\",\"styleTag\":true}"
     },
     {
       "id": "shell.early_css",
@@ -56,134 +56,139 @@
       "detail": "toolbox=0"
     },
     {
-      "id": "shell.fab_opens_studio",
+      "id": "shell.fab_menu_edit_toolbox",
       "status": "pass",
+      "detail": "{\"ok\":true,\"labels\":[\"Edit Mode\",\"Settings\",\"GitHub\",\"Ko-fi\"],\"toolbox\":true,\"editCls\":true,\"toolboxGone\":true}"
+    },
+    {
+      "id": "shell.fab_opens_studio",
+      "status": "fail",
       "detail": ""
     },
     {
       "id": "shell.tabs_present",
-      "status": "pass",
-      "detail": "Simple,Layout,Advanced,Curate,Create,CQS,Mod,Library"
+      "status": "fail",
+      "detail": ""
     },
     {
       "id": "profile.focus_reader",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"980px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-rail-compact\",\"readit-layout-preset-singleColumn\"],\"kb\":false,\"kbMode\":\"\",\"compact\":false}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"card missing\"}"
     },
     {
       "id": "profile.dense_power",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"1100px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-rail-compact\",\"readit-feed-compact\",\"readit-layout-preset-classic\"],\"kb\":false,\"kbMode\":\"defer\",\"compact\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"card missing\"}"
     },
     {
       "id": "advanced.keyboard_nav",
-      "status": "pass",
-      "detail": "data-readit-kb=defer"
+      "status": "fail",
+      "detail": "data-readit-kb=undefined"
     },
     {
       "id": "track.waveA.hotkey_defer",
-      "status": "pass",
-      "detail": "{\"kbMode\":\"defer\",\"kb\":false}"
+      "status": "fail",
+      "detail": "{}"
     },
     {
       "id": "track.waveA.compact_feed",
-      "status": "pass",
-      "detail": "{\"compact\":true}"
+      "status": "fail",
+      "detail": "{}"
     },
     {
       "id": "simple.profile_switch",
-      "status": "pass",
+      "status": "fail",
       "detail": "alias of Dense Power switch"
     },
     {
       "id": "profile.creator_desk",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"1000px\",\"classes\":[\"readit-active\",\"readit-op-highlight\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-layout-preset-classic\"],\"kb\":false,\"kbMode\":\"\",\"compact\":false}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"card missing\"}"
     },
     {
       "id": "profile.minimal_media",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"900px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-feed-compact\",\"readit-layout-preset-classic\",\"readit-rail-compact\"],\"kb\":false,\"kbMode\":\"\",\"compact\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"card missing\"}"
     },
     {
       "id": "profile.mod_desk",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"feedWidth\":\"1200px\",\"classes\":[\"readit-active\",\"readit-layout-slots\",\"readit-layout-degraded\",\"readit-queue-density\",\"readit-op-highlight\",\"readit-mod-highlight\",\"readit-layout-preset-navRight\"],\"kb\":false,\"kbMode\":\"defer\",\"compact\":false}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"card missing\"}"
     },
     {
       "id": "shell.undo",
       "status": "pass",
-      "detail": "{\"beforeUndo\":\"980px\",\"afterUndo\":{\"width\":\"980px\",\"toast\":\"Undid: Switch profile\"}}"
+      "detail": "{\"beforeUndo\":\"1300px\",\"afterUndo\":{\"width\":\"1300px\",\"toast\":\"\"}}"
     },
     {
       "id": "simple.hide_sidebars_toggle",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"before\":true,\"after\":false}"
+      "status": "fail",
+      "detail": "{\"ok\":false}"
     },
     {
       "id": "simple.hide_promoted_toggle",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"before\":true,\"after\":false}"
+      "status": "fail",
+      "detail": "{\"ok\":false}"
     },
     {
       "id": "simple.density_font",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"gap\":\"18px\",\"scale\":\"1.1\"}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"ranges missing\"}"
     },
     {
       "id": "simple.media_mode",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"value\":\"links_on_feed\"}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"no media select\"}"
     },
     {
       "id": "simple.quiet_nsfw",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"checked\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false}"
     },
     {
       "id": "simple.sync_lightweight",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"before\":false,\"after\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false}"
     },
     {
       "id": "simple.picker_arm_esc",
-      "status": "pass",
-      "detail": "{\"pickerArmed\":true,\"pickerGone\":true}"
+      "status": "fail",
+      "detail": "{\"pickerArmed\":false,\"pickerGone\":true}"
     },
     {
       "id": "layout.tab_ui",
-      "status": "pass",
-      "detail": "{\"hasPresets\":true,\"zone\":true,\"slotHealth\":true,\"chips\":[\"Classic\",\"Nav right\",\"Dual left\",\"Dual right\",\"Single column\"]}"
+      "status": "fail",
+      "detail": "{\"hasPresets\":false,\"zone\":false,\"slotHealth\":false,\"chips\":[]}"
     },
     {
       "id": "layout.presets_chips",
-      "status": "pass",
-      "detail": "[\"Classic\",\"Nav right\",\"Dual left\",\"Dual right\",\"Single column\"]"
+      "status": "fail",
+      "detail": "[]"
     },
     {
       "id": "layout.slot_health",
-      "status": "pass",
-      "detail": "{\"slotHealth\":true}"
+      "status": "fail",
+      "detail": "{\"slotHealth\":false}"
     },
     {
       "id": "layout.nav_right",
       "status": "fail",
-      "detail": "{\"ok\":false,\"stamped\":true,\"recipe\":false,\"preset\":true}"
+      "detail": "{\"ok\":false,\"reason\":\"no nav right chip\"}"
     },
     {
       "id": "layout.dual_left",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"layout\":\"dualLeft\",\"hasRecipe\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"hasRecipe\":false}"
     },
     {
       "id": "layout.single_column",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"layout\":\"singleColumn\",\"hasRecipe\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"hasRecipe\":false}"
     },
     {
       "id": "layout.reset_classic",
       "status": "fail",
-      "detail": "{\"ok\":true,\"layout\":\"classic\"}"
+      "detail": "{\"ok\":false}"
     },
     {
       "id": "layout.widths",
@@ -197,8 +202,8 @@
     },
     {
       "id": "layout.hide_sidebars_bridge",
-      "status": "pass",
-      "detail": "{\"ok\":true,\"checked\":true,\"layout\":\"singleColumn\",\"hasRecipe\":true}"
+      "status": "fail",
+      "detail": "{\"ok\":false,\"reason\":\"no checkbox\"}"
     },
     {
       "id": "simple.noise_pack_ui",
@@ -438,22 +443,22 @@
     {
       "id": "routes.post_comments",
       "status": "pass",
-      "detail": "https://www.reddit.com/r/AskReddit/comments/1w61j0f/what_is_the_worst_movie_youve_ever_watched_and/"
+      "detail": "https://www.reddit.com/r/AskReddit/comments/1w6eajz/askreddit_is_looking_for_new_moderators/"
     },
     {
       "id": "create.absolute_timestamps",
       "status": "pass",
-      "detail": "count=3"
+      "detail": "count=2"
     },
     {
       "id": "track.later.quote_dom",
-      "status": "pass",
-      "detail": "quoteButtons=1"
+      "status": "fail",
+      "detail": "quoteButtons=0"
     },
     {
       "id": "routes.spa_soft_nav",
       "status": "pass",
-      "detail": "{\"ok\":true,\"href\":\"https://www.reddit.com/r/NoStupidQuestions/\",\"fab\":true,\"active\":true,\"mode\":\"click\"}"
+      "detail": "{\"ok\":true,\"href\":\"https://www.reddit.com/r/transboobs/\",\"fab\":true,\"active\":true,\"mode\":\"click\"}"
     },
     {
       "id": "routes.home",
@@ -488,10 +493,10 @@
     {
       "id": "shell.popup_open_studio",
       "status": "pass",
-      "detail": "{\"clickOpen\":{\"ok\":true,\"tabCount\":2,\"sends\":[{\"id\":2140449600,\"url\":\"https://www.reddit.com/user/cherryjammm/\",\"ok\":false,\"err\":\"Error: Could not establish connection. Receiving end does not exist.\"},{\"id\":2140449687,\"url\":\"https://www.reddit.com/\",\"ok\":true}],\"clicked\":true},\"opened\":true}"
+      "detail": "{\"clickOpen\":{\"ok\":true,\"tabCount\":5,\"sends\":[{\"id\":2140450945,\"url\":\"https://www.reddit.com/?feed=home\",\"ok\":false,\"err\":\"Error: Could not establish connection. Receiving end does not exist.\"},{\"id\":2140450950,\"url\":\"https://www.reddit.com/\",\"ok\":false,\"err\":\"Error: Could not establish connection. Receiving end does not exist.\"},{\"id\":2140451014,\"url\":\"https://www.reddit.com/\",\"ok\":false,\"err\":\"Error: Could not establish connection. Receiving end does not exist.\"},{\"id\":2140451019,\"url\":\"https://www.reddit.com/\",\"ok\":false,\"err\":\"Error: Could not establish connection. Receiving end does not exist.\"},{\"id\":2140451028,\"url\":\"https://www.reddit.com/\",\"ok\":true}],\"clicked\":true},\"opened\":true}"
     }
   ],
-  "pass": 86,
-  "fail": 4,
+  "pass": 62,
+  "fail": 29,
   "skip": 7
 }

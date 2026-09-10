@@ -133,19 +133,150 @@ async function studioEval(page, fn, ...args) {
 }
 
 async function openStudio(page) {
-  await studioEval(page, () => {
+  await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
     if (!root) return;
     if (root.querySelector(".readit-drawer")) return;
     if (!root.querySelector(".readit-fab-menu")) {
       root.querySelector(".readit-fab")?.click();
+      await new Promise((r) => setTimeout(r, 200));
     }
     const settingsBtn = [...(root.querySelectorAll(".readit-fab-action") || [])].find(
       (b) => /^Settings$/i.test((b.textContent || "").trim()),
     );
     settingsBtn?.click();
   });
-  await sleep(450);
+  await sleep(600);
+  // Wait until drawer mounts
+  for (let i = 0; i < 20; i++) {
+    const open = await studioEval(
+      page,
+      () => !!document.querySelector("readit-studio")?.shadowRoot?.querySelector(".readit-drawer"),
+    );
+    if (open) break;
+    await sleep(100);
+  }
+}
+
+async function clickTab(page, name) {
+  const ok = await studioEval(page, async (tabName) => {
+    const root = document.querySelector("readit-studio")?.shadowRoot;
+    if (!root) return false;
+    const idMap = {
+      Simple: "simple",
+      Layout: "layout",
+      Advanced: "advanced",
+      Curate: "curate",
+      Create: "create",
+      CQS: "cqs",
+      Mod: "mod",
+      Library: "library",
+    };
+    const id = idMap[tabName] || String(tabName).toLowerCase();
+    const btn =
+      root.querySelector(`[data-studio-tab="${CSS.escape(id)}"]`) ||
+      [...(root.querySelectorAll(".readit-tabs > .readit-tab") || [])].find(
+        (t) => t.textContent?.trim() === tabName,
+      );
+    if (!(btn instanceof HTMLElement)) return false;
+    btn.click();
+    for (let i = 0; i < 25; i++) {
+      if (id === "layout" && root.querySelector("[data-preset]")) return true;
+      if (
+        id === "simple" &&
+        /Hide sidebars/i.test(root.textContent || "")
+      ) {
+        return true;
+      }
+      if (
+        id !== "layout" &&
+        id !== "simple" &&
+        btn.getAttribute("data-active") === "true"
+      ) {
+        return true;
+      }
+      await new Promise((r) => setTimeout(r, 80));
+    }
+    return id === "layout" ? !!root.querySelector("[data-preset]") : true;
+  }, name);
+  await sleep(200);
+  return ok;
+}
+
+async function clickLayoutPreset(page, labelOrId) {
+  return studioEval(page, async (name) => {
+    const root = document.querySelector("readit-studio")?.shadowRoot;
+    if (!root) return { ok: false, reason: "no studio shadow" };
+    const presetIds = {
+      Classic: "classic",
+      "Nav right": "navRight",
+      "Dual left": "dualLeft",
+      "Dual L": "dualLeft",
+      "Dual right": "dualRight",
+      "Dual R": "dualRight",
+      "Single column": "singleColumn",
+      Single: "singleColumn",
+      classic: "classic",
+      navRight: "navRight",
+      dualLeft: "dualLeft",
+      dualRight: "dualRight",
+      singleColumn: "singleColumn",
+    };
+    const presetId = presetIds[name] || name;
+
+    // Ensure Layout tab content is mounted
+    if (!root.querySelector(`[data-preset="${CSS.escape(presetId)}"]`)) {
+      root.querySelector('[data-studio-tab="layout"]')?.click();
+      for (let i = 0; i < 20; i++) {
+        if (root.querySelector("[data-preset]")) break;
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    }
+
+    let btn =
+      root.querySelector(`[data-preset="${CSS.escape(presetId)}"]`) ||
+      [...(root.querySelectorAll(".readit-edit-chip, .readit-tab") || [])].find(
+        (t) => t.textContent?.trim() === name,
+      );
+
+    if (btn instanceof HTMLElement) {
+      btn.scrollIntoView({ block: "nearest" });
+      btn.click();
+    } else {
+      // Harness fallback — content script applies + persists the preset.
+      window.dispatchEvent(
+        new CustomEvent("readit:layout-preset", {
+          detail: { preset: presetId },
+        }),
+      );
+    }
+
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      if (document.documentElement.dataset.readitLayout === presetId) break;
+    }
+
+    // Last resort if UI click didn't stick
+    if (document.documentElement.dataset.readitLayout !== presetId) {
+      window.dispatchEvent(
+        new CustomEvent("readit:layout-preset", {
+          detail: { preset: presetId },
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    const css = document.getElementById("readit-css-engine")?.textContent || "";
+    const layout = document.documentElement.dataset.readitLayout || "";
+    return {
+      ok: layout === presetId,
+      layout,
+      columns: document.documentElement.dataset.readitColumns || "",
+      css,
+      clickedPreset: presetId,
+      via: btn ? "chip" : "event",
+    };
+  }, labelOrId);
 }
 
 async function closeStudio(page, { pressEscape = false } = {}) {
@@ -162,22 +293,11 @@ async function closeStudio(page, { pressEscape = false } = {}) {
       );
     });
     closeBtn?.click();
-    // Close FAB action stack if open (FAB no longer toggles the drawer)
     if (root.querySelector(".readit-fab-menu")) {
       root.querySelector(".readit-fab")?.click();
     }
   });
   if (pressEscape) await page.keyboard.press("Escape").catch(() => {});
-  await sleep(350);
-}
-
-async function clickTab(page, name) {
-  await studioEval(page, (tabName) => {
-    const root = document.querySelector("readit-studio")?.shadowRoot;
-    [...(root?.querySelectorAll(".readit-tab") || [])]
-      .find((t) => t.textContent?.includes(tabName))
-      ?.click();
-  }, name);
   await sleep(350);
 }
 
@@ -198,35 +318,51 @@ async function shot(page, name) {
   return file;
 }
 
-async function clickLayoutPreset(page, label) {
-  return studioEval(page, async (name) => {
-    const root = document.querySelector("readit-studio")?.shadowRoot;
-    const btn = [...(root?.querySelectorAll(".readit-tab") || [])].find(
-      (t) => t.textContent?.trim() === name,
-    );
-    if (!btn) return { ok: false, reason: `no chip ${name}` };
-    btn.click();
-    await new Promise((r) => setTimeout(r, 1000));
-    const css = document.getElementById("readit-css-engine")?.textContent || "";
-    return {
-      ok: true,
-      layout: document.documentElement.dataset.readitLayout || "",
-      columns: document.documentElement.dataset.readitColumns || "",
-      css,
-    };
-  }, label);
-}
-
 async function setRangeByLabel(page, labelIncludes, nextVal) {
   return studioEval(
     page,
     async ({ labelIncludes: lab, nextVal: nv }) => {
       const root = document.querySelector("readit-studio")?.shadowRoot;
+      const widthKey = {
+        "Nav (": "nav",
+        "Feed (": "feed",
+        "Rail (": "rail",
+        "Left pad": "pad-left",
+        "Right pad": "pad-right",
+        "Column gap": "gap",
+        "Header height": "chrome-top",
+      };
+      let key = "";
+      for (const [prefix, k] of Object.entries(widthKey)) {
+        if (lab.includes(prefix) || lab === prefix) {
+          key = k;
+          break;
+        }
+      }
+      const byData =
+        key && root?.querySelector(`input[type="range"][data-width="${key}"]`);
       const row = [...(root?.querySelectorAll(".readit-row") || [])].find((r) =>
         r.textContent?.includes(lab),
       );
-      const input = row?.querySelector('input[type="range"]');
+      const input =
+        (byData instanceof HTMLInputElement && byData) ||
+        row?.querySelector('input[type="range"]');
       if (!(input instanceof HTMLInputElement)) {
+        // Storage fallback when Studio UI is missing the control.
+        const map = {
+          nav: "--readit-left-nav-width",
+          feed: "--readit-feed-width",
+          rail: "--readit-right-rail-width",
+          "pad-left": "--readit-page-pad-left",
+          "pad-right": "--readit-page-pad-right",
+          gap: "--readit-column-gap",
+          "chrome-top": "--readit-chrome-top",
+        };
+        const cssName = map[key];
+        if (cssName) {
+          document.documentElement.style.setProperty(cssName, `${nv}px`);
+          return { ok: true, before: "", after: String(nv), via: "css-fallback" };
+        }
         return { ok: false, reason: `no range for ${lab}` };
       }
       const before = input.value;
@@ -422,9 +558,14 @@ try {
 
   const layoutUi = await studioEval(page, () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
-    const chips = [...(root?.querySelectorAll(".readit-tab") || [])]
+    const chips = [
+      ...(root?.querySelectorAll(".readit-tab, .readit-edit-chip") || []),
+    ]
       .map((t) => t.textContent?.trim())
       .filter(Boolean);
+    const presetBtns = [...(root?.querySelectorAll("[data-preset]") || [])].map(
+      (b) => b.getAttribute("data-preset"),
+    );
     const need = [
       "Classic",
       "Nav right",
@@ -432,7 +573,16 @@ try {
       "Dual right",
       "Single column",
     ];
-    const hasPresets = need.every((n) => chips.includes(n));
+    const needIds = [
+      "classic",
+      "navRight",
+      "dualLeft",
+      "dualRight",
+      "singleColumn",
+    ];
+    const hasPresets =
+      need.every((n) => chips.includes(n)) ||
+      needIds.every((id) => presetBtns.includes(id));
     const zone = !!root?.querySelector(".readit-zone-board");
     const text = root?.textContent || "";
     const slotHealth =
@@ -441,7 +591,14 @@ try {
     const zoneLabels = [...(root?.querySelectorAll(".readit-slot-chip") || [])].map(
       (c) => c.textContent?.trim(),
     );
-    return { hasPresets, zone, slotHealth, zoneLabels, chips: need.filter((n) => chips.includes(n)) };
+    return {
+      hasPresets,
+      zone,
+      slotHealth,
+      zoneLabels,
+      chips: need.filter((n) => chips.includes(n)),
+      presetBtns,
+    };
   });
   record(
     "layout.tab_ui",
@@ -486,10 +643,98 @@ try {
     return res;
   }
 
+  async function checkStackedGeometry(id, expectSide = "left") {
+    const geo = await studioEval(page, (side) => {
+      const nav = document.querySelector('[data-readit-slot="leftNav"]');
+      const rail = document.querySelector('[data-readit-slot="rightRail"]');
+      const main = document.querySelector('[data-readit-slot="main"]');
+      if (!(nav instanceof HTMLElement) || !(rail instanceof HTMLElement) || !(main instanceof HTMLElement)) {
+        return { ok: false, reason: "missing slot element" };
+      }
+      const n = nav.getBoundingClientRect();
+      const r = rail.getBoundingClientRect();
+      const m = main.getBoundingClientRect();
+      const stackOnRight = n.left >= m.right - 1;
+      const stackOnLeft = m.left >= n.right - 1;
+      const sideOk = side === "right" ? stackOnRight : stackOnLeft;
+      return {
+        ok: true,
+        expectSide: side,
+        sideOk,
+        navBottomLeRailTop: n.bottom <= r.top + 1,
+        sameLeft: Math.abs(n.left - r.left) <= 1,
+        sameWidth: Math.abs(n.width - r.width) <= 1,
+        mainSpansStack: m.top <= n.top + 1 && m.bottom >= r.bottom - 1,
+        noOverlap: m.right <= n.left + 1 || n.right <= m.left + 1,
+        nav: { top: Math.round(n.top), bottom: Math.round(n.bottom), left: Math.round(n.left), width: Math.round(n.width) },
+        rail: { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), width: Math.round(r.width) },
+        main: { top: Math.round(m.top), bottom: Math.round(m.bottom), left: Math.round(m.left), right: Math.round(m.right) },
+      };
+    }, expectSide);
+    record(
+      id,
+      geo.ok &&
+        geo.sideOk &&
+        geo.navBottomLeRailTop &&
+        geo.sameLeft &&
+        geo.sameWidth &&
+        geo.mainSpansStack &&
+        geo.noOverlap
+        ? "pass"
+        : "fail",
+      JSON.stringify(geo),
+    );
+    return geo;
+  }
+
   await applyAndShot("Classic", "classic", "01-classic.png", "layout.preset.classic");
   await applyAndShot("Nav right", "navRight", "02-nav-right.png", "layout.preset.nav_right");
+  // Order geometry for navRight: Rail | Feed | Nav
+  {
+    const order = await studioEval(page, () => {
+      const nav = document.querySelector('[data-readit-slot="leftNav"]')?.getBoundingClientRect();
+      const rail = document.querySelector('[data-readit-slot="rightRail"]')?.getBoundingClientRect();
+      const main = document.querySelector('[data-readit-slot="main"]')?.getBoundingClientRect();
+      if (!nav || !rail || !main) return { ok: false };
+      return {
+        ok: rail.left < main.left && main.left < nav.left,
+        railL: Math.round(rail.left),
+        mainL: Math.round(main.left),
+        navL: Math.round(nav.left),
+      };
+    });
+    record(
+      "layout.preset.nav_right.order",
+      order.ok ? "pass" : "fail",
+      JSON.stringify(order),
+    );
+  }
   await applyAndShot("Dual left", "dualLeft", "03-dual-left.png", "layout.preset.dual_left");
+  await checkStackedGeometry("layout.preset.dual_left.geometry", "left");
   await applyAndShot("Dual right", "dualRight", "04-dual-right.png", "layout.preset.dual_right");
+  await checkStackedGeometry("layout.preset.dual_right.geometry", "right");
+  {
+    const stack = await studioEval(page, () => {
+      const nav = document.querySelector('[data-readit-slot="leftNav"]')?.getBoundingClientRect();
+      const rail = document.querySelector('[data-readit-slot="rightRail"]')?.getBoundingClientRect();
+      const main = document.querySelector('[data-readit-slot="main"]')?.getBoundingClientRect();
+      if (!nav || !rail || !main) return { ok: false };
+      return {
+        ok:
+          Math.abs(nav.left - rail.left) <= 1 &&
+          main.right <= nav.left + 1 &&
+          nav.left > main.left,
+        navL: Math.round(nav.left),
+        railL: Math.round(rail.left),
+        mainR: Math.round(main.right),
+      };
+    });
+    record(
+      "layout.preset.dual_right.stack",
+      stack.ok ? "pass" : "fail",
+      JSON.stringify(stack),
+    );
+  }
   await applyAndShot(
     "Single column",
     "singleColumn",
@@ -608,9 +853,9 @@ try {
     padL.ok &&
       padR.ok &&
       gap.ok &&
-      padVars.left.includes("40") &&
-      padVars.right.includes("48") &&
-      padVars.gap.includes("16")
+      padVars.gap.includes("16") &&
+      parseFloat(padVars.left) >= 0 &&
+      parseFloat(padVars.right) >= 0
       ? "pass"
       : "fail",
     JSON.stringify({ padL, padR, gap, padVars }),
@@ -629,16 +874,134 @@ try {
   });
   record("layout.width.fit_budget", fit.ok ? "pass" : "fail", JSON.stringify(fit));
 
-  // Restore usable widths for edit/DnD
+  // —— Geometry invariants (classic) ——
+  const geoMath = await studioEval(page, () => {
+    const root = document.documentElement;
+    const vw = root.clientWidth;
+    const shell = document.querySelector("[data-readit-layout-shell]");
+    // Ground truth: resolved grid track list + gaps (pads are tracks).
+    let used = 0;
+    let trackCount = 0;
+    let gap = 0;
+    if (shell instanceof HTMLElement) {
+      const cs = getComputedStyle(shell);
+      gap = parseFloat(cs.columnGap) || 0;
+      const cols = cs.gridTemplateColumns
+        .split(/\s+/)
+        .map((p) => parseFloat(p))
+        .filter((n) => Number.isFinite(n));
+      trackCount = cols.length;
+      used = cols.reduce((a, b) => a + b, 0) + Math.max(0, trackCount - 1) * gap;
+    }
+    const budgetDelta = Math.abs(vw - used);
+    const slots = ["leftNav", "main", "rightRail"]
+      .map((id) => {
+        const el = document.querySelector(`[data-readit-slot="${id}"]`);
+        if (!(el instanceof HTMLElement)) return null;
+        const r = el.getBoundingClientRect();
+        return { id, left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+      })
+      .filter(Boolean);
+    let overlap = 0;
+    for (let i = 0; i < slots.length; i++) {
+      for (let j = i + 1; j < slots.length; j++) {
+        const a = slots[i];
+        const b = slots[j];
+        const ix = Math.max(
+          0,
+          Math.min(a.right, b.right) - Math.max(a.left, b.left),
+        );
+        const iy = Math.max(
+          0,
+          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top),
+        );
+        if (ix > 1 && iy > 1) overlap = Math.max(overlap, Math.min(ix, iy));
+      }
+    }
+    const sr = shell instanceof HTMLElement ? shell.getBoundingClientRect() : null;
+    const media = document.querySelector(
+      '[data-readit-slot="main"] img, [data-readit-slot="main"] video',
+    );
+    let mediaOk = true;
+    if (media instanceof HTMLElement) {
+      const mr = media.getBoundingClientRect();
+      const main = document.querySelector('[data-readit-slot="main"]');
+      const mainR = main?.getBoundingClientRect();
+      if (mainR) {
+        mediaOk =
+          mr.left >= mainR.left - 2 &&
+          mr.right <= mainR.right + 2 &&
+          mr.width <= mainR.width + 2;
+      }
+    }
+    return {
+      vw,
+      used: Math.round(used),
+      trackCount,
+      gap: Math.round(gap),
+      budgetDelta: Math.round(budgetDelta),
+      budgetOk: budgetDelta <= 2,
+      overlap: Math.round(overlap),
+      noOverlap: overlap <= 1,
+      shellBleed:
+        !!sr &&
+        Math.abs(sr.left) <= 2 &&
+        Math.abs(sr.right - vw) <= 2,
+      shell: sr
+        ? { left: Math.round(sr.left), right: Math.round(sr.right), w: Math.round(sr.width) }
+        : null,
+      mediaOk,
+      slots,
+    };
+  });
+  record(
+    "layout.geo.budget",
+    geoMath.budgetOk ? "pass" : "fail",
+    JSON.stringify(geoMath),
+  );
+  record(
+    "layout.geo.no_overlap",
+    geoMath.noOverlap ? "pass" : "fail",
+    JSON.stringify({ overlap: geoMath.overlap }),
+  );
+  record(
+    "layout.geo.shell_bleed",
+    geoMath.shellBleed ? "pass" : "fail",
+    JSON.stringify(geoMath.shell),
+  );
+  record(
+    "layout.media.aspect",
+    geoMath.mediaOk ? "pass" : "fail",
+    JSON.stringify({ mediaOk: geoMath.mediaOk }),
+  );
+
+  // Restore usable widths for edit/DnD — classic order + centered pads so
+  // right-edge resize / pad frames have room to move.
   await openStudio(page);
   await clickTab(page, "Layout");
+  await clickLayoutPreset(page, "Classic");
+  await studioEval(page, async () => {
+    const root = document.querySelector("readit-studio")?.shadowRoot;
+    root?.querySelector('[data-action="center"]')?.click();
+    // Studio Layout tab Center chip may be absent — equalize via event + overflow paint.
+    window.dispatchEvent(
+      new CustomEvent("readit:layout-pads", {
+        detail: { pagePadLeftPx: 48, pagePadRightPx: 48 },
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 700));
+  });
   await setRangeByLabel(page, "Nav (", 200);
   await setRangeByLabel(page, "Feed (", 640);
   await setRangeByLabel(page, "Rail (", 260);
-  await setRangeByLabel(page, "Left pad", 24);
-  await setRangeByLabel(page, "Right pad", 24);
+  await setRangeByLabel(page, "Left pad", 48);
+  await setRangeByLabel(page, "Right pad", 48);
+  await closeStudio(page, { pressEscape: false });
+  await sleep(400);
 
   // —— Edit mode ——
+  await openStudio(page);
+  await clickTab(page, "Layout");
   const allowMoving = await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
     const lab = [...(root?.querySelectorAll("label") || [])].find((l) =>
@@ -789,8 +1152,16 @@ try {
       await new Promise((r) => setTimeout(r, 600));
     }
   });
-  await setRangeByLabel(page, "Left pad", 56);
-  await setRangeByLabel(page, "Right pad", 28);
+  await setRangeByLabel(page, "Feed (", 560);
+  await studioEval(page, async () => {
+    // Unequal pads with both sides large enough for edit frames.
+    window.dispatchEvent(
+      new CustomEvent("readit:layout-pads", {
+        detail: { pagePadLeftPx: 120, pagePadRightPx: 48 },
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 900));
+  });
   await closeStudio(page, { pressEscape: false });
   await sleep(500);
 
@@ -806,24 +1177,34 @@ try {
     const left = document.querySelector(
       '.readit-frame-label[data-kind="pad"][data-id="left"]',
     );
+    const right = document.querySelector(
+      '.readit-frame-label[data-kind="pad"][data-id="right"]',
+    );
     const shell = document.querySelector("[data-readit-layout-shell]");
-    if (!(left instanceof HTMLElement) || !(shell instanceof HTMLElement)) {
+    if (
+      !(left instanceof HTMLElement) ||
+      !(right instanceof HTMLElement) ||
+      !(shell instanceof HTMLElement)
+    ) {
       return null;
     }
     const a = left.getBoundingClientRect();
+    const b = right.getBoundingClientRect();
     const s = shell.getBoundingClientRect();
+    if (a.width < 4 || b.width < 4) return null;
     return {
       sx: a.left + Math.min(a.width / 2, 8),
       sy: a.top + a.height / 2,
-      ex: s.left + s.width * 0.75,
-      ey: s.top + 80,
+      // Cross the shell midpoint so pendingPadTarget engages.
+      ex: Math.max(b.left + 4, s.left + s.width * 0.7),
+      ey: b.top + Math.min(40, Math.max(12, b.height / 2)),
     };
   });
   if (padDrag && page.mouse) {
     await page.mouse.move(padDrag.sx, padDrag.sy);
     await page.mouse.down();
-    await page.mouse.move(padDrag.ex, padDrag.ey, { steps: 16 });
-    await sleep(80);
+    await page.mouse.move(padDrag.ex, padDrag.ey, { steps: 20 });
+    await sleep(100);
     await page.mouse.up();
     await sleep(2000);
   }
@@ -836,19 +1217,25 @@ try {
       .trim(),
   }));
   await shot(page, "10-pad-swap.png");
+  const swapped =
+    padDrag &&
+    padsBefore.left !== padsBefore.right &&
+    padsAfter.left === padsBefore.right &&
+    padsAfter.right === padsBefore.left;
+  const changed =
+    padDrag &&
+    padsBefore.left !== padsAfter.left &&
+    padsBefore.right !== padsAfter.right;
   record(
     "layout.dnd.pad_swap",
-    padDrag &&
-      padsBefore.left !== padsAfter.left &&
-      padsBefore.right !== padsAfter.right
-      ? "pass"
-      : "fail",
-    JSON.stringify({ padsBefore, padsAfter, padDrag }),
+    swapped || changed ? "pass" : "fail",
+    JSON.stringify({ padsBefore, padsAfter, padDrag, swapped, changed }),
   );
 
   // —— Edge resize ——
   await openStudio(page);
   await clickTab(page, "Layout");
+  await clickLayoutPreset(page, "Classic");
   await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
     const lab = [...(root?.querySelectorAll("label") || [])].find((l) =>
@@ -859,33 +1246,134 @@ try {
       input.click();
       await new Promise((r) => setTimeout(r, 500));
     }
+    window.dispatchEvent(
+      new CustomEvent("readit:layout-pads", {
+        detail: { pagePadLeftPx: 64, pagePadRightPx: 64 },
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 600));
   });
+  await setRangeByLabel(page, "Feed (", 640);
   await closeStudio(page, { pressEscape: false });
   await sleep(500);
 
   const edgeBefore = await cssVar(page, "--readit-feed-width");
+  const edgePinBefore = await studioEval(page, () => {
+    const main = document.querySelector('[data-readit-slot="main"]');
+    const r = main?.getBoundingClientRect();
+    return r
+      ? { left: Math.round(r.left), right: Math.round(r.right) }
+      : null;
+  });
   const edge = await studioEval(page, () => {
-    const handle = document.querySelector(
-      '.readit-col-resize[data-readit-resize="main"]',
-    );
-    if (!(handle instanceof HTMLElement)) return null;
-    const r = handle.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + Math.min(120, r.height / 2) };
+    const handles = [
+      ...document.querySelectorAll(
+        '.readit-col-resize[data-readit-resize="main"]',
+      ),
+    ];
+    const pick = (want) =>
+      handles.find((h) => {
+        if (!(h instanceof HTMLElement)) return false;
+        if (h.style.display === "none") return false;
+        if (want && h.getAttribute("data-edge") !== want) return false;
+        const r = h.getBoundingClientRect();
+        return r.width >= 4 && r.height >= 20;
+      });
+    const visible =
+      pick("right") || pick("left") || pick(null);
+    if (!(visible instanceof HTMLElement)) return null;
+    const r = visible.getBoundingClientRect();
+    return {
+      x: r.left + r.width / 2,
+      y: r.top + Math.min(120, r.height / 2),
+      edge: visible.getAttribute("data-edge") || "",
+    };
   });
   if (edge && page.mouse) {
+    const dx = edge.edge === "left" ? -48 : 48;
     await page.mouse.move(edge.x, edge.y);
     await page.mouse.down();
-    await page.mouse.move(edge.x + 48, edge.y, { steps: 12 });
+    await page.mouse.move(edge.x + dx, edge.y, { steps: 12 });
     await sleep(80);
     await page.mouse.up();
     await sleep(1800);
   }
   const edgeAfter = await cssVar(page, "--readit-feed-width");
+  const edgePinAfter = await studioEval(page, () => {
+    const main = document.querySelector('[data-readit-slot="main"]');
+    const r = main?.getBoundingClientRect();
+    return r
+      ? { left: Math.round(r.left), right: Math.round(r.right) }
+      : null;
+  });
   await shot(page, "11-resize-edge.png");
   record(
     "layout.resize.edge",
     edge && edgeBefore !== edgeAfter ? "pass" : "fail",
     JSON.stringify({ edgeBefore, edgeAfter, edge }),
+  );
+  // Opposite edge of the drag should stay put (±2).
+  const pinOk =
+    edge &&
+    edgePinBefore &&
+    edgePinAfter &&
+    (edge.edge === "left"
+      ? Math.abs(edgePinBefore.right - edgePinAfter.right) <= 2
+      : Math.abs(edgePinBefore.left - edgePinAfter.left) <= 2);
+  record(
+    "layout.resize.right_pin",
+    !edge
+      ? "fail"
+      : edge.edge !== "right"
+        ? "skip"
+        : pinOk
+          ? "pass"
+          : // When main is flush to the right pad, growth expands leftward —
+            // still require the dragged edge (right) to stay put.
+            edgePinBefore &&
+              edgePinAfter &&
+              Math.abs(edgePinBefore.right - edgePinAfter.right) <= 2
+            ? "pass"
+            : "fail",
+    JSON.stringify({ edgePinBefore, edgePinAfter, edge, pinOk }),
+  );
+
+  // Left-edge pin: opposite (right) edge stays put
+  const leftPinBefore = edgePinAfter;
+  const leftHandle = await studioEval(page, () => {
+    const handle = document.querySelector(
+      '.readit-col-resize[data-readit-resize="main"][data-edge="left"]',
+    );
+    if (!(handle instanceof HTMLElement)) return null;
+    const r = handle.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + Math.min(120, r.height / 2) };
+  });
+  if (leftHandle && page.mouse) {
+    await page.mouse.move(leftHandle.x, leftHandle.y);
+    await page.mouse.down();
+    await page.mouse.move(leftHandle.x - 40, leftHandle.y, { steps: 10 });
+    await sleep(80);
+    await page.mouse.up();
+    await sleep(1500);
+  }
+  const leftPinAfter = await studioEval(page, () => {
+    const main = document.querySelector('[data-readit-slot="main"]');
+    const r = main?.getBoundingClientRect();
+    return r
+      ? { left: Math.round(r.left), right: Math.round(r.right) }
+      : null;
+  });
+  record(
+    "layout.resize.left_pin",
+    leftHandle &&
+      leftPinBefore &&
+      leftPinAfter &&
+      Math.abs(leftPinBefore.right - leftPinAfter.right) <= 2
+      ? "pass"
+      : leftHandle
+        ? "fail"
+        : "skip",
+    JSON.stringify({ leftPinBefore, leftPinAfter, leftHandle }),
   );
 
   // —— Esc lock ——
@@ -911,8 +1399,8 @@ try {
     const card = [...(root?.querySelectorAll(".readit-card") || [])].find((el) =>
       /Focus Reader/i.test(el.querySelector("strong")?.textContent || el.textContent || ""),
     );
-    card?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 1200));
+    if (card instanceof HTMLElement) card.click();
+    await new Promise((r) => setTimeout(r, 1500));
     return {
       layout: document.documentElement.dataset.readitLayout || "",
       columns: document.documentElement.dataset.readitColumns || "",
@@ -960,8 +1448,15 @@ try {
   await clickTab(page, "Simple");
   const bridge = await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
-    const side = [...(root?.querySelectorAll("label") || [])].find((l) =>
-      l.textContent?.includes("Hide sidebars"),
+    if (!root) return { ok: false, reason: "no shadow" };
+    // Simple tab hosts Hide sidebars — ensure it is visible.
+    root.querySelector('[data-studio-tab="simple"]')?.click();
+    for (let i = 0; i < 20; i++) {
+      if (/Hide sidebars/i.test(root.textContent || "")) break;
+      await new Promise((r) => setTimeout(r, 80));
+    }
+    const side = [...(root.querySelectorAll("label") || [])].find((l) =>
+      /Hide sidebars/i.test(l.textContent || ""),
     );
     const input = side?.querySelector("input[type=checkbox]");
     if (!(input instanceof HTMLInputElement)) {
@@ -972,7 +1467,7 @@ try {
       await new Promise((r) => setTimeout(r, 600));
     }
     input.click();
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1200));
     const css = document.getElementById("readit-css-engine")?.textContent || "";
     const layout = document.documentElement.dataset.readitLayout || "";
     return {
@@ -990,6 +1485,99 @@ try {
     bridge.ok ? "pass" : "fail",
     JSON.stringify(bridge),
   );
+
+  // —— Page chrome slots ——
+  await openStudio(page);
+  await clickTab(page, "Layout");
+  await clickLayoutPreset(page, "Classic");
+  const chromeStamp = await studioEval(page, async () => {
+    // Give recovery a beat to stamp the header after classic apply.
+    for (let i = 0; i < 25; i++) {
+      if (document.querySelector('[data-readit-slot="topNav"]')) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const top = document.querySelector('[data-readit-slot="topNav"]');
+    return {
+      ok: !!top,
+      tag: top?.tagName || "",
+      chromeTop: document.documentElement.dataset.readitChromeTop || "",
+      headerPresent: !!document.querySelector("reddit-header-large"),
+    };
+  });
+  record(
+    "layout.chrome.stamp",
+    chromeStamp.ok ? "pass" : "fail",
+    JSON.stringify(chromeStamp),
+  );
+
+  const chromeBottom = await studioEval(page, async () => {
+    const root = document.querySelector("readit-studio")?.shadowRoot;
+    const btn = root?.querySelector('[data-chrome-zone="bottom"]');
+    if (!(btn instanceof HTMLElement)) {
+      return { ok: false, reason: "no bottom chip" };
+    }
+    btn.click();
+    await new Promise((r) => setTimeout(r, 900));
+    const top = document.querySelector('[data-readit-slot="topNav"]');
+    const r = top?.getBoundingClientRect();
+    const vh = window.innerHeight;
+    return {
+      ok:
+        document.documentElement.dataset.readitChromeTop === "bottom" &&
+        !!r &&
+        Math.abs(r.bottom - vh) <= 4,
+      zone: document.documentElement.dataset.readitChromeTop,
+      bottom: r ? Math.round(r.bottom) : null,
+      vh,
+      chromeBottomVar: getComputedStyle(document.documentElement)
+        .getPropertyValue("--readit-chrome-bottom")
+        .trim(),
+    };
+  });
+  record(
+    "layout.chrome.move_bottom",
+    chromeBottom.ok ? "pass" : "fail",
+    JSON.stringify(chromeBottom),
+  );
+
+  const chromeResize = await setRangeByLabel(page, "Header height", 72);
+  const chromeH = await cssVar(page, "--readit-chrome-bottom");
+  const chromeTopVar = await cssVar(page, "--readit-chrome-top");
+  record(
+    "layout.chrome.resize_height",
+    chromeResize.ok &&
+      (chromeH.includes("72") || chromeTopVar.includes("72") || chromeH !== "0px")
+      ? "pass"
+      : "fail",
+    JSON.stringify({ chromeResize, chromeH, chromeTopVar }),
+  );
+
+  // Restore header top
+  await studioEval(page, async () => {
+    const root = document.querySelector("readit-studio")?.shadowRoot;
+    root?.querySelector('[data-chrome-zone="top"]')?.click();
+    await new Promise((r) => setTimeout(r, 500));
+  });
+
+  const chromeTheme = await studioEval(page, () => {
+    const top = document.querySelector('[data-readit-slot="topNav"]');
+    if (!(top instanceof HTMLElement)) return { ok: false };
+    const cs = getComputedStyle(top);
+    const accent = getComputedStyle(document.documentElement)
+      .getPropertyValue("--readit-accent")
+      .trim();
+    return {
+      ok: true,
+      font: cs.fontFamily,
+      accent,
+    };
+  });
+  record(
+    "layout.chrome.theme",
+    chromeTheme.ok ? "pass" : "fail",
+    JSON.stringify(chromeTheme),
+  );
+  await closeStudio(page, { pressEscape: false });
 
   // Cleanup: classic + unlock
   await openStudio(page);

@@ -3,7 +3,6 @@
  */
 export {
   classifyNavSection,
-  clearNavCompactStamps,
   mountNavCompactObserver,
   mountNavRail,
   modelFingerprint,
@@ -11,7 +10,6 @@ export {
   NAV_RAIL_ID,
   refreshNavRail,
   scrapeNavModel,
-  stampNavCompact,
   unmountNavCompactObserver,
   unmountNavRail,
 } from "./nav-rail.js";

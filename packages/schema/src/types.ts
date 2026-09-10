@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-export const SETTINGS_VERSION = 8 as const;
+export const SETTINGS_VERSION = 9 as const;
+
+/** Strict hex color — CSS tokens are interpolated raw into stylesheets, so
+ * anything else risks CSS injection (rule breakout via imported settings). */
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 export const AudienceSchema = z.enum(["reader", "creator", "moderator"]);
 export type Audience = z.infer<typeof AudienceSchema>;
@@ -36,7 +40,7 @@ export const CssTokensSchema = z.object({
   fontFamily: FontFamilySchema.default("system"),
   fontWeight: FontWeightSchema.default(400),
   radiusPx: z.number().min(0).max(24).default(8),
-  accent: z.string().default("#ff4500"),
+  accent: z.string().regex(HEX_COLOR_RE).catch("#ff4500"),
   themeMode: ThemeModeSchema.default("system"),
 });
 export type CssTokens = z.infer<typeof CssTokensSchema>;
@@ -81,7 +85,7 @@ export type FilterRule = z.infer<typeof FilterRuleSchema>;
 export const UserTagSchema = z.object({
   username: z.string(),
   label: z.string(),
-  color: z.string().default("#666666"),
+  color: z.string().regex(HEX_COLOR_RE).catch("#666666"),
   note: z.string().default(""),
   severity: z.enum(["none", "info", "warn", "danger"]).default("none"),
   updatedAt: z.number(),
@@ -180,6 +184,8 @@ export const FeatureFlagsSchema = z.object({
   followingFeed: z.boolean().default(false),
   /** Disable vote pointer-events (read-only lurk) */
   lurkerMode: z.boolean().default(false),
+  /** Show the active profile's mascot next to Reddit's own header logo */
+  headerMascot: z.boolean().default(true),
 });
 export type FeatureFlags = z.infer<typeof FeatureFlagsSchema>;
 
@@ -235,8 +241,41 @@ export const LayoutSlotIdSchema = z.enum([
   "main",
   "rightRail",
   "subHeader",
+  "topNav",
+  "bottomChrome",
 ]);
 export type LayoutSlotId = z.infer<typeof LayoutSlotIdSchema>;
+
+/** Placement for page chrome (header / dock) — distinct from column zones. */
+export const ChromeZoneSchema = z.enum(["top", "bottom", "hidden"]);
+export type ChromeZone = z.infer<typeof ChromeZoneSchema>;
+
+export const CHROME_HEIGHT_LIMITS = {
+  topNav: { min: 32, max: 160 },
+  bottomChrome: { min: 0, max: 160 },
+} as const;
+
+export function clampChromeHeight(
+  which: "topNav" | "bottomChrome",
+  px: number,
+): number {
+  const { min, max } = CHROME_HEIGHT_LIMITS[which];
+  return Math.min(max, Math.max(min, Math.round(px)));
+}
+
+export const LayoutChromeSchema = z.object({
+  topNav: ChromeZoneSchema.default("top"),
+  bottomChrome: ChromeZoneSchema.default("hidden"),
+  topNavPx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 56),
+    z.number().transform((n) => clampChromeHeight("topNav", n)),
+  ),
+  bottomChromePx: z.preprocess(
+    (v) => (typeof v === "number" ? v : 0),
+    z.number().transform((n) => clampChromeHeight("bottomChrome", n)),
+  ),
+});
+export type LayoutChrome = z.infer<typeof LayoutChromeSchema>;
 
 /** The three page columns that can be permuted (panel-owned widths). */
 export const LayoutColumnPanelSchema = z.enum([
@@ -264,26 +303,43 @@ export const LayoutPlacementsSchema = z.object({
 });
 export type LayoutPlacements = z.infer<typeof LayoutPlacementsSchema>;
 
+/** Shared min/max for nav + rail (icon compact → labeled). */
+const SIDE_COLUMN_LIMITS = { min: 64, max: 400 } as const;
+
 export const LayoutWidthsSchema = z.object({
   /** Icon-rail floor (64) → comfortable labeled nav (400). */
   leftNavPx: z.preprocess(
     (v) => (typeof v === "number" ? v : 272),
-    z.number().transform((n) => Math.min(400, Math.max(64, Math.round(n)))),
+    z
+      .number()
+      .transform((n) =>
+        Math.min(
+          SIDE_COLUMN_LIMITS.max,
+          Math.max(SIDE_COLUMN_LIMITS.min, Math.round(n)),
+        ),
+      ),
   ),
-  /** Readable widgets (280) → wide rail (400). */
+  /** Same band as nav — compact rail uses readit-rail-compact. */
   rightRailPx: z.preprocess(
     (v) => (typeof v === "number" ? v : 316),
-    z.number().transform((n) => Math.min(400, Math.max(280, Math.round(n)))),
+    z
+      .number()
+      .transform((n) =>
+        Math.min(
+          SIDE_COLUMN_LIMITS.max,
+          Math.max(SIDE_COLUMN_LIMITS.min, Math.round(n)),
+        ),
+      ),
   ),
   /** Outer page gutter (left of first column). */
   pagePadLeftPx: z.preprocess(
     (v) => (typeof v === "number" ? v : 24),
-    z.number().transform((n) => Math.min(160, Math.max(0, Math.round(n)))),
+    z.number().transform((n) => Math.min(1600, Math.max(0, Math.round(n)))),
   ),
   /** Outer page gutter (right of last column). */
   pagePadRightPx: z.preprocess(
     (v) => (typeof v === "number" ? v : 24),
-    z.number().transform((n) => Math.min(160, Math.max(0, Math.round(n)))),
+    z.number().transform((n) => Math.min(1600, Math.max(0, Math.round(n)))),
   ),
   /** Gap between the three columns (prevents chrome overlap). */
   columnGapPx: z.preprocess(
@@ -294,12 +350,15 @@ export const LayoutWidthsSchema = z.object({
 export type LayoutWidths = z.infer<typeof LayoutWidthsSchema>;
 
 export const LAYOUT_WIDTH_LIMITS = {
-  leftNav: { min: 64, max: 400 },
-  /** Floor keeps Recent Posts / widgets readable (no vertical letter stacks). */
-  rightRail: { min: 280, max: 400 },
+  leftNav: SIDE_COLUMN_LIMITS,
+  rightRail: SIDE_COLUMN_LIMITS,
   main: { min: 480, max: 1600 },
-  /** Keep gutters modest so pads cannot starve nav/feed/rail. */
-  pagePad: { min: 0, max: 160 },
+  /**
+   * Outer gutters. High enough that equal left/right pads can center a
+   * min-size column+separator shell on ultrawide viewports without leaving
+   * a dead void between the last track and the right pad.
+   */
+  pagePad: { min: 0, max: 1600 },
   columnGap: { min: 0, max: 48 },
   separator: { min: 8, max: 120 },
 } as const;
@@ -456,8 +515,10 @@ function stealWidthFromPanel(
   w: LayoutWidthBudget,
   panel: LayoutColumnPanel,
   need: number,
+  locked?: ReadonlySet<string>,
 ): number {
   if (need <= 0) return 0;
+  if (locked?.has(panel)) return 0;
   const cur = readPanelWidth(panel, w);
   const min = panelWidthLimits(panel).min;
   const steal = Math.min(need, Math.max(0, cur - min));
@@ -465,10 +526,117 @@ function stealWidthFromPanel(
   return steal;
 }
 
+function giveWidthToPanel(
+  w: LayoutWidthBudget,
+  panel: LayoutColumnPanel,
+  amount: number,
+  locked?: ReadonlySet<string>,
+): number {
+  if (amount <= 0) return 0;
+  if (locked?.has(panel)) return 0;
+  const cur = readPanelWidth(panel, w);
+  const max = panelWidthLimits(panel).max;
+  const give = Math.min(amount, Math.max(0, max - cur));
+  if (give > 0) writePanelWidth(panel, w, cur + give);
+  return give;
+}
+
+function stealWidthFromPad(
+  w: LayoutWidthBudget,
+  side: "left" | "right",
+  need: number,
+  locked?: ReadonlySet<string>,
+): number {
+  if (need <= 0) return 0;
+  if (locked?.has(side === "left" ? "pad:left" : "pad:right")) return 0;
+  const cur = side === "left" ? w.pagePadLeftPx : w.pagePadRightPx;
+  const steal = Math.min(
+    need,
+    Math.max(0, cur - LAYOUT_WIDTH_LIMITS.pagePad.min),
+  );
+  if (steal <= 0) return 0;
+  if (side === "left") w.pagePadLeftPx = cur - steal;
+  else w.pagePadRightPx = cur - steal;
+  return steal;
+}
+
+function giveWidthToPad(
+  w: LayoutWidthBudget,
+  side: "left" | "right",
+  amount: number,
+  locked?: ReadonlySet<string>,
+): number {
+  if (amount <= 0) return 0;
+  if (locked?.has(side === "left" ? "pad:left" : "pad:right")) return 0;
+  const cur = side === "left" ? w.pagePadLeftPx : w.pagePadRightPx;
+  const give = Math.min(
+    amount,
+    Math.max(0, LAYOUT_WIDTH_LIMITS.pagePad.max - cur),
+  );
+  if (give <= 0) return 0;
+  if (side === "left") w.pagePadLeftPx = cur + give;
+  else w.pagePadRightPx = cur + give;
+  return give;
+}
+
 /**
- * Clamp pads + columns so they never exceed the viewport.
- * Overflow is taken from rightmost columns first, then pads if columns
- * are already at their minimums.
+ * Split remaining viewport pixels into left/right pads.
+ * Unlocked pads share equally (centering). A locked pad keeps its size;
+ * the other pad absorbs the rest (clamped).
+ */
+function distributePadsEqual(
+  w: LayoutWidthBudget,
+  padBudget: number,
+  locked?: ReadonlySet<string>,
+): void {
+  const budget = Math.max(0, Math.round(padBudget));
+  const leftLocked = !!locked?.has("pad:left");
+  const rightLocked = !!locked?.has("pad:right");
+  const max = LAYOUT_WIDTH_LIMITS.pagePad.max;
+  const min = LAYOUT_WIDTH_LIMITS.pagePad.min;
+
+  if (leftLocked && rightLocked) {
+    w.pagePadLeftPx = clampPagePad(w.pagePadLeftPx);
+    w.pagePadRightPx = clampPagePad(w.pagePadRightPx);
+    return;
+  }
+  if (leftLocked) {
+    const left = clampPagePad(w.pagePadLeftPx);
+    w.pagePadLeftPx = left;
+    w.pagePadRightPx = Math.min(max, Math.max(min, budget - left));
+    return;
+  }
+  if (rightLocked) {
+    const right = clampPagePad(w.pagePadRightPx);
+    w.pagePadRightPx = right;
+    w.pagePadLeftPx = Math.min(max, Math.max(min, budget - right));
+    return;
+  }
+
+  // Both unlocked → equal pads so columns stay centered in the viewport.
+  let each = Math.floor(budget / 2);
+  each = Math.min(max, Math.max(min, each));
+  w.pagePadLeftPx = each;
+  w.pagePadRightPx = each;
+  // If max capped both sides, leftover is intentional void (ultra-wide + fat columns).
+  const used = each * 2;
+  if (used < budget && each < max) {
+    // Odd leftover pixel — prefer right so left edge stays stable.
+    w.pagePadRightPx = Math.min(max, each + (budget - used));
+  }
+}
+
+/** How leftover viewport is applied after overflow clamping. */
+export type FitLayoutMode = "overflow" | "center";
+
+/**
+ * Clamp pads + columns into the viewport.
+ *
+ * - `overflow` (default for live resize): shrink when over budget; keep
+ *   requested pad sizes when under budget (no equal re-center).
+ * - `center`: split leftover viewport equally into left/right pads.
+ *
+ * Gap math matches CSS pads-as-tracks: `(panels + seps + 2 pads - 1) * gap`.
  */
 export function fitLayoutWidths(
   widths: LayoutWidthBudget,
@@ -476,6 +644,10 @@ export function fitLayoutWidths(
   viewportPx: number,
   /** Extra track widths (separators) counted against the viewport budget. */
   extraTracksPx = 0,
+  locked?: ReadonlySet<string>,
+  mode: FitLayoutMode = "center",
+  /** Number of separator tracks (for column-gap count). */
+  extraTrackCount = 0,
 ): LayoutWidthBudget {
   const order = visibleOrder.length
     ? [...visibleOrder]
@@ -490,7 +662,10 @@ export function fitLayoutWidths(
   };
 
   const viewport = Math.max(0, Math.round(viewportPx));
-  const gaps = gapTotalPx(order.length, next.columnGapPx);
+  const sepCount = Math.max(0, Math.round(extraTrackCount));
+  // Pads are first/last grid tracks — include them in the gap count.
+  const trackCount = order.length + sepCount + 2;
+  const gaps = gapTotalPx(trackCount, next.columnGapPx);
   const extras = Math.max(0, Math.round(extraTracksPx));
   const minCols = order.reduce(
     (sum, panel) => sum + panelWidthLimits(panel).min,
@@ -498,42 +673,115 @@ export function fitLayoutWidths(
   );
   const minShell = minCols + gaps + extras;
 
-  // Pads cannot leave less than the minimum column shell.
-  let padBudget = Math.max(0, viewport - minShell);
-  let padSum = next.pagePadLeftPx + next.pagePadRightPx;
-  if (padSum > padBudget) {
-    if (padBudget <= 0 || padSum <= 0) {
-      next.pagePadLeftPx = 0;
-      next.pagePadRightPx = 0;
-    } else {
-      const left = clampPagePad(
-        Math.round((next.pagePadLeftPx / padSum) * padBudget),
-      );
-      next.pagePadLeftPx = Math.min(left, padBudget);
-      next.pagePadRightPx = clampPagePad(padBudget - next.pagePadLeftPx);
+  // Shrink columns if tracks alone exceed the viewport.
+  let trackUsed = sumPanelWidths(order, next) + gaps + extras;
+  let trackExcess = trackUsed - viewport;
+  if (trackExcess > 0) {
+    for (let i = order.length - 1; i >= 0 && trackExcess > 0; i--) {
+      trackExcess -= stealWidthFromPanel(next, order[i]!, trackExcess, locked);
+    }
+    trackUsed = sumPanelWidths(order, next) + gaps + extras;
+  }
+
+  let padBudget = viewport - trackUsed;
+
+  // Still short after columns hit mins — collapse unlocked pads then steal again.
+  if (padBudget < 0) {
+    if (!locked?.has("pad:left")) next.pagePadLeftPx = 0;
+    if (!locked?.has("pad:right")) next.pagePadRightPx = 0;
+    let still = sumPanelWidths(order, next) + gaps + extras - viewport;
+    if (still > 0) {
+      for (let i = order.length - 1; i >= 0 && still > 0; i--) {
+        still -= stealWidthFromPanel(next, order[i]!, still, locked);
+      }
+    }
+    trackUsed = sumPanelWidths(order, next) + gaps + extras;
+    padBudget = Math.max(0, viewport - trackUsed);
+  }
+
+  // Locked pads may demand more than padBudget — shrink unlocked columns to honor them.
+  if (locked?.has("pad:left") || locked?.has("pad:right")) {
+    const lockedPadNeed =
+      (locked?.has("pad:left") ? next.pagePadLeftPx : 0) +
+      (locked?.has("pad:right") ? next.pagePadRightPx : 0);
+    if (lockedPadNeed > padBudget) {
+      let need = lockedPadNeed - padBudget;
+      for (let i = order.length - 1; i >= 0 && need > 0; i--) {
+        need -= stealWidthFromPanel(next, order[i]!, need, locked);
+      }
+      trackUsed = sumPanelWidths(order, next) + gaps + extras;
+      padBudget = Math.max(0, viewport - trackUsed);
     }
   }
 
-  const contentBudget = Math.max(
-    minCols,
-    viewport - next.pagePadLeftPx - next.pagePadRightPx - gaps - extras,
-  );
-  let excess = sumPanelWidths(order, next) - contentBudget;
-  if (excess > 0) {
-    for (let i = order.length - 1; i >= 0 && excess > 0; i--) {
-      excess -= stealWidthFromPanel(next, order[i]!, excess);
+  if (viewport < minShell) {
+    if (!locked?.has("pad:left")) next.pagePadLeftPx = 0;
+    if (!locked?.has("pad:right")) next.pagePadRightPx = 0;
+    return next;
+  }
+
+  if (mode === "center") {
+    distributePadsEqual(next, padBudget, locked);
+  } else {
+    // Overflow-only: clamp requested pads so they fit, but do not re-center.
+    let padUsed = next.pagePadLeftPx + next.pagePadRightPx;
+    if (padUsed > padBudget) {
+      let overflow = padUsed - padBudget;
+      overflow -= stealWidthFromPad(next, "right", overflow, locked);
+      overflow -= stealWidthFromPad(next, "left", overflow, locked);
     }
   }
+
   return next;
 }
 
+/** Equal-pad centering after an overflow fit (explicit user/toolbox action). */
+export function centerPadsInViewport(
+  widths: LayoutWidthBudget,
+  visibleOrder: readonly LayoutColumnPanel[],
+  viewportPx: number,
+  extraTracksPx = 0,
+  locked?: ReadonlySet<string>,
+  extraTrackCount = 0,
+): LayoutWidthBudget {
+  return fitLayoutWidths(
+    widths,
+    visibleOrder,
+    viewportPx,
+    extraTracksPx,
+    locked,
+    "center",
+    extraTrackCount,
+  );
+}
+
+/** Overflow clamp without rewriting pad equality (live edge resize). */
+export function fitOverflowOnly(
+  widths: LayoutWidthBudget,
+  visibleOrder: readonly LayoutColumnPanel[],
+  viewportPx: number,
+  extraTracksPx = 0,
+  locked?: ReadonlySet<string>,
+  extraTrackCount = 0,
+): LayoutWidthBudget {
+  return fitLayoutWidths(
+    widths,
+    visibleOrder,
+    viewportPx,
+    extraTracksPx,
+    locked,
+    "overflow",
+    extraTrackCount,
+  );
+}
+
 /**
- * Grow/shrink one panel. Extra width first eats free space (neighbors shift
- * toward the opposite gutter). If the shell is full, columns on the far side of
- * the active edge shrink down to their mins; the handle itself is clamped last.
+ * Grow/shrink one panel. The dragged edge is the one that moves:
+ * - right edge: grow into free space / steal from the right
+ * - left edge: always trade with the left side so the right edge stays pinned
  *
- * @param edge Which vertical edge is being dragged. Right edge steals from
- * columns to the right; left edge steals from columns to the left.
+ * Locked panels/pads are never resized by neighbor cascade.
+ * After the trade, overflow-only fit preserves pad sizes (use Center to equalize).
  */
 export function resizePanelInBudget(
   widths: LayoutWidthBudget,
@@ -542,6 +790,9 @@ export function resizePanelInBudget(
   desiredPx: number,
   viewportPx: number,
   edge: "left" | "right" = "right",
+  extraTracksPx = 0,
+  locked?: ReadonlySet<string>,
+  extraTrackCount = 0,
 ): LayoutWidthBudget {
   const order = visibleOrder.filter(Boolean);
   const idx = order.indexOf(panel);
@@ -551,74 +802,168 @@ export function resizePanelInBudget(
     pagePadLeftPx: clampPagePad(widths.pagePadLeftPx),
     pagePadRightPx: clampPagePad(widths.pagePadRightPx),
   };
-  if (idx < 0) return fitLayoutWidths(next, order, viewportPx);
+  if (idx < 0 || locked?.has(panel)) {
+    return fitLayoutWidths(
+      next,
+      order,
+      viewportPx,
+      extraTracksPx,
+      locked,
+      "overflow",
+      extraTrackCount,
+    );
+  }
 
   const before = readPanelWidth(panel, next);
-  writePanelWidth(panel, next, clampPanelWidth(panel, desiredPx));
+  const target = clampPanelWidth(panel, desiredPx);
+  const delta = target - before;
 
-  // Shrinking nav/rail donates the freed pixels to the feed (up to main.max)
-  // so the feed can grow toward the largest size the viewport allows.
-  if (panel !== "main" && order.includes("main")) {
-    const after = readPanelWidth(panel, next);
-    const freed = before - after;
-    if (freed > 0) {
-      writePanelWidth(
-        "main",
-        next,
-        clampPanelWidth("main", next.feedWidthPx + freed),
-      );
-    }
-  }
-
-  const gaps = gapTotalPx(order.length, next.columnGapPx);
-  const budget =
-    Math.max(0, Math.round(viewportPx)) -
-    next.pagePadLeftPx -
-    next.pagePadRightPx -
-    gaps;
-  let excess = sumPanelWidths(order, next) - budget;
-  if (excess > 0) {
-    if (edge === "right") {
-      for (let i = order.length - 1; i > idx && excess > 0; i--) {
-        excess -= stealWidthFromPanel(next, order[i]!, excess);
+  if (edge === "left") {
+    if (delta > 0) {
+      let need = delta;
+      for (let i = idx - 1; i >= 0 && need > 0; i--) {
+        need -= stealWidthFromPanel(next, order[i]!, need, locked);
       }
-    } else {
-      for (let i = idx - 1; i >= 0 && excess > 0; i--) {
-        excess -= stealWidthFromPanel(next, order[i]!, excess);
+      // Do not steal from pads here — overflow fit keeps pad sizes so the
+      // pinned right edge does not jump (use Center to re-equalize pads).
+      writePanelWidth(panel, next, before + (delta - need));
+    } else if (delta < 0) {
+      writePanelWidth(panel, next, target);
+      let freed = before - readPanelWidth(panel, next);
+      if (idx > 0) {
+        freed -= giveWidthToPanel(next, order[idx - 1]!, freed, locked);
       }
+      // Leftover freed width stays as free space until Center runs.
     }
+  } else {
+    writePanelWidth(panel, next, target);
+    if (delta < 0 && panel !== "main" && order.includes("main")) {
+      const freed = before - readPanelWidth(panel, next);
+      if (freed > 0) giveWidthToPanel(next, "main", freed, locked);
+    }
+    const sepCount = Math.max(0, Math.round(extraTrackCount));
+    const gaps = gapTotalPx(order.length + sepCount + 2, next.columnGapPx);
+    const extras = Math.max(0, Math.round(extraTracksPx));
+    const budget =
+      Math.max(0, Math.round(viewportPx)) -
+      next.pagePadLeftPx -
+      next.pagePadRightPx -
+      gaps -
+      extras;
+    let excess = sumPanelWidths(order, next) - budget;
     if (excess > 0) {
-      excess -= stealWidthFromPanel(next, panel, excess);
+      excess -= stealWidthFromPad(next, "right", excess, locked);
+      for (let i = order.length - 1; i > idx && excess > 0; i--) {
+        excess -= stealWidthFromPanel(next, order[i]!, excess, locked);
+      }
+      if (excess > 0) {
+        excess -= stealWidthFromPad(next, "left", excess, locked);
+      }
+      if (excess > 0) {
+        excess -= stealWidthFromPanel(next, panel, excess, locked);
+      }
     }
   }
-  return fitLayoutWidths(next, order, viewportPx);
+
+  return fitLayoutWidths(
+    next,
+    order,
+    viewportPx,
+    extraTracksPx,
+    locked,
+    "overflow",
+    extraTrackCount,
+  );
 }
 
-/** Change a page pad; columns shrink from the right to honor the gutters. */
+/**
+ * Change a page pad. Unlocked left/right pads stay equal (mirrored).
+ * Desired pad size sets the margin budget: columns grow/shrink so
+ * `2 * pad ≈ viewport - tracks`, eliminating dead space beside the shell.
+ */
 export function resizePadInBudget(
   widths: LayoutWidthBudget,
   visibleOrder: readonly LayoutColumnPanel[],
   side: "left" | "right",
   desiredPx: number,
   viewportPx: number,
+  extraTracksPx = 0,
+  locked?: ReadonlySet<string>,
+  extraTrackCount = 0,
 ): LayoutWidthBudget {
+  const padKey = side === "left" ? "pad:left" : "pad:right";
+  const otherKey = side === "left" ? "pad:right" : "pad:left";
   const order = visibleOrder.filter(Boolean);
   const next: LayoutWidthBudget = {
     ...widths,
     columnGapPx: clampColumnGap(widths.columnGapPx),
+    pagePadLeftPx: clampPagePad(widths.pagePadLeftPx),
+    pagePadRightPx: clampPagePad(widths.pagePadRightPx),
   };
-  const before =
-    side === "left" ? next.pagePadLeftPx : next.pagePadRightPx;
-  if (side === "left") next.pagePadLeftPx = clampPagePad(desiredPx);
-  else next.pagePadRightPx = clampPagePad(desiredPx);
-  const after =
-    side === "left" ? next.pagePadLeftPx : next.pagePadRightPx;
-  // Shrinking a pad donates freed pixels to the feed (up to main.max).
-  const freed = before - after;
-  if (freed > 0 && order.includes("main")) {
-    next.feedWidthPx = clampPanelWidth("main", next.feedWidthPx + freed);
+  if (locked?.has(padKey)) {
+    return fitLayoutWidths(
+      next,
+      order,
+      viewportPx,
+      extraTracksPx,
+      locked,
+      "overflow",
+      extraTrackCount,
+    );
   }
-  return fitLayoutWidths(next, order, viewportPx);
+
+  const desired = clampPagePad(desiredPx);
+  const mirror = !locked?.has(otherKey);
+  if (mirror) {
+    next.pagePadLeftPx = desired;
+    next.pagePadRightPx = desired;
+  } else if (side === "left") {
+    next.pagePadLeftPx = desired;
+  } else {
+    next.pagePadRightPx = desired;
+  }
+
+  const sepCount = Math.max(0, Math.round(extraTrackCount));
+  const gaps = gapTotalPx(order.length + sepCount + 2, next.columnGapPx);
+  const extras = Math.max(0, Math.round(extraTracksPx));
+  const viewport = Math.max(0, Math.round(viewportPx));
+  const padTotal = next.pagePadLeftPx + next.pagePadRightPx;
+  const trackBudget = Math.max(0, viewport - padTotal);
+  let trackUsed = sumPanelWidths(order, next) + gaps + extras;
+
+  if (trackUsed > trackBudget) {
+    let need = trackUsed - trackBudget;
+    if (side === "left") {
+      for (let i = 0; i < order.length && need > 0; i++) {
+        need -= stealWidthFromPanel(next, order[i]!, need, locked);
+      }
+    } else {
+      for (let i = order.length - 1; i >= 0 && need > 0; i--) {
+        need -= stealWidthFromPanel(next, order[i]!, need, locked);
+      }
+    }
+  } else if (trackUsed < trackBudget) {
+    // Shrinking pads → grow columns so the equal-pad fit can honor desired.
+    let spare = trackBudget - trackUsed;
+    if (order.includes("main")) {
+      spare -= giveWidthToPanel(next, "main", spare, locked);
+    }
+    for (const panel of order) {
+      if (spare <= 0) break;
+      if (panel === "main") continue;
+      spare -= giveWidthToPanel(next, panel, spare, locked);
+    }
+  }
+
+  return fitLayoutWidths(
+    next,
+    order,
+    viewportPx,
+    extraTracksPx,
+    locked,
+    "overflow",
+    extraTrackCount,
+  );
 }
 
 export const CLASSIC_COLUMN_ORDER: LayoutColumnPanel[] = [
@@ -689,36 +1034,118 @@ export const LayoutSlotsConfigSchema = z.object({
       rightRail: z.number().optional(),
     })
     .default({}),
+  /**
+   * Size locks (not position). Keys: `leftNav` | `main` | `rightRail` |
+   * `pad:left` | `pad:right` | separator id. Locked widths are skipped when
+   * neighbors resize or the viewport fit steals slack.
+   */
+  widthLocks: z.record(z.string(), z.boolean()).default({}),
+  /** Top/bottom page chrome (header, dock) — moveable / resizable. */
+  chrome: LayoutChromeSchema.default({}),
 });
 export type LayoutSlotsConfig = z.infer<typeof LayoutSlotsConfigSchema>;
 
+/** Build a lock set from persisted widthLocks (truthy entries only). */
+export function widthLockSet(
+  locks: Record<string, boolean> | null | undefined,
+): Set<string> {
+  const out = new Set<string>();
+  if (!locks) return out;
+  for (const [k, v] of Object.entries(locks)) {
+    if (v) out.add(k);
+  }
+  return out;
+}
+
 /** Interleaved panel + separator tracks for grid template building. */
 export type LayoutTrack =
+  | { type: "pad"; side: "left" | "right" }
   | { type: "panel"; panel: LayoutColumnPanel }
   | { type: "separator"; id: string; widthPx: number };
 
+/**
+ * Ordered grid tracks: optional outer pads, then panels with interleaved
+ * separators. Pads as tracks keep chrome/CSS geometry on one list.
+ * Stacked dual emits two content tracks (nav+rail share one column).
+ */
 export function buildLayoutTracks(
   config: Pick<LayoutSlotsConfig, "columnOrder" | "separators" | "placements">,
+  opts: { includePads?: boolean } = {},
 ): LayoutTrack[] {
-  const order = normalizeColumnOrder(config.columnOrder);
-  const visible = order.filter(
-    (id) => config.placements[id] !== "hidden",
-  );
-  const seps = (config.separators || []).slice(0, MAX_LAYOUT_SEPARATORS);
+  const includePads = opts.includePads !== false;
   const out: LayoutTrack[] = [];
-  for (const panel of visible) {
-    out.push({ type: "panel", panel });
-    for (const sep of seps) {
-      if (sep.after === panel) {
-        out.push({
-          type: "separator",
-          id: sep.id,
-          widthPx: clampSeparatorWidth(sep.widthPx),
-        });
+  if (includePads) out.push({ type: "pad", side: "left" });
+
+  if (isStackedPair(config.placements)) {
+    const isDualRight = config.placements.leftNav === "stackedRight";
+    if (isDualRight) {
+      out.push({ type: "panel", panel: "main" });
+      out.push({ type: "panel", panel: "leftNav" });
+    } else {
+      out.push({ type: "panel", panel: "leftNav" });
+      out.push({ type: "panel", panel: "main" });
+    }
+  } else {
+    const order = normalizeColumnOrder(config.columnOrder);
+    const visible = order.filter(
+      (id) => config.placements[id] !== "hidden",
+    );
+    const seps = (config.separators || []).slice(0, MAX_LAYOUT_SEPARATORS);
+    for (const panel of visible) {
+      out.push({ type: "panel", panel });
+      for (const sep of seps) {
+        if (sep.after === panel) {
+          out.push({
+            type: "separator",
+            id: sep.id,
+            widthPx: clampSeparatorWidth(sep.widthPx),
+          });
+        }
       }
     }
   }
+
+  if (includePads) out.push({ type: "pad", side: "right" });
   return out;
+}
+
+/** Pixel width for one track from a width budget. */
+export function resolveTrackWidthPx(
+  track: LayoutTrack,
+  widths: LayoutWidthBudget,
+): number {
+  switch (track.type) {
+    case "pad":
+      return track.side === "left"
+        ? clampPagePad(widths.pagePadLeftPx)
+        : clampPagePad(widths.pagePadRightPx);
+    case "panel":
+      return readPanelWidth(track.panel, widths);
+    case "separator":
+      return clampSeparatorWidth(track.widthPx);
+    default: {
+      const _exhaustive: never = track;
+      return _exhaustive;
+    }
+  }
+}
+
+/** `grid-template-columns` value from the shared track list. */
+export function resolveGridTemplateColumns(
+  tracks: readonly LayoutTrack[],
+  widths: LayoutWidthBudget,
+): string {
+  return tracks
+    .map((t) => `${resolveTrackWidthPx(t, widths)}px`)
+    .join(" ");
+}
+
+/** Gaps between every adjacent track (pads + panels + separators). */
+export function layoutTracksGapTotal(
+  trackCount: number,
+  columnGapPx: number,
+): number {
+  return gapTotalPx(trackCount, columnGapPx);
 }
 
 export function presetToColumnOrder(preset: LayoutPreset): LayoutColumnPanel[] {
@@ -774,6 +1201,34 @@ export function presetToPlacements(preset: LayoutPreset): LayoutPlacements {
   }
 }
 
+/** True when leftNav+rightRail are stacked together in one visual column. */
+export function isStackedPair(placements: LayoutPlacements): boolean {
+  return (
+    (placements.leftNav === "stackedLeft" && placements.rightRail === "stackedLeft") ||
+    (placements.leftNav === "stackedRight" && placements.rightRail === "stackedRight")
+  );
+}
+
+/** In stacked mode rightRail mirrors leftNav's width (they share one grid column). */
+export function mirrorStackedWidths(
+  widths: LayoutWidthBudget,
+  placements: LayoutPlacements,
+): LayoutWidthBudget {
+  return isStackedPair(placements)
+    ? { ...widths, rightRailPx: widths.leftNavPx }
+    : widths;
+}
+
+/** Drop the mirrored panel from budget sums so its column isn't double-counted. */
+export function budgetColumnOrder(
+  order: readonly LayoutColumnPanel[],
+  placements: LayoutPlacements,
+): LayoutColumnPanel[] {
+  return isStackedPair(placements)
+    ? order.filter((p) => p !== "rightRail")
+    : [...order];
+}
+
 export function applyLayoutPreset(
   config: LayoutSlotsConfig,
   preset: LayoutPreset,
@@ -782,18 +1237,36 @@ export function applyLayoutPreset(
     return { ...config, preset: "custom" };
   }
   const columnOrder = presetToColumnOrder(preset);
-  return {
+  const placements: LayoutPlacements = {
+    ...presetToPlacements(preset),
+    subHeader:
+      preset === "singleColumn"
+        ? "hidden"
+        : (config.placements.subHeader ?? "right"),
+  };
+  const next: LayoutSlotsConfig = {
     ...config,
     preset,
     columnOrder,
-    placements: {
-      ...presetToPlacements(preset),
-      subHeader:
-        preset === "singleColumn"
-          ? "hidden"
-          : (config.placements.subHeader ?? "right"),
-    },
+    placements,
   };
+  // Stacked dual shares one column — persist mirrored rail width so Studio /
+  // CSS paint / live fit never diverge. Per-panel zoom on the stack is cleared
+  // (Zoom Sel would scale nav/rail past the grid track and overlap the feed).
+  if (isStackedPair(placements)) {
+    next.widths = {
+      ...next.widths,
+      rightRailPx: next.widths.leftNavPx,
+    };
+    if (next.zoomByPanel) {
+      next.zoomByPanel = {
+        ...next.zoomByPanel,
+        leftNav: 1,
+        rightRail: 1,
+      };
+    }
+  }
+  return next;
 }
 
 export function placementsFromColumnOrder(
@@ -844,7 +1317,7 @@ export function columnOrderFromPlacements(
   );
 }
 
-/** Swap two panels in the column order (used when moving feed ↔ sidebar). */
+/** Swap two panels in the column order (used when dropping onto a column center). */
 export function swapColumnPanels(
   order: readonly LayoutColumnPanel[],
   a: LayoutColumnPanel,
@@ -860,7 +1333,32 @@ export function swapColumnPanels(
   return next;
 }
 
-/** Move `panel` into position index; the displaced panel takes `panel`'s old spot. */
+/**
+ * Reorder by removing `panel` and inserting it at `finalIndex`.
+ * `finalIndex` is the index in the array **after** removal (slot-between, not swap).
+ */
+export function insertPanelAtIndex(
+  order: readonly LayoutColumnPanel[],
+  panel: LayoutColumnPanel,
+  finalIndex: number,
+): LayoutColumnPanel[] {
+  const next = normalizeColumnOrder(order);
+  const from = next.indexOf(panel);
+  if (from < 0) return next;
+  next.splice(from, 1);
+  const to = Math.max(0, Math.min(next.length, Math.round(finalIndex)));
+  next.splice(to, 0, panel);
+  return next;
+}
+
+/**
+ * Move `panel` into absolute position `targetIndex`; the panel currently
+ * occupying that slot takes `panel`'s old spot (swap, not insert).
+ * Used by setSlotZone, which maps a fixed left/center/right zone to an
+ * absolute index — insertPanelAtIndex's post-removal indexing would shift
+ * an untouched third panel. Between-column drag moves use insertPanelAtIndex
+ * directly instead of this function.
+ */
 export function movePanelToIndex(
   order: readonly LayoutColumnPanel[],
   panel: LayoutColumnPanel,
@@ -937,8 +1435,23 @@ export const SimpleKnobsSchema = z.object({
   showNotes: z.boolean().default(true),
   queueDensity: z.boolean().default(false),
   macroBar: z.boolean().default(false),
+  /** Creator Desk: hide feed posts Reddit hasn't flagged over_18. */
+  showOnlyNsfw: z.boolean().default(false),
 });
 export type SimpleKnobs = z.infer<typeof SimpleKnobsSchema>;
+
+/** Ids of the bundled mascot art under extension/public/mascots/*.png */
+export const ProfileIconIdSchema = z.enum([
+  "base",
+  "bear",
+  "turle",
+  "robot",
+  "star",
+  "mod",
+  "egirl",
+  "nsfw",
+]);
+export type ProfileIconId = z.infer<typeof ProfileIconIdSchema>;
 
 export const ProfilePackSchema = z.object({
   id: z.string(),
@@ -950,6 +1463,10 @@ export const ProfilePackSchema = z.object({
   flags: FeatureFlagsSchema.default({}),
   /** Optional column-layout recipe applied on profile switch. */
   layoutSlots: LayoutSlotsConfigSchema.optional(),
+  /** Default mascot icon for this profile's card/badge. */
+  icon: ProfileIconIdSchema.optional(),
+  /** Alternate mascot icons the user may pick instead of `icon`. */
+  iconOptions: z.array(ProfileIconIdSchema).default([]),
 });
 export type ProfilePack = z.infer<typeof ProfilePackSchema>;
 
@@ -986,6 +1503,8 @@ export const ReaditSettingsSchema = z.object({
   featureHealth: z.record(FeatureHealthSchema).default({}),
   toolboxDetected: z.boolean().default(false),
   syncLightweight: z.boolean().default(false),
+  /** Per-profile mascot icon pick, keyed by profile id (must be one of that profile's iconOptions). */
+  profileIconChoice: z.record(ProfileIconIdSchema).default({}),
 });
 export type ReaditSettings = z.infer<typeof ReaditSettingsSchema>;
 
@@ -1078,4 +1597,21 @@ export function previewImport(raw: unknown): ImportPreview {
 
 export function createId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+}
+
+/**
+ * Resolves which mascot icon a profile card should show: the user's saved pick
+ * from `iconOptions` (falling back to the profile default), except Creator Desk
+ * forces the "nsfw" mascot while `knobs.showOnlyNsfw` is on.
+ */
+export function resolveProfileIcon(
+  profile: ProfilePack,
+  settings: Pick<ReaditSettings, "knobs" | "profileIconChoice">,
+): ProfileIconId | undefined {
+  if (profile.id === "creator-desk" && settings.knobs.showOnlyNsfw) {
+    return "nsfw";
+  }
+  const choice = settings.profileIconChoice[profile.id];
+  if (choice && profile.iconOptions.includes(choice)) return choice;
+  return profile.icon;
 }

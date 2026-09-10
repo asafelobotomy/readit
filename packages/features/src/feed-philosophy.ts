@@ -25,18 +25,33 @@ function isTabActive(el: HTMLElement): boolean {
 }
 
 /**
+ * Tracks the Home URL we've already auto-switched once, so a manual switch
+ * back to For You isn't fought on every debounced DOM-mutation rescan.
+ */
+let autoSwitchedHref: string | null = null;
+
+/**
  * Prefer Home → Following over For You when the experiment tabs are present.
+ * Only forces the switch once per Home visit — after that, a user who
+ * deliberately picks For You is left alone until they navigate away and back.
  */
 export function switchHomeToFollowing(): "ok" | "degraded" | "broken" {
-  if (!isHomePath(location.pathname)) return "degraded";
+  if (!isHomePath(location.pathname)) {
+    autoSwitchedHref = null;
+    return "degraded";
+  }
 
   const following = findFeedTab(/^Following$/i);
   const forYou = findFeedTab(/^For You$/i);
   if (!following && !forYou) return "broken";
   if (!following) return "degraded";
-  if (isTabActive(following)) return "ok";
+  if (isTabActive(following) || autoSwitchedHref === location.href) {
+    autoSwitchedHref = location.href;
+    return "ok";
+  }
   try {
     following.click();
+    autoSwitchedHref = location.href;
     return "ok";
   } catch {
     return "broken";

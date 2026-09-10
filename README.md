@@ -58,7 +58,7 @@ Then load `~/GitHub/readit/dist/chrome-mv3-dev` instead (path is also printed by
 | --- | --- |
 | `storage` | Profiles, filters, tags, macros, usernotes (local) |
 | `activeTab` | Popup → open studio / pause on the current Reddit tab |
-| Host `*.reddit.com` | Content scripts + CSS on New Reddit |
+| Host `*.reddit.com` | Content scripts + CSS on New Reddit; also covers the popup's `tabs.query`/`sendMessage` to Reddit tabs, so no separate `tabs` permission is requested |
 
 No analytics. No remote servers. Optional sync of lightweight prefs can be enabled later (`syncLightweight`); packs and usernotes stay local + JSON export.
 

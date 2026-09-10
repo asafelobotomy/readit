@@ -12,7 +12,20 @@ import type {
   LayoutPreset,
   ReaditSettings,
 } from "@readit/schema";
-import { clampZoom, MAX_LAYOUT_SEPARATORS } from "@readit/schema";
+import {
+  budgetColumnOrder,
+  centerPadsInViewport,
+  clampColumnGap,
+  clampPagePad,
+  clampPanelWidth,
+  clampSeparatorWidth,
+  clampZoom,
+  isStackedPair,
+  MAX_LAYOUT_SEPARATORS,
+  mirrorStackedWidths,
+  normalizeColumnOrder,
+  widthLockSet,
+} from "@readit/schema";
 
 const REPO_URL = "https://github.com/asafelobotomy/readit";
 const KOFI_URL = "https://ko-fi.com/U5R225QZH3";
@@ -91,6 +104,7 @@ export function EditToolbox({ settings, commit }: Props) {
             type="button"
             key={p.id}
             class="readit-edit-chip"
+            data-preset={p.id}
             data-active={cfg.preset === p.id ? "true" : "false"}
             onClick={() =>
               void commit(`Layout ${p.label}`, (s) => ({
@@ -101,6 +115,121 @@ export function EditToolbox({ settings, commit }: Props) {
             }
           >
             {p.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          class="readit-edit-chip"
+          data-action="center"
+          title="Equalize left/right pads to center columns in the viewport"
+          onClick={() =>
+            void commit("Center columns", (s) => {
+              const placements = s.layoutSlots.placements;
+              const order = normalizeColumnOrder(s.layoutSlots.columnOrder);
+              const visible = order.filter((id) => placements[id] !== "hidden");
+              const extras = (s.layoutSlots.separators || []).reduce(
+                (sum, sep) => sum + clampSeparatorWidth(sep.widthPx),
+                0,
+              );
+              const extraCount = Math.min(
+                MAX_LAYOUT_SEPARATORS,
+                (s.layoutSlots.separators || []).length,
+              );
+              const w = s.layoutSlots.widths;
+              const viewport =
+                typeof window !== "undefined"
+                  ? document.documentElement.clientWidth ||
+                    window.innerWidth ||
+                    0
+                  : 0;
+              const fitted = mirrorStackedWidths(
+                centerPadsInViewport(
+                  mirrorStackedWidths(
+                    {
+                      leftNavPx: clampPanelWidth("leftNav", w.leftNavPx),
+                      rightRailPx: clampPanelWidth("rightRail", w.rightRailPx),
+                      feedWidthPx: clampPanelWidth(
+                        "main",
+                        s.knobs.tokens.feedWidthPx,
+                      ),
+                      pagePadLeftPx: clampPagePad(w.pagePadLeftPx ?? 24),
+                      pagePadRightPx: clampPagePad(w.pagePadRightPx ?? 24),
+                      columnGapPx: clampColumnGap(w.columnGapPx ?? 12),
+                    },
+                    placements,
+                  ),
+                  budgetColumnOrder(visible, placements),
+                  viewport,
+                  extras,
+                  widthLockSet(s.layoutSlots.widthLocks),
+                  extraCount,
+                ),
+                placements,
+              );
+              return {
+                ...s,
+                knobs: {
+                  ...s.knobs,
+                  tokens: {
+                    ...s.knobs.tokens,
+                    feedWidthPx: fitted.feedWidthPx,
+                  },
+                },
+                layoutSlots: {
+                  ...s.layoutSlots,
+                  widths: {
+                    ...s.layoutSlots.widths,
+                    leftNavPx: fitted.leftNavPx,
+                    rightRailPx: isStackedPair(placements)
+                      ? fitted.leftNavPx
+                      : fitted.rightRailPx,
+                    pagePadLeftPx: fitted.pagePadLeftPx,
+                    pagePadRightPx: fitted.pagePadRightPx,
+                    columnGapPx: fitted.columnGapPx,
+                  },
+                },
+              };
+            })
+          }
+        >
+          Center
+        </button>
+      </div>
+
+      <div class="readit-edit-toolbox-group" title="Header placement">
+        {(
+          [
+            ["top", "Hdr top"],
+            ["bottom", "Hdr bot"],
+          ] as const
+        ).map(([zone, label]) => (
+          <button
+            type="button"
+            key={zone}
+            class="readit-edit-chip"
+            data-chrome-zone={zone}
+            data-active={
+              (cfg.chrome?.topNav ?? "top") === zone ? "true" : "false"
+            }
+            onClick={() =>
+              void commit(`Header ${zone}`, (s) => ({
+                ...s,
+                layoutSlots: {
+                  ...s.layoutSlots,
+                  chrome: {
+                    ...(s.layoutSlots.chrome ?? {
+                      topNav: "top",
+                      bottomChrome: "hidden",
+                      topNavPx: 56,
+                      bottomChromePx: 0,
+                    }),
+                    topNav: zone,
+                  },
+                },
+              }))
+            }
+          >
+            {label}
           </button>
         ))}
       </div>

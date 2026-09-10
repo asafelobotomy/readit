@@ -27,7 +27,10 @@ function ensureBuiltinProfiles(settings: ReaditSettings): ReaditSettings {
       );
       const metaChanged =
         existing.name !== builtin.name ||
-        existing.description !== builtin.description;
+        existing.description !== builtin.description ||
+        existing.icon !== builtin.icon ||
+        (existing.iconOptions ?? []).join(",") !==
+          (builtin.iconOptions ?? []).join(",");
       if (metaChanged || missingFlag) {
         byId.set(builtin.id, {
           ...existing,
@@ -35,6 +38,8 @@ function ensureBuiltinProfiles(settings: ReaditSettings): ReaditSettings {
           description: builtin.description,
           audiences: builtin.audiences,
           builtin: true,
+          icon: builtin.icon,
+          iconOptions: builtin.iconOptions,
           knobs: structuredClone(builtin.knobs),
           flags: {
             ...structuredClone(builtin.flags),
@@ -91,7 +96,9 @@ export function migrateSettings(raw: unknown): ReaditSettings {
     base = applyV4FeedbackDefaults(base);
     base = applyV5WaveADefaults(base);
     base = applyV6ColumnOrderDefaults(base);
-    return applyV8EditChromeDefaults(applyV7ProfileLayoutRecipes(base));
+    return applyV9PageChromeDefaults(
+      applyV8EditChromeDefaults(applyV7ProfileLayoutRecipes(base)),
+    );
   }
 
   const parsed = ReaditSettingsSchema.safeParse({
@@ -128,6 +135,9 @@ export function migrateSettings(raw: unknown): ReaditSettings {
   }
   if (version < 8) {
     base = applyV8EditChromeDefaults(base);
+  }
+  if (version < 9) {
+    base = applyV9PageChromeDefaults(base);
   }
 
   return { ...base, version: SETTINGS_VERSION };
@@ -359,6 +369,24 @@ function applyV8EditChromeDefaults(settings: ReaditSettings): ReaditSettings {
       gutterTheme: layout.gutterTheme ?? "plain",
       zoomAll: layout.zoomAll ?? 1,
       zoomByPanel: layout.zoomByPanel ?? {},
+      widthLocks: layout.widthLocks ?? {},
+    },
+  };
+}
+
+/** v9: page chrome slots (top nav / bottom dock) heights + placement. */
+function applyV9PageChromeDefaults(settings: ReaditSettings): ReaditSettings {
+  const layout = settings.layoutSlots;
+  return {
+    ...settings,
+    layoutSlots: {
+      ...layout,
+      chrome: layout.chrome ?? {
+        topNav: "top",
+        bottomChrome: "hidden",
+        topNavPx: 56,
+        bottomChromePx: 0,
+      },
     },
   };
 }

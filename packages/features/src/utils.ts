@@ -1,4 +1,9 @@
-import type { FeatureFlags, FeatureHealth, ReaditSettings } from "@readit/schema";
+import type {
+  FeatureFlags,
+  FeatureHealth,
+  ProfileIconId,
+  ReaditSettings,
+} from "@readit/schema";
 
 export type FeatureContext = {
   settings: ReaditSettings;
@@ -6,6 +11,10 @@ export type FeatureContext = {
   subreddit: string | null;
   /** Pathname for route-aware features */
   pathname: string;
+  /** Resolves a bundled mascot icon id to an extension-page URL usable in the
+   * Reddit page's DOM (this package has no access to the WebExtension APIs
+   * that provide it — the host injects the resolver). */
+  mascotUrl?: (icon: ProfileIconId) => string;
 };
 
 export type FeatureModule = {

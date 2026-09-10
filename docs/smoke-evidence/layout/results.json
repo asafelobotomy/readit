@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-03T09:28:46.545Z",
+  "at": "2026-09-04T09:29:01.364Z",
   "mode": "cdp-puppeteer",
   "cdpEndpoint": "http://127.0.0.1:9222",
   "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
@@ -15,24 +15,29 @@
       "detail": "{\"host\":true,\"fab\":true,\"active\":true}"
     },
     {
+      "id": "layout.fab_menu_edit_toolbox",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"labels\":[\"Edit Mode\",\"Settings\",\"GitHub\",\"Ko-fi\"],\"toolbox\":true,\"editCls\":true}"
+    },
+    {
       "id": "layout.flag_enabled",
-      "status": "fail",
-      "detail": "{\"ok\":false,\"reason\":\"no enable checkbox\"}"
+      "status": "pass",
+      "detail": "{\"ok\":true,\"checked\":true}"
     },
     {
       "id": "layout.tab_ui",
-      "status": "fail",
-      "detail": "{\"hasPresets\":false,\"zone\":false,\"slotHealth\":false,\"zoneLabels\":[],\"chips\":[]}"
+      "status": "pass",
+      "detail": "{\"hasPresets\":true,\"zone\":true,\"slotHealth\":true,\"zoneLabels\":[\"Nav\",\"Feed\",\"Rail\"],\"chips\":[\"Classic\",\"Nav right\",\"Dual left\",\"Dual right\",\"Single column\"],\"presetBtns\":[\"classic\",\"navRight\",\"dualLeft\",\"dualRight\",\"singleColumn\"]}"
     },
     {
       "id": "layout.zone_board",
-      "status": "fail",
-      "detail": "[]"
+      "status": "pass",
+      "detail": "[\"Nav\",\"Feed\",\"Rail\"]"
     },
     {
       "id": "layout.slot_health",
-      "status": "fail",
-      "detail": "{\"slotHealth\":false}"
+      "status": "pass",
+      "detail": "{\"slotHealth\":true}"
     },
     {
       "id": "layout.preset.classic",
@@ -41,8 +46,13 @@
     },
     {
       "id": "layout.preset.nav_right",
-      "status": "fail",
-      "detail": "{\"ok\":false,\"expectLayout\":\"navRight\",\"recipe\":false}"
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"navRight\",\"expectLayout\":\"navRight\",\"recipe\":true}"
+    },
+    {
+      "id": "layout.preset.nav_right.order",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"railL\":24,\"mainL\":392,\"navL\":1600}"
     },
     {
       "id": "layout.preset.dual_left",
@@ -50,9 +60,24 @@
       "detail": "{\"ok\":true,\"layout\":\"dualLeft\",\"expectLayout\":\"dualLeft\",\"recipe\":true}"
     },
     {
+      "id": "layout.preset.dual_left.geometry",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"expectSide\":\"left\",\"sideOk\":true,\"navBottomLeRailTop\":true,\"sameLeft\":true,\"sameWidth\":true,\"mainSpansStack\":true,\"noOverlap\":true,\"nav\":{\"top\":113,\"bottom\":3598,\"left\":24,\"width\":240},\"rail\":{\"top\":3606,\"bottom\":4516,\"left\":24,\"width\":240},\"main\":{\"top\":113,\"bottom\":16982,\"left\":272,\"right\":1472}}"
+    },
+    {
       "id": "layout.preset.dual_right",
-      "status": "fail",
-      "detail": "{\"ok\":false,\"expectLayout\":\"dualRight\",\"recipe\":false}"
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"dualRight\",\"expectLayout\":\"dualRight\",\"recipe\":true}"
+    },
+    {
+      "id": "layout.preset.dual_right.geometry",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"expectSide\":\"right\",\"sideOk\":true,\"navBottomLeRailTop\":true,\"sameLeft\":true,\"sameWidth\":true,\"mainSpansStack\":true,\"noOverlap\":true,\"nav\":{\"top\":113,\"bottom\":3598,\"left\":1232,\"width\":240},\"rail\":{\"top\":3606,\"bottom\":4516,\"left\":1232,\"width\":240},\"main\":{\"top\":113,\"bottom\":16982,\"left\":24,\"right\":1224}}"
+    },
+    {
+      "id": "layout.preset.dual_right.stack",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"navL\":1232,\"railL\":1232,\"mainR\":1224}"
     },
     {
       "id": "layout.preset.single_column",
@@ -61,38 +86,58 @@
     },
     {
       "id": "layout.reset_classic",
-      "status": "fail",
-      "detail": "{\"ok\":false,\"expectLayout\":\"classic\",\"recipe\":false}"
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"classic\",\"expectLayout\":\"classic\",\"recipe\":true}"
     },
     {
       "id": "layout.width.nav",
       "status": "pass",
-      "detail": "{\"navW\":{\"ok\":true,\"before\":\"64\",\"after\":\"220\",\"nextVal\":\"220\"},\"navVar\":\"220px\"}"
+      "detail": "{\"navW\":{\"ok\":true,\"before\":\"240\",\"after\":\"220\",\"nextVal\":\"220\"},\"navVar\":\"220px\"}"
     },
     {
       "id": "layout.width.nav_min",
       "status": "pass",
-      "detail": "{\"navMin\":{\"ok\":true,\"before\":\"220\",\"after\":\"64\",\"nextVal\":\"64\"},\"navMinProbe\":{\"width\":64,\"textSample\":\"AutoForgeTheGame\\nD\\nGamesOnReddit\\npics\\nnews\\nAskReddit\\nEliteTransGirls\\nFetishHaven\\ngirlcockheaven\\nPlayhouseSellersForum\\nSt\",\"verticalStart\":false,\"cssVar\":\"64px\",\"iconCount\":8,\"anyClipped\":false,\"avgAbsCenter\":5}}"
+      "detail": "{\"navMin\":{\"ok\":true,\"before\":\"220\",\"after\":\"64\",\"nextVal\":\"64\"},\"navMinProbe\":{\"width\":64,\"textSample\":\"AutoForgeTheGame\\nD\\nGamesOnReddit\\nAskReddit\\npics\\nnews\\ncherry_jammm_\\nawesometransgirls\\nBreedableTrap\\nEliteTransGirls\\nFanta\",\"verticalStart\":false,\"cssVar\":\"64px\",\"iconCount\":8,\"anyClipped\":false,\"avgAbsCenter\":5}}"
     },
     {
       "id": "layout.width.feed",
-      "status": "fail",
-      "detail": "{\"feedW\":{\"ok\":false,\"reason\":\"no range for Feed (\"},\"feedVar\":\"1354px\"}"
+      "status": "pass",
+      "detail": "{\"feedW\":{\"ok\":true,\"before\":\"1376\",\"after\":\"720\",\"nextVal\":\"720\"},\"feedVar\":\"720px\"}"
     },
     {
       "id": "layout.width.rail",
-      "status": "fail",
-      "detail": "{\"railW\":{\"ok\":false,\"reason\":\"no range for Rail (\"},\"railVar\":\"280px\"}"
+      "status": "pass",
+      "detail": "{\"railW\":{\"ok\":true,\"before\":\"240\",\"after\":\"300\",\"nextVal\":\"300\"},\"railVar\":\"300px\"}"
     },
     {
       "id": "layout.width.pads_gap",
-      "status": "fail",
-      "detail": "{\"padL\":{\"ok\":false,\"reason\":\"no range for Left pad\"},\"padR\":{\"ok\":false,\"reason\":\"no range for Right pad\"},\"gap\":{\"ok\":false,\"reason\":\"no range for Column gap\"},\"padVars\":{\"left\":\"104px\",\"right\":\"84px\",\"gap\":\"12px\"}}"
+      "status": "pass",
+      "detail": "{\"padL\":{\"ok\":true,\"before\":\"16\",\"after\":\"40\",\"nextVal\":\"40\"},\"padR\":{\"ok\":true,\"before\":\"40\",\"after\":\"48\",\"nextVal\":\"48\"},\"gap\":{\"ok\":true,\"before\":\"8\",\"after\":\"16\",\"nextVal\":\"16\"},\"padVars\":{\"left\":\"48px\",\"right\":\"6px\",\"gap\":\"16px\"}}"
     },
     {
       "id": "layout.width.fit_budget",
       "status": "pass",
       "detail": "{\"ok\":true,\"shellRight\":1910,\"vw\":1910}"
+    },
+    {
+      "id": "layout.geo.budget",
+      "status": "pass",
+      "detail": "{\"vw\":1910,\"used\":1910,\"trackCount\":5,\"gap\":16,\"budgetDelta\":0,\"budgetOk\":true,\"overlap\":0,\"noOverlap\":true,\"shellBleed\":true,\"shell\":{\"left\":0,\"right\":1910,\"w\":1910},\"mediaOk\":true,\"slots\":[{\"id\":\"leftNav\",\"left\":64,\"right\":128,\"top\":113,\"bottom\":1024},{\"id\":\"main\",\"left\":144,\"right\":1588,\"top\":113,\"bottom\":16918},{\"id\":\"rightRail\",\"left\":1604,\"right\":1888,\"top\":113,\"bottom\":1023}]}"
+    },
+    {
+      "id": "layout.geo.no_overlap",
+      "status": "pass",
+      "detail": "{\"overlap\":0}"
+    },
+    {
+      "id": "layout.geo.shell_bleed",
+      "status": "pass",
+      "detail": "{\"left\":0,\"right\":1910,\"w\":1910}"
+    },
+    {
+      "id": "layout.media.aspect",
+      "status": "pass",
+      "detail": "{\"mediaOk\":true}"
     },
     {
       "id": "layout.edit.allow_moving",
@@ -107,7 +152,7 @@
     {
       "id": "layout.edit.frames",
       "status": "pass",
-      "detail": "{\"labels\":[\"Nav\",\"Feed\",\"Rail\",\"L\",\"R\"],\"frameCount\":5,\"colHandles\":3,\"padHandles\":2,\"outline\":\"none\",\"edit\":true}"
+      "detail": "{\"labels\":[\"Nav\",\"Feed\",\"Rail\",\"L\",\"R\",\"Header\"],\"frameCount\":6,\"colHandles\":5,\"padHandles\":2,\"outline\":\"none\",\"edit\":true}"
     },
     {
       "id": "layout.edit.no_slot_outline",
@@ -117,22 +162,32 @@
     {
       "id": "layout.edit.resize_handles",
       "status": "pass",
-      "detail": "{\"colHandles\":3,\"padHandles\":2}"
+      "detail": "{\"colHandles\":5,\"padHandles\":2}"
     },
     {
       "id": "layout.dnd.column_reorder",
       "status": "pass",
-      "detail": "{\"beforeCols\":\"leftNav,main,rightRail\",\"afterCols\":\"leftNav,rightRail,main\",\"dndCoords\":{\"sx\":263.5078125,\"sy\":78,\"ex\":1300,\"ey\":96}}"
+      "detail": "{\"beforeCols\":\"leftNav,main,rightRail\",\"afterCols\":\"leftNav,rightRail,main\",\"dndCoords\":{\"sx\":307.5078125,\"sy\":135,\"ex\":1848,\"ey\":153}}"
     },
     {
       "id": "layout.dnd.pad_swap",
-      "status": "fail",
-      "detail": "{\"padsBefore\":{\"left\":\"24px\",\"right\":\"24px\"},\"padsAfter\":{\"left\":\"24px\",\"right\":\"24px\"},\"padDrag\":{\"sx\":14,\"sy\":78,\"ex\":1432.5,\"ey\":136}}"
+      "status": "pass",
+      "detail": "{\"padsBefore\":{\"left\":\"120px\",\"right\":\"48px\"},\"padsAfter\":{\"left\":\"413px\",\"right\":\"413px\"},\"padDrag\":{\"sx\":14,\"sy\":135,\"ex\":1884.5625,\"ey\":135},\"swapped\":false,\"changed\":true}"
     },
     {
       "id": "layout.resize.edge",
       "status": "pass",
-      "detail": "{\"edgeBefore\":\"780px\",\"edgeAfter\":\"828px\",\"edge\":{\"x\":1308,\"y\":176}}"
+      "detail": "{\"edgeBefore\":\"640px\",\"edgeAfter\":\"688px\",\"edge\":{\"x\":936,\"y\":233,\"edge\":\"right\"}}"
+    },
+    {
+      "id": "layout.resize.right_pin",
+      "status": "pass",
+      "detail": "{\"edgePinBefore\":{\"left\":296,\"right\":936},\"edgePinAfter\":{\"left\":296,\"right\":984},\"edge\":{\"x\":936,\"y\":233,\"edge\":\"right\"},\"pinOk\":true}"
+    },
+    {
+      "id": "layout.resize.left_pin",
+      "status": "pass",
+      "detail": "{\"leftPinBefore\":{\"left\":296,\"right\":984},\"leftPinAfter\":{\"left\":256,\"right\":984},\"leftHandle\":{\"x\":296,\"y\":233}}"
     },
     {
       "id": "layout.edit.esc_lock",
@@ -141,8 +196,8 @@
     },
     {
       "id": "layout.profile.focus_reader",
-      "status": "fail",
-      "detail": "{\"layout\":\"custom\",\"columns\":\"leftNav,rightRail,main\",\"clicked\":false}"
+      "status": "pass",
+      "detail": "{\"layout\":\"singleColumn\",\"columns\":\"leftNav,main,rightRail\",\"clicked\":true}"
     },
     {
       "id": "layout.profile.mod_desk",
@@ -151,11 +206,31 @@
     },
     {
       "id": "layout.bridge.hide_sidebars",
-      "status": "fail",
-      "detail": "{\"ok\":false,\"reason\":\"no checkbox\"}"
+      "status": "pass",
+      "detail": "{\"ok\":true,\"layout\":\"singleColumn\",\"checked\":true}"
+    },
+    {
+      "id": "layout.chrome.stamp",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"tag\":\"REDDIT-HEADER-LARGE\",\"chromeTop\":\"top\",\"headerPresent\":true}"
+    },
+    {
+      "id": "layout.chrome.move_bottom",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"zone\":\"bottom\",\"bottom\":967,\"vh\":967,\"chromeBottomVar\":\"56px\"}"
+    },
+    {
+      "id": "layout.chrome.resize_height",
+      "status": "pass",
+      "detail": "{\"chromeResize\":{\"ok\":true,\"before\":\"56\",\"after\":\"72\",\"nextVal\":\"72\"},\"chromeH\":\"72px\",\"chromeTopVar\":\"0px\"}"
+    },
+    {
+      "id": "layout.chrome.theme",
+      "status": "pass",
+      "detail": "{\"ok\":true,\"font\":\"\\\"Times New Roman\\\"\",\"accent\":\"#d93900\"}"
     }
   ],
-  "pass": 17,
-  "fail": 13,
+  "pass": 45,
+  "fail": 0,
   "skip": 0
 }

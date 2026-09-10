@@ -45,6 +45,10 @@ import {
   presetToPlacements,
   removeLayoutSeparator,
   resolveSlots,
+  separatorExtraPx,
+  separatorTrackCount,
+  setChromeTopNavHeight,
+  setChromeTopNavZone,
   setSlotZone,
   stampLayoutSlots,
   swapLayoutColumns,
@@ -65,6 +69,7 @@ import {
   modQuickActionsFeature,
   modUsernotesFeature,
 } from "./mod.js";
+import { headerMascotFeature } from "./header-mascot.js";
 import type { FeatureContext, FeatureModule } from "./utils.js";
 import {
   cleanRedditUrl,
@@ -99,6 +104,7 @@ export const ALL_FEATURES: FeatureModule[] = [
   modMacrosFeature,
   modUsernotesFeature,
   modHighlightFeature,
+  headerMascotFeature,
 ];
 
 /** Features safe to re-run on DOM mutations (idempotent via marks). */
@@ -116,6 +122,7 @@ const SCAN_FEATURE_IDS = new Set([
   "markRead",
   "commentUx",
   "followingFeed",
+  "headerMascot",
 ]);
 
 export type FeatureRuntime = {
@@ -135,7 +142,15 @@ function isFlagEnabled(settings: ReaditSettings, id: string): boolean {
   return true;
 }
 
-export function createFeatureRuntime(): FeatureRuntime {
+export type FeatureRuntimeOptions = {
+  /** Resolves a bundled mascot icon id to an extension-page URL; only the
+   * host app (which has the WebExtension runtime APIs) can provide this. */
+  mascotUrl?: FeatureContext["mascotUrl"];
+};
+
+export function createFeatureRuntime(
+  options: FeatureRuntimeOptions = {},
+): FeatureRuntime {
   let last: ReaditSettings | null = null;
   let lastEnabled = new Map<string, boolean>();
   let toolboxDetected = false;
@@ -145,6 +160,7 @@ export function createFeatureRuntime(): FeatureRuntime {
     settings: { ...settings, toolboxDetected },
     subreddit: currentSubreddit(location.pathname),
     pathname: location.pathname,
+    mascotUrl: options.mascotUrl,
   });
 
   return {
@@ -163,15 +179,18 @@ export function createFeatureRuntime(): FeatureRuntime {
             if (wasEnabled) feature.teardown(ctx);
             lastEnabled.set(feature.id, false);
           } else if (!wasEnabled) {
-            void feature.apply(ctx);
+            // Mark enabled before calling apply(): if apply() throws after
+            // partially attaching listeners/observers, a later disable must
+            // still reach teardown() instead of retrying apply() forever.
             lastEnabled.set(feature.id, true);
+            void feature.apply(ctx);
           } else if (SCAN_FEATURE_IDS.has(feature.id)) {
             void feature.apply(ctx);
             lastEnabled.set(feature.id, true);
           } else if (feature.id === "keyboardNav" || feature.id === "followingFeed") {
             feature.teardown(ctx);
-            void feature.apply(ctx);
             lastEnabled.set(feature.id, true);
+            void feature.apply(ctx);
           } else {
             lastEnabled.set(feature.id, true);
           }
@@ -264,6 +283,10 @@ export {
   presetToPlacements,
   resolveSlots,
   removeLayoutSeparator,
+  separatorExtraPx,
+  separatorTrackCount,
+  setChromeTopNavHeight,
+  setChromeTopNavZone,
   setSlotZone,
   stampLayoutSlots,
   swapLayoutColumns,
@@ -271,7 +294,6 @@ export {
 };
 export {
   classifyNavSection,
-  clearNavCompactStamps,
   mountNavCompactObserver,
   mountNavRail,
   modelFingerprint,
@@ -279,7 +301,6 @@ export {
   NAV_RAIL_ID,
   refreshNavRail,
   scrapeNavModel,
-  stampNavCompact,
   unmountNavCompactObserver,
   unmountNavRail,
 } from "./nav-rail.js";

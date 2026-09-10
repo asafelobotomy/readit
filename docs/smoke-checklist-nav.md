@@ -2,7 +2,7 @@
 
 End-to-end coverage of **thin / compact Nav**: icon rail, community avatars + bold names under, section icons, tooltips, alignment, and no clipping.
 
-**Latest automated run:** 2026-09-03 · **24 pass / 2 fail / 0 skip**
+**Latest automated run:** 2026-09-06 · **22 pass / 4 fail / 0 skip**
 
 **Harness:** `npm run smoke:nav` (Playwright) · `npm run smoke:nav:brave` (CDP `:9222`)
 
@@ -49,8 +49,8 @@ Legend: **A** automated · **U** unit · Status: ✓ pass · ✗ fail · — ski
 | ID | Check | Kind | Shot | Status |
 | --- | --- | --- | --- | --- |
 | `nav.compact.class_mid` | Nav → 140px arms `readit-nav-compact` | A | `01-nav-mid.png` | ✓ |
-| `nav.compact.class_min` | Nav → 64px keeps compact class | A | `02-nav-min.png` | ✓ |
-| `nav.compact.width_var` | `--readit-left-nav-width` matches slider (64px) | A | — | ✓ |
+| `nav.compact.class_min` | Nav → 64px keeps compact class | A | `02-nav-min.png` | ✗ |
+| `nav.compact.width_var` | `--readit-left-nav-width` matches slider (64px) | A | — | ✗ |
 
 ## 3. Avatars & community names
 

@@ -13,6 +13,7 @@ import {
   layoutSlotsHealth,
   presetToPlacements,
   resolveSlots,
+  setSlotZone,
   swapLayoutColumns,
 } from "../packages/features/src/layout-slots.ts";
 import {
@@ -30,10 +31,19 @@ import {
   createDefaultSettings,
   fitLayoutWidths,
   formatProfileLayoutBlurb,
+  budgetColumnOrder,
+  isStackedPair,
+  LAYOUT_WIDTH_LIMITS,
+  mirrorStackedWidths,
   previewImport,
   resizePadInBudget,
   resizePanelInBudget,
+  centerPadsInViewport,
+  fitOverflowOnly,
+  widthLockSet,
   SETTINGS_VERSION,
+  insertPanelAtIndex,
+  movePanelToIndex,
   swapColumnPanels,
 } from "../packages/schema/src/index.ts";
 
@@ -73,6 +83,59 @@ check("presetToPlacements dualLeft", () => {
   const p = presetToPlacements("dualLeft");
   assert.equal(p.leftNav, "stackedLeft");
   assert.equal(p.rightRail, "stackedLeft");
+});
+
+check("isStackedPair detects dual presets only", () => {
+  assert.equal(isStackedPair(presetToPlacements("dualLeft")), true);
+  assert.equal(isStackedPair(presetToPlacements("dualRight")), true);
+  assert.equal(isStackedPair(presetToPlacements("classic")), false);
+  assert.equal(isStackedPair(presetToPlacements("navRight")), false);
+  // Hiding one panel breaks the pair — graceful fallback to normal columns.
+  const partial = { ...presetToPlacements("dualLeft"), rightRail: "hidden" as const };
+  assert.equal(isStackedPair(partial), false);
+});
+
+check("mirrorStackedWidths + budgetColumnOrder exclude the mirrored panel", () => {
+  const placements = presetToPlacements("dualLeft");
+  const widths = {
+    leftNavPx: 220,
+    rightRailPx: 350,
+    feedWidthPx: 600,
+    pagePadLeftPx: 24,
+    pagePadRightPx: 24,
+    columnGapPx: 12,
+  };
+  const mirrored = mirrorStackedWidths(widths, placements);
+  assert.equal(mirrored.rightRailPx, 220);
+  assert.equal(mirrored.leftNavPx, 220);
+
+  const order = budgetColumnOrder(["leftNav", "main", "rightRail"], placements);
+  assert.deepEqual(order, ["leftNav", "main"]);
+
+  const classicPlacements = presetToPlacements("classic");
+  assert.deepEqual(
+    budgetColumnOrder(["leftNav", "main", "rightRail"], classicPlacements),
+    ["leftNav", "main", "rightRail"],
+  );
+  assert.equal(mirrorStackedWidths(widths, classicPlacements).rightRailPx, 350);
+});
+
+check("applyLayoutPreset dual mirrors rail width + clears stack zoom", () => {
+  const base = createDefaultSettings().layoutSlots;
+  base.widths = { ...base.widths, leftNavPx: 240, rightRailPx: 400 };
+  base.zoomByPanel = { leftNav: 1.1, main: 1.05, rightRail: 1.2 };
+  const dual = applyLayoutPreset(base, "dualLeft");
+  assert.equal(dual.widths.leftNavPx, 240);
+  assert.equal(dual.widths.rightRailPx, 240);
+  assert.equal(dual.zoomByPanel?.leftNav, 1);
+  assert.equal(dual.zoomByPanel?.rightRail, 1);
+  assert.equal(dual.zoomByPanel?.main, 1.05);
+
+  const classic = applyLayoutPreset(
+    { ...base, widths: { ...base.widths, leftNavPx: 240, rightRailPx: 400 } },
+    "classic",
+  );
+  assert.equal(classic.widths.rightRailPx, 400);
 });
 
 check("resolveSlots fixture", () => {
@@ -120,6 +183,55 @@ check("CSS singleColumn recipe", () => {
   assert.match(css, /display: none !important/);
 });
 
+check("CSS dualLeft recipe", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "dualLeft");
+  const css = buildStylesheet(settings);
+  assert.match(css, /readit-layout:stacked dualLeft/);
+  assert.match(
+    css,
+    /grid-template-columns: var\(--readit-grid-cols, var\(--readit-page-pad-left, 24px\) var\(--readit-left-nav-width\) var\(--readit-feed-width\) var\(--readit-page-pad-right, 24px\)\) !important/,
+  );
+  assert.match(css, /grid-template-rows: auto !important/);
+  assert.match(
+    css,
+    /\[data-readit-slot="leftNav"\] \{\n\s*grid-row: 1 !important/,
+  );
+  // rightRail is taken out of grid flow (position:absolute) so its height
+  // never inflates the shared row's track — see syncStackedRailOffset.
+  assert.match(
+    css,
+    /\[data-readit-slot="rightRail"\] \{[\s\S]*?grid-column: 2 \/ span 1 !important;\n\s*grid-row: 1 \/ span 1 !important;\n\s*position: absolute !important;\n\s*top: var\(--readit-stack-rail-top, 0px\) !important/,
+  );
+  // Shared stack width — rail must use the nav width var (not 100% / rail var).
+  assert.match(
+    css,
+    /\[data-readit-slot="rightRail"\] \{[\s\S]*?width: var\(--readit-left-nav-width\) !important/,
+  );
+  assert.match(css, /\[data-readit-slot="main"\][\s\S]*?grid-row: 1 !important/);
+});
+
+check("CSS dualRight recipe", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "dualRight");
+  const css = buildStylesheet(settings);
+  assert.match(css, /readit-layout:stacked dualRight/);
+  assert.match(
+    css,
+    /grid-template-columns: var\(--readit-grid-cols, var\(--readit-page-pad-left, 24px\) var\(--readit-feed-width\) var\(--readit-left-nav-width\) var\(--readit-page-pad-right, 24px\)\) !important/,
+  );
+  assert.match(
+    css,
+    /\[data-readit-slot="rightRail"\] \{[\s\S]*?grid-column: 3 \/ span 1 !important;\n\s*grid-row: 1 \/ span 1 !important;\n\s*position: absolute !important/,
+  );
+  assert.match(
+    css,
+    /\[data-readit-slot="rightRail"\] \{[\s\S]*?width: var\(--readit-left-nav-width\) !important/,
+  );
+});
+
 check("column swap helper", () => {
   const swapped = swapColumnPanels(
     ["leftNav", "main", "rightRail"],
@@ -135,15 +247,65 @@ check("column swap helper", () => {
   assert.equal(next.placements.rightRail, "center");
 });
 
+check("insertPanelAtIndex slots between without swap", () => {
+  // finalIndex is post-removal: drag rightRail to front
+  assert.deepEqual(
+    insertPanelAtIndex(["leftNav", "main", "rightRail"], "rightRail", 0),
+    ["rightRail", "leftNav", "main"],
+  );
+  // drag leftNav to end
+  assert.deepEqual(
+    insertPanelAtIndex(["leftNav", "main", "rightRail"], "leftNav", 2),
+    ["main", "rightRail", "leftNav"],
+  );
+  // drag main between leftNav and rightRail (index 1 after removal)
+  assert.deepEqual(
+    insertPanelAtIndex(["leftNav", "main", "rightRail"], "main", 1),
+    ["leftNav", "main", "rightRail"],
+  );
+  // drag main before leftNav
+  assert.deepEqual(
+    insertPanelAtIndex(["leftNav", "main", "rightRail"], "main", 0),
+    ["main", "leftNav", "rightRail"],
+  );
+  // drag leftNav between main and rightRail (after removal index 1)
+  assert.deepEqual(
+    insertPanelAtIndex(["leftNav", "main", "rightRail"], "leftNav", 1),
+    ["main", "leftNav", "rightRail"],
+  );
+});
+
+check("movePanelToIndex swaps rather than shifts an untouched panel", () => {
+  // rightRail -> zone "left" (index 0) must swap with leftNav only, leaving
+  // main untouched — setSlotZone relies on this absolute-index swap.
+  assert.deepEqual(
+    movePanelToIndex(["leftNav", "main", "rightRail"], "rightRail", 0),
+    ["rightRail", "main", "leftNav"],
+  );
+  assert.deepEqual(
+    movePanelToIndex(["leftNav", "main", "rightRail"], "leftNav", 2),
+    ["rightRail", "main", "leftNav"],
+  );
+});
+
+check("setSlotZone moves only the targeted panel", () => {
+  const settings = createDefaultSettings();
+  const next = setSlotZone(settings.layoutSlots, "rightRail", "left");
+  assert.deepEqual(next.columnOrder, ["rightRail", "main", "leftNav"]);
+});
+
 check("clampPanelWidth limits", () => {
   assert.equal(clampPanelWidth("leftNav", 20), 64);
   assert.equal(clampPanelWidth("leftNav", 500), 400);
   assert.equal(clampPanelWidth("main", 200), 480);
   assert.equal(clampPanelWidth("main", 2000), 1600);
-  assert.equal(clampPanelWidth("rightRail", 100), 280);
-  assert.equal(clampPanelWidth("rightRail", 250), 280);
+  // Nav and rail share the same band.
+  assert.equal(clampPanelWidth("rightRail", 20), 64);
+  assert.equal(clampPanelWidth("rightRail", 100), 100);
   assert.equal(clampPanelWidth("rightRail", 300), 300);
   assert.equal(clampPanelWidth("rightRail", 500), 400);
+  assert.equal(LAYOUT_WIDTH_LIMITS.leftNav.min, LAYOUT_WIDTH_LIMITS.rightRail.min);
+  assert.equal(LAYOUT_WIDTH_LIMITS.leftNav.max, LAYOUT_WIDTH_LIMITS.rightRail.max);
 });
 
 check("page pad + column gap defaults and CSS", () => {
@@ -153,7 +315,8 @@ check("page pad + column gap defaults and CSS", () => {
   assert.equal(settings.layoutSlots.widths.pagePadRightPx, 48);
   assert.equal(settings.layoutSlots.widths.columnGapPx, 12);
   assert.equal(clampPagePad(-10), 0);
-  assert.equal(clampPagePad(999), 160);
+  assert.equal(clampPagePad(999), 999);
+  assert.equal(clampPagePad(2000), 1600);
   assert.equal(clampColumnGap(100), 48);
   settings.flags.layoutSlots = true;
   settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "classic");
@@ -167,7 +330,8 @@ check("page pad + column gap defaults and CSS", () => {
   assert.match(css, /--readit-page-pad-left:\s*24px/);
   assert.match(css, /--readit-page-pad-right:\s*24px/);
   assert.match(css, /--readit-column-gap:\s*12px/);
-  assert.match(css, /padding-left:\s*var\(--readit-page-pad-left/);
+  assert.match(css, /padding-left:\s*0 !important/);
+  assert.match(css, /var\(--readit-page-pad-left/);
   assert.match(css, /column-gap:\s*var\(--readit-column-gap/);
   assert.match(css, /readit-pad-resize/);
   assert.match(css, /--readit-grid-cols/);
@@ -175,7 +339,35 @@ check("page pad + column gap defaults and CSS", () => {
   assert.match(css, /contain:\s*inline-size/);
 });
 
-check("fitLayoutWidths respects right gutter", () => {
+check("fitLayoutWidths centers with equal pads and fills the viewport", () => {
+  const order = ["leftNav", "main", "rightRail"] as const;
+  const fitted = fitLayoutWidths(
+    {
+      leftNavPx: 200,
+      rightRailPx: 200,
+      feedWidthPx: 600,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    [...order],
+    1600,
+  );
+  // 3 panels + 2 pads → 4 gaps
+  const gaps = 48;
+  const tracks =
+    fitted.feedWidthPx + fitted.leftNavPx + fitted.rightRailPx + gaps;
+  assert.equal(fitted.pagePadLeftPx, fitted.pagePadRightPx);
+  assert.equal(
+    fitted.pagePadLeftPx + fitted.pagePadRightPx + tracks,
+    1600,
+  );
+  assert.ok(fitted.leftNavPx >= 64);
+  assert.ok(fitted.rightRailPx >= 64);
+  assert.ok(fitted.feedWidthPx >= 480);
+});
+
+check("fitLayoutWidths shrinks columns before starving equal pads on narrow viewports", () => {
   const order = ["main", "leftNav", "rightRail"] as const;
   const fitted = fitLayoutWidths(
     {
@@ -198,9 +390,9 @@ check("fitLayoutWidths respects right gutter", () => {
     fitted.leftNavPx +
     fitted.rightRailPx;
   assert.ok(used <= 1200, `used ${used} > 1200`);
-  assert.ok(fitted.pagePadRightPx >= 0);
+  assert.equal(fitted.pagePadLeftPx, fitted.pagePadRightPx);
   assert.ok(fitted.leftNavPx >= 64);
-  assert.ok(fitted.rightRailPx >= 280);
+  assert.ok(fitted.rightRailPx >= 64);
   assert.ok(fitted.feedWidthPx >= 480);
 });
 
@@ -220,10 +412,17 @@ check("resizePanelInBudget shrinks neighbors to the right", () => {
     900,
     1200,
   );
-  // Content budget 1128; growing main steals from rightRail then leftNav mins.
-  assert.equal(next.rightRailPx, 280);
-  // Remaining after rail min: 1128 - 280 = 848 for main+nav; main wants 900 → nav shrinks.
-  assert.equal(next.feedWidthPx + next.leftNavPx + next.rightRailPx, 1128);
+  const used =
+    next.feedWidthPx +
+    next.leftNavPx +
+    next.rightRailPx +
+    next.pagePadLeftPx +
+    next.pagePadRightPx +
+    24;
+  assert.ok(used <= 1200);
+  // Overflow fit may collapse the right pad first — equality is Center's job.
+  assert.ok(next.pagePadLeftPx + next.pagePadRightPx <= 48);
+  assert.ok(next.rightRailPx >= 64);
   assert.ok(next.leftNavPx >= 64);
   assert.ok(next.feedWidthPx <= 900);
 });
@@ -247,46 +446,128 @@ check("resizePanelInBudget donates shrink to feed", () => {
   assert.equal(next.leftNavPx, 64);
   assert.equal(next.feedWidthPx, 600 + (272 - 64));
   assert.equal(next.rightRailPx, 316);
+  assert.equal(next.pagePadLeftPx, next.pagePadRightPx);
 });
 
-check("resizePadInBudget donates shrink to feed", () => {
+check("resizePadInBudget shrink grows columns then keeps equal pads", () => {
   const order = ["leftNav", "main", "rightRail"] as const;
   const next = resizePadInBudget(
     {
       leftNavPx: 64,
       rightRailPx: 280,
       feedWidthPx: 700,
-      pagePadLeftPx: 160,
-      pagePadRightPx: 48,
+      pagePadLeftPx: 200,
+      pagePadRightPx: 200,
       columnGapPx: 8,
     },
     [...order],
     "left",
-    24,
+    40,
     1920,
   );
-  assert.equal(next.pagePadLeftPx, 24);
-  assert.equal(next.feedWidthPx, 700 + (160 - 24));
+  assert.equal(next.pagePadLeftPx, next.pagePadRightPx);
+  assert.equal(next.pagePadLeftPx, 40);
+  // Freed margin goes into feed (main) first.
+  assert.ok(next.feedWidthPx > 700);
 });
 
-check("huge legacy pads clamp and cannot starve columns", () => {
+check("fitLayoutWidths can center min-size columns with large equal pads", () => {
   const order = ["leftNav", "main", "rightRail"] as const;
   const fitted = fitLayoutWidths(
     {
       leftNavPx: 64,
-      rightRailPx: 160,
-      feedWidthPx: 720,
-      pagePadLeftPx: 480,
-      pagePadRightPx: 480,
+      rightRailPx: 64,
+      feedWidthPx: 480,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
       columnGapPx: 12,
     },
     [...order],
     1920,
   );
-  assert.ok(fitted.pagePadLeftPx <= 160);
-  assert.ok(fitted.pagePadRightPx <= 160);
-  assert.ok(fitted.rightRailPx >= 280);
-  assert.ok(fitted.feedWidthPx >= 480);
+  const gaps = 48;
+  const tracks =
+    fitted.leftNavPx + fitted.feedWidthPx + fitted.rightRailPx + gaps;
+  assert.equal(fitted.pagePadLeftPx, fitted.pagePadRightPx);
+  assert.equal(fitted.pagePadLeftPx + fitted.pagePadRightPx + tracks, 1920);
+  assert.ok(fitted.pagePadLeftPx > 160);
+  assert.ok(fitted.pagePadLeftPx <= LAYOUT_WIDTH_LIMITS.pagePad.max);
+});
+
+check("resizePanelInBudget can shrink pads so columns reach max", () => {
+  const order = ["leftNav", "main", "rightRail"] as const;
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 272,
+      rightRailPx: 316,
+      feedWidthPx: 600,
+      pagePadLeftPx: 160,
+      pagePadRightPx: 160,
+      columnGapPx: 12,
+    },
+    [...order],
+    "main",
+    900,
+    1600,
+    "right",
+  );
+  assert.equal(next.feedWidthPx, 900);
+  assert.ok(
+    next.pagePadLeftPx + next.pagePadRightPx < 320 || next.leftNavPx < 272,
+  );
+});
+
+check("resizePadInBudget grows mirrored pads by shrinking columns", () => {
+  const order = ["leftNav", "main", "rightRail"] as const;
+  const next = resizePadInBudget(
+    {
+      leftNavPx: 272,
+      rightRailPx: 316,
+      feedWidthPx: 700,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    [...order],
+    "right",
+    120,
+    1400,
+  );
+  assert.equal(next.pagePadLeftPx, 120);
+  assert.equal(next.pagePadRightPx, 120);
+  const used =
+    next.pagePadLeftPx +
+    next.pagePadRightPx +
+    24 +
+    next.feedWidthPx +
+    next.leftNavPx +
+    next.rightRailPx;
+  assert.ok(used <= 1400, `used ${used}`);
+  assert.ok(next.rightRailPx <= 316);
+  assert.ok(next.rightRailPx >= 64);
+});
+
+check("resizePadInBudget grow with free space keeps columns until pads need room", () => {
+  const order = ["leftNav", "main", "rightRail"] as const;
+  const next = resizePadInBudget(
+    {
+      leftNavPx: 64,
+      rightRailPx: 280,
+      feedWidthPx: 600,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    [...order],
+    "right",
+    100,
+    1920,
+  );
+  // 100px pads fit without stealing — feed can grow into leftover instead.
+  assert.equal(next.pagePadLeftPx, 100);
+  assert.equal(next.pagePadRightPx, 100);
+  assert.equal(next.rightRailPx, 280);
+  assert.ok(next.feedWidthPx >= 600);
 });
 
 check("resizePanelInBudget shifts when free space remains", () => {
@@ -325,6 +606,7 @@ check("CSS column resize handle styles", () => {
   const css = buildStylesheet(settings);
   assert.match(css, /readit-col-resize/);
   assert.match(css, /readit-frame-remove/);
+  assert.match(css, /readit-frame-lock/);
   assert.match(css, /data-edge="left"/);
   assert.match(css, /cursor:\s*col-resize/);
 });
@@ -416,12 +698,12 @@ check("CSS compact nav/rail containment", () => {
   settings.layoutSlots.widths = {
     ...settings.layoutSlots.widths,
     leftNavPx: 64,
-    rightRailPx: 160, // legacy thin — must clamp in recipe
+    rightRailPx: 160, // legacy thin — clamps to shared side-column min
   };
   const css = buildStylesheet(settings);
   assert.match(css, /readit-nav-compact/);
   assert.match(css, /readit-rail-compact/);
-  assert.match(css, /--readit-right-rail-width:\s*280px/);
+  assert.match(css, /--readit-right-rail-width:\s*160px/);
   assert.match(css, /\[data-readit-slot="rightRail"\] \*/);
   assert.match(css, /word-break:\s*normal/);
   assert.match(css, /\.readit-user-tag/);
@@ -436,9 +718,20 @@ check("CSS edit-mode labeled frames", () => {
   assert.match(css, /readit-layout-frame/);
   assert.match(css, /readit-frame-label/);
   assert.match(css, /readit-drop-line/);
+  assert.match(css, /readit-drop-label/);
+  assert.match(css, /readit-drop-moving/);
+  // Overlay caret stays thin — no wide gap pill that malforms neighbors.
+  assert.match(css, /\.readit-drop-line \{[\s\S]*?width:\s*4px/);
+  assert.doesNotMatch(css, /width:\s*40px\s*!important/);
+  assert.doesNotMatch(css, /data-nudge/);
+  assert.doesNotMatch(css, /data-readit-drop-preview/);
   assert.match(css, /outline:\s*none/);
   assert.match(css, /\[data-drop="1"\][\s\S]*?border-style:\s*dashed/);
   assert.match(css, /\[data-readit-slot\][\s\S]*?pointer-events:\s*none/);
+  assert.match(
+    css,
+    /\[data-readit-dragging-kind\][\s\S]*?\.readit-col-resize/,
+  );
   assert.doesNotMatch(css, /\[data-readit-slot\]\s*\{\s*outline:\s*2px dashed/);
 });
 
@@ -487,14 +780,25 @@ check("CSS waveA lurker styles", () => {
   assert.match(css, /readit-lurker/);
 });
 
-check("schema v8 column order defaults", () => {
+check("schema v9 column order + chrome defaults", () => {
   const settings = createDefaultSettings();
   assert.equal(settings.version, SETTINGS_VERSION);
-  assert.equal(SETTINGS_VERSION, 8);
+  assert.equal(SETTINGS_VERSION, 9);
   assert.deepEqual(settings.layoutSlots.separators, []);
   assert.equal(settings.layoutSlots.gutterTheme, "plain");
   assert.equal(settings.layoutSlots.zoomAll, 1);
   assert.equal(settings.knobs.tokens.fontFamily, "system");
+  assert.equal(settings.layoutSlots.chrome?.topNav ?? "top", "top");
+  assert.equal(settings.layoutSlots.chrome?.topNavPx ?? 56, 56);
+});
+
+check("CSS page chrome slot rules", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  const css = buildStylesheet(settings);
+  assert.match(css, /data-readit-slot="topNav"/);
+  assert.match(css, /data-readit-chrome-top="bottom"/);
+  assert.match(css, /--readit-chrome-bottom/);
 });
 
 check("separator tracks interleave after panel", () => {
@@ -512,8 +816,14 @@ check("separator tracks interleave after panel", () => {
     ],
   });
   assert.deepEqual(
-    tracks.map((t) => (t.type === "panel" ? t.panel : `sep:${t.widthPx}`)),
-    ["leftNav", "sep:24", "main", "sep:40", "rightRail"],
+    tracks.map((t) =>
+      t.type === "panel"
+        ? t.panel
+        : t.type === "pad"
+          ? `pad:${t.side}`
+          : `sep:${t.widthPx}`,
+    ),
+    ["pad:left", "leftNav", "sep:24", "main", "sep:40", "rightRail", "pad:right"],
   );
 });
 
@@ -567,8 +877,10 @@ check("moveLayoutSeparator relocates after another panel", () => {
     separators: cfg.separators,
   });
   assert.deepEqual(
-    tracks.map((t) => (t.type === "panel" ? t.panel : "sep")),
-    ["leftNav", "main", "sep", "rightRail"],
+    tracks.map((t) =>
+      t.type === "panel" ? t.panel : t.type === "pad" ? `pad:${t.side}` : "sep",
+    ),
+    ["pad:left", "leftNav", "main", "sep", "rightRail", "pad:right"],
   );
 });
 
@@ -599,6 +911,261 @@ check("resizePanelInBudget left edge steals from left neighbors", () => {
     "left",
   );
   assert.ok(next.leftNavPx < 200 || next.feedWidthPx <= 800);
+  assert.equal(next.pagePadLeftPx, next.pagePadRightPx);
+});
+
+check("resizePanelInBudget left edge trades only with left columns", () => {
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 200,
+      rightRailPx: 300,
+      feedWidthPx: 600,
+      pagePadLeftPx: 100,
+      pagePadRightPx: 100,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "main",
+    650,
+    1600,
+    "left",
+  );
+  assert.equal(next.feedWidthPx, 650);
+  assert.equal(next.leftNavPx, 150);
+  assert.equal(next.rightRailPx, 300);
+  assert.equal(next.pagePadLeftPx, next.pagePadRightPx);
+});
+
+check("resizePanelInBudget left edge cannot steal from locked left neighbors", () => {
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 200,
+      rightRailPx: 300,
+      feedWidthPx: 600,
+      pagePadLeftPx: 100,
+      pagePadRightPx: 100,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "main",
+    650,
+    1600,
+    "left",
+    0,
+    widthLockSet({ leftNav: true }),
+  );
+  // Left nav locked and pads are not stolen on left-edge — growth is refused.
+  assert.equal(next.leftNavPx, 200);
+  assert.ok(next.feedWidthPx <= 600);
+  assert.equal(next.pagePadLeftPx, next.pagePadRightPx);
+});
+
+check("resizePadInBudget mirrors both pads and shrinks the near side first", () => {
+  const next = resizePadInBudget(
+    {
+      leftNavPx: 200,
+      rightRailPx: 300,
+      feedWidthPx: 600,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "left",
+    80,
+    1200,
+  );
+  assert.equal(next.pagePadLeftPx, 80);
+  assert.equal(next.pagePadRightPx, 80);
+  // Growing both pads on a tight viewport steals from the left first.
+  assert.ok(next.leftNavPx < 200);
+  assert.equal(next.rightRailPx, 300);
+});
+
+check("resizePanelInBudget left edge pins the right edge (trade only left)", () => {
+  const base = {
+    leftNavPx: 220,
+    rightRailPx: 280,
+    feedWidthPx: 520,
+    pagePadLeftPx: 40,
+    pagePadRightPx: 40,
+    columnGapPx: 12,
+  };
+  const next = resizePanelInBudget(
+    base,
+    ["leftNav", "main", "rightRail"],
+    "main",
+    620,
+    1600,
+    "left",
+  );
+  assert.equal(next.feedWidthPx, 620);
+  assert.equal(next.rightRailPx, 280);
+  assert.equal(next.leftNavPx, 120);
+  assert.equal(next.pagePadLeftPx, 40);
+  assert.equal(next.pagePadRightPx, 40);
+});
+
+check("width locks skip locked neighbors during right-edge grow", () => {
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 200,
+      rightRailPx: 320,
+      feedWidthPx: 700,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "main",
+    900,
+    1200,
+    "right",
+    0,
+    widthLockSet({ rightRail: true, "pad:right": true }),
+  );
+  assert.equal(next.rightRailPx, 320);
+  assert.equal(next.pagePadRightPx, 24);
+  assert.ok(next.feedWidthPx < 900);
+});
+
+check("width locks prevent resizing a locked panel", () => {
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 200,
+      rightRailPx: 300,
+      feedWidthPx: 600,
+      pagePadLeftPx: 24,
+      pagePadRightPx: 24,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "leftNav",
+    280,
+    1600,
+    "right",
+    0,
+    widthLockSet({ leftNav: true }),
+  );
+  assert.equal(next.leftNavPx, 200);
+});
+
+check("locked pad is not stolen by fitLayoutWidths", () => {
+  const next = fitLayoutWidths(
+    {
+      leftNavPx: 400,
+      rightRailPx: 400,
+      feedWidthPx: 900,
+      pagePadLeftPx: 80,
+      pagePadRightPx: 120,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    1000,
+    0,
+    widthLockSet({ "pad:right": true }),
+  );
+  assert.equal(next.pagePadRightPx, 120);
+});
+
+check("resizePanelInBudget overflow preserves unequal pads under budget", () => {
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 200,
+      rightRailPx: 280,
+      feedWidthPx: 600,
+      pagePadLeftPx: 40,
+      pagePadRightPx: 120,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "main",
+    700,
+    1920,
+    "right",
+  );
+  assert.equal(next.feedWidthPx, 700);
+  assert.equal(next.pagePadLeftPx, 40);
+  assert.equal(next.pagePadRightPx, 120);
+  assert.equal(next.leftNavPx, 200);
+  assert.equal(next.rightRailPx, 280);
+});
+
+check("resizePanelInBudget right edge pin keeps left pad when shrinking", () => {
+  const base = {
+    leftNavPx: 220,
+    rightRailPx: 280,
+    feedWidthPx: 700,
+    pagePadLeftPx: 60,
+    pagePadRightPx: 90,
+    columnGapPx: 12,
+  };
+  const next = resizePanelInBudget(
+    base,
+    ["leftNav", "main", "rightRail"],
+    "main",
+    600,
+    1920,
+    "right",
+  );
+  assert.equal(next.feedWidthPx, 600);
+  assert.equal(next.pagePadLeftPx, 60);
+  assert.equal(next.pagePadRightPx, 90);
+  assert.equal(next.leftNavPx, 220);
+});
+
+check("resizePanelInBudget left edge pin keeps right pad and rightRail", () => {
+  const next = resizePanelInBudget(
+    {
+      leftNavPx: 220,
+      rightRailPx: 280,
+      feedWidthPx: 520,
+      pagePadLeftPx: 40,
+      pagePadRightPx: 80,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    "main",
+    620,
+    1600,
+    "left",
+  );
+  assert.equal(next.feedWidthPx, 620);
+  assert.equal(next.rightRailPx, 280);
+  assert.equal(next.leftNavPx, 120);
+  assert.equal(next.pagePadLeftPx, 40);
+  assert.equal(next.pagePadRightPx, 80);
+});
+
+check("centerPadsInViewport equalizes leftover into pads", () => {
+  const centered = centerPadsInViewport(
+    {
+      leftNavPx: 200,
+      rightRailPx: 280,
+      feedWidthPx: 700,
+      pagePadLeftPx: 40,
+      pagePadRightPx: 120,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    1920,
+  );
+  assert.equal(centered.pagePadLeftPx, centered.pagePadRightPx);
+  assert.ok(centered.pagePadLeftPx > 120);
+  const overflow = fitOverflowOnly(
+    {
+      leftNavPx: 200,
+      rightRailPx: 280,
+      feedWidthPx: 700,
+      pagePadLeftPx: 40,
+      pagePadRightPx: 120,
+      columnGapPx: 12,
+    },
+    ["leftNav", "main", "rightRail"],
+    1920,
+  );
+  assert.equal(overflow.pagePadLeftPx, 40);
+  assert.equal(overflow.pagePadRightPx, 120);
 });
 
 check("CSS gutter theme + zoom + font tokens", () => {
