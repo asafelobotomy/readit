@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   addLayoutSeparator,
-  applyLayoutPreset,
+  applyLayoutPresetToSettings,
   getEditSelection,
   onReadit,
 } from "@readit/features";
@@ -25,6 +25,7 @@ import {
   MAX_LAYOUT_SEPARATORS,
   mirrorStackedWidths,
   normalizeColumnOrder,
+  shellZoomFactor,
   widthLockSet,
 } from "@readit/schema";
 
@@ -63,6 +64,83 @@ type Props = {
     mutator: (s: ReaditSettings) => ReaditSettings,
   ) => Promise<void>;
 };
+
+/** Center columns: align center and split the leftover viewport into equal pads. */
+function centerColumns(s: ReaditSettings): ReaditSettings {
+  const placements = s.layoutSlots.placements;
+  const order = normalizeColumnOrder(s.layoutSlots.columnOrder);
+  const visible = order.filter((id) => placements[id] !== "hidden");
+  const extras = (s.layoutSlots.separators || []).reduce(
+    (sum, sep) => sum + clampSeparatorWidth(sep.widthPx),
+    0,
+  );
+  const extraCount = Math.min(
+    MAX_LAYOUT_SEPARATORS,
+    (s.layoutSlots.separators || []).length,
+  );
+  const w = s.layoutSlots.widths;
+  const viewport =
+    (document.documentElement.clientWidth || window.innerWidth || 0) /
+    shellZoomFactor(s.layoutSlots);
+  const fitted = mirrorStackedWidths(
+    centerPadsInViewport(
+      mirrorStackedWidths(
+        {
+          leftNavPx: clampPanelWidth("leftNav", w.leftNavPx),
+          rightRailPx: clampPanelWidth("rightRail", w.rightRailPx),
+          feedWidthPx: clampPanelWidth("main", s.knobs.tokens.feedWidthPx),
+          pagePadLeftPx: clampPagePad(w.pagePadLeftPx ?? 24),
+          pagePadRightPx: clampPagePad(w.pagePadRightPx ?? 24),
+          columnGapPx: clampColumnGap(w.columnGapPx ?? 12),
+        },
+        placements,
+      ),
+      budgetColumnOrder(visible, placements),
+      viewport,
+      extras,
+      widthLockSet(s.layoutSlots.widthLocks),
+      extraCount,
+    ),
+    placements,
+  );
+  return {
+    ...s,
+    knobs: {
+      ...s.knobs,
+      tokens: { ...s.knobs.tokens, feedWidthPx: fitted.feedWidthPx },
+    },
+    layoutSlots: {
+      ...s.layoutSlots,
+      align: "center",
+      widths: {
+        ...s.layoutSlots.widths,
+        leftNavPx: fitted.leftNavPx,
+        rightRailPx: isStackedPair(placements)
+          ? fitted.leftNavPx
+          : fitted.rightRailPx,
+        pagePadLeftPx: fitted.pagePadLeftPx,
+        pagePadRightPx: fitted.pagePadRightPx,
+        columnGapPx: fitted.columnGapPx,
+      },
+    },
+  };
+}
+
+/**
+ * Left/right alignment: the grid puts leftover width on the far side, so the
+ * near pad returns to its default gutter (unless locked) — otherwise a pad
+ * enlarged by an earlier Center would keep the columns off the edge.
+ */
+function alignColumns(
+  s: ReaditSettings,
+  align: "left" | "right",
+): ReaditSettings {
+  const locks = widthLockSet(s.layoutSlots.widthLocks);
+  const widths = { ...s.layoutSlots.widths };
+  if (align === "left" && !locks.has("pad:left")) widths.pagePadLeftPx = 24;
+  if (align === "right" && !locks.has("pad:right")) widths.pagePadRightPx = 24;
+  return { ...s, layoutSlots: { ...s.layoutSlots, align, widths } };
+}
 
 export function EditToolbox({ settings, commit }: Props) {
   const [selected, setSelected] = useState<string[]>(() => getEditSelection());
@@ -105,93 +183,40 @@ export function EditToolbox({ settings, commit }: Props) {
             data-preset={p.id}
             data-active={cfg.preset === p.id ? "true" : "false"}
             onClick={() =>
-              void commit(`Layout ${p.label}`, (s) => ({
-                ...s,
-                flags: { ...s.flags, layoutSlots: true },
-                layoutSlots: applyLayoutPreset(s.layoutSlots, p.id),
-              }))
+              void commit(`Layout ${p.label}`, (s) =>
+                applyLayoutPresetToSettings(s, p.id),
+              )
             }
           >
             {p.label}
           </button>
         ))}
-        <button
-          type="button"
-          class="readit-edit-chip"
-          data-action="center"
-          title="Equalize left/right pads to center columns in the viewport"
-          onClick={() =>
-            void commit("Center columns", (s) => {
-              const placements = s.layoutSlots.placements;
-              const order = normalizeColumnOrder(s.layoutSlots.columnOrder);
-              const visible = order.filter((id) => placements[id] !== "hidden");
-              const extras = (s.layoutSlots.separators || []).reduce(
-                (sum, sep) => sum + clampSeparatorWidth(sep.widthPx),
-                0,
-              );
-              const extraCount = Math.min(
-                MAX_LAYOUT_SEPARATORS,
-                (s.layoutSlots.separators || []).length,
-              );
-              const w = s.layoutSlots.widths;
-              const viewport =
-                typeof window !== "undefined"
-                  ? document.documentElement.clientWidth ||
-                    window.innerWidth ||
-                    0
-                  : 0;
-              const fitted = mirrorStackedWidths(
-                centerPadsInViewport(
-                  mirrorStackedWidths(
-                    {
-                      leftNavPx: clampPanelWidth("leftNav", w.leftNavPx),
-                      rightRailPx: clampPanelWidth("rightRail", w.rightRailPx),
-                      feedWidthPx: clampPanelWidth(
-                        "main",
-                        s.knobs.tokens.feedWidthPx,
-                      ),
-                      pagePadLeftPx: clampPagePad(w.pagePadLeftPx ?? 24),
-                      pagePadRightPx: clampPagePad(w.pagePadRightPx ?? 24),
-                      columnGapPx: clampColumnGap(w.columnGapPx ?? 12),
-                    },
-                    placements,
-                  ),
-                  budgetColumnOrder(visible, placements),
-                  viewport,
-                  extras,
-                  widthLockSet(s.layoutSlots.widthLocks),
-                  extraCount,
-                ),
-                placements,
-              );
-              return {
-                ...s,
-                knobs: {
-                  ...s.knobs,
-                  tokens: {
-                    ...s.knobs.tokens,
-                    feedWidthPx: fitted.feedWidthPx,
-                  },
-                },
-                layoutSlots: {
-                  ...s.layoutSlots,
-                  widths: {
-                    ...s.layoutSlots.widths,
-                    leftNavPx: fitted.leftNavPx,
-                    rightRailPx: isStackedPair(placements)
-                      ? fitted.leftNavPx
-                      : fitted.rightRailPx,
-                    pagePadLeftPx: fitted.pagePadLeftPx,
-                    pagePadRightPx: fitted.pagePadRightPx,
-                    columnGapPx: fitted.columnGapPx,
-                  },
-                },
-              };
-            })
-          }
-        >
-          Center
-        </button>
+      </div>
+
+      <div class="readit-edit-toolbox-group" title="Column alignment">
+        {(
+          [
+            ["left", "Left", "Align columns to the left edge"],
+            ["center", "Center", "Center columns (equalizes left/right pads)"],
+            ["right", "Right", "Align columns to the right edge"],
+          ] as const
+        ).map(([align, label, title]) => (
+          <button
+            type="button"
+            key={align}
+            class="readit-edit-chip"
+            data-align={align}
+            data-active={(cfg.align ?? "center") === align ? "true" : "false"}
+            title={title}
+            onClick={() =>
+              void commit(`Align ${label.toLowerCase()}`, (s) =>
+                align === "center" ? centerColumns(s) : alignColumns(s, align),
+              )
+            }
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div class="readit-edit-toolbox-group" title="Header placement">

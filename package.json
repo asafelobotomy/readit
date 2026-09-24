@@ -25,7 +25,8 @@
     "smoke:edit": "npm run build && node scripts/smoke-edit.mjs",
     "smoke:edit:brave": "npm run build && READIT_CDP=http://127.0.0.1:9222 node scripts/smoke-edit.mjs",
     "smoke:nav": "npm run build && node scripts/smoke-nav.mjs",
-    "smoke:nav:brave": "READIT_CDP=http://127.0.0.1:9222 node scripts/smoke-nav.mjs"
+    "smoke:nav:brave": "READIT_CDP=http://127.0.0.1:9222 node scripts/smoke-nav.mjs",
+    "smoke:visual": "node --experimental-strip-types --import ./scripts/register-ts-resolve.mjs scripts/smoke-visual.mts"
   },
   "engines": {
     "node": ">=20"

@@ -7,6 +7,7 @@ import { buildStylesheet, LAYOUT_RECIPE_MARKER } from "../packages/css-engine/sr
 import { isEditableTarget } from "../packages/features/src/reader-creator.ts";
 import {
   applyLayoutPreset,
+  applyLayoutPresetToSettings,
   addLayoutSeparator,
   moveLayoutSeparator,
   removeLayoutSeparator,
@@ -23,6 +24,8 @@ import {
 } from "../packages/features/src/nav-rail.ts";
 import {
   applyProfile,
+  fillPadsForAlign,
+  shellZoomFactor,
   BUILTIN_PROFILES,
   buildLayoutTracks,
   clampColumnGap,
@@ -106,8 +109,12 @@ check("mirrorStackedWidths + budgetColumnOrder exclude the mirrored panel", () =
     columnGapPx: 12,
   };
   const mirrored = mirrorStackedWidths(widths, placements);
-  assert.equal(mirrored.rightRailPx, 220);
-  assert.equal(mirrored.leftNavPx, 220);
+  // Shared stack column can't go below the rail's readable floor (240).
+  assert.equal(mirrored.rightRailPx, 240);
+  assert.equal(mirrored.leftNavPx, 240);
+  const wide = mirrorStackedWidths({ ...widths, leftNavPx: 300 }, placements);
+  assert.equal(wide.leftNavPx, 300);
+  assert.equal(wide.rightRailPx, 300);
 
   const order = budgetColumnOrder(["leftNav", "main", "rightRail"], placements);
   assert.deepEqual(order, ["leftNav", "main"]);
@@ -299,12 +306,12 @@ check("clampPanelWidth limits", () => {
   assert.equal(clampPanelWidth("leftNav", 500), 400);
   assert.equal(clampPanelWidth("main", 200), 480);
   assert.equal(clampPanelWidth("main", 2000), 1600);
-  // Nav and rail share the same band.
-  assert.equal(clampPanelWidth("rightRail", 20), 64);
-  assert.equal(clampPanelWidth("rightRail", 100), 100);
+  // Rail has no icon mode, so it keeps a readable floor above the nav's.
+  assert.equal(clampPanelWidth("rightRail", 20), 240);
+  assert.equal(clampPanelWidth("rightRail", 100), 240);
   assert.equal(clampPanelWidth("rightRail", 300), 300);
   assert.equal(clampPanelWidth("rightRail", 500), 400);
-  assert.equal(LAYOUT_WIDTH_LIMITS.leftNav.min, LAYOUT_WIDTH_LIMITS.rightRail.min);
+  assert.equal(LAYOUT_WIDTH_LIMITS.rightRail.min, 240);
   assert.equal(LAYOUT_WIDTH_LIMITS.leftNav.max, LAYOUT_WIDTH_LIMITS.rightRail.max);
 });
 
@@ -691,19 +698,19 @@ check("CSS compact nav community subname + section icons", () => {
   assert.match(css, /mask-image:\s*url\("data:image\/svg\+xml/);
 });
 
-check("CSS compact nav/rail containment", () => {
+check("CSS compact nav containment; legacy thin rail clamps to its floor", () => {
   const settings = createDefaultSettings();
   settings.flags.layoutSlots = true;
   settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "classic");
   settings.layoutSlots.widths = {
     ...settings.layoutSlots.widths,
     leftNavPx: 64,
-    rightRailPx: 160, // legacy thin — clamps to shared side-column min
+    rightRailPx: 160, // legacy thin — clamps to the rail's 240 floor
   };
   const css = buildStylesheet(settings);
   assert.match(css, /readit-nav-compact/);
-  assert.match(css, /readit-rail-compact/);
-  assert.match(css, /--readit-right-rail-width:\s*160px/);
+  assert.doesNotMatch(css, /readit-rail-compact/);
+  assert.match(css, /--readit-right-rail-width:\s*240px/);
   assert.match(css, /\[data-readit-slot="rightRail"\] \*/);
   assert.match(css, /word-break:\s*normal/);
   assert.match(css, /\.readit-user-tag/);
@@ -1251,6 +1258,132 @@ check("import preview dry-run", () => {
   assert.equal(preview.ok, true);
   assert.equal(preview.kind, "bundle");
   assert.equal(preview.schemaVersion, SETTINGS_VERSION);
+});
+
+check("overflow fit keeps side panels readable before crushing one", () => {
+  const widths = {
+    leftNavPx: 272,
+    rightRailPx: 316,
+    feedWidthPx: 980,
+    pagePadLeftPx: 24,
+    pagePadRightPx: 24,
+    columnGapPx: 12,
+  };
+  const order = ["leftNav", "main", "rightRail"] as const;
+  for (const vw of [1366, 1024]) {
+    const fit = fitLayoutWidths(widths, order, vw, 0, undefined, "overflow");
+    assert.ok(fit.rightRailPx >= 240, `${vw}: rail ${fit.rightRailPx}`);
+    assert.ok(fit.feedWidthPx >= 480, `${vw}: feed ${fit.feedWidthPx}`);
+    assert.ok(fit.leftNavPx >= 180, `${vw}: nav ${fit.leftNavPx}`);
+    const used =
+      fit.leftNavPx + fit.feedWidthPx + fit.rightRailPx +
+      fit.pagePadLeftPx + fit.pagePadRightPx + 4 * fit.columnGapPx;
+    assert.ok(used <= vw, `${vw}: fits (${used})`);
+  }
+  // Pads that must shrink shrink evenly, so centered layouts stay centered.
+  const tight = fitLayoutWidths({ ...widths, pagePadLeftPx: 48, pagePadRightPx: 48 }, order, 1366, 0, undefined, "overflow");
+  assert.ok(Math.abs(tight.pagePadLeftPx - tight.pagePadRightPx) <= 1, `pads ${tight.pagePadLeftPx}/${tight.pagePadRightPx}`);
+  // A deliberately narrow nav (icon mode) is never widened by the floor.
+  const narrow = fitLayoutWidths({ ...widths, leftNavPx: 64 }, order, 1366, 0, undefined, "overflow");
+  assert.equal(narrow.leftNavPx, 64);
+});
+
+check("zoom: shell factor and zoomed nav stays inside its track", () => {
+  assert.equal(shellZoomFactor({ zoomAll: 1.5 }), 1.5);
+  assert.equal(shellZoomFactor({ zoomAll: 1.5, zoomByPanel: { main: 1.2 } }), 1);
+  assert.equal(shellZoomFactor({}), 1);
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  settings.layoutSlots = {
+    ...applyLayoutPreset(settings.layoutSlots, "classic"),
+    zoomByPanel: { leftNav: 1.5 },
+  };
+  const css = buildStylesheet(settings);
+  assert.match(css, /zoom: 1\.5;\n  width: calc\(var\(--readit-left-nav-width\) \/ 1\.5\) !important;/);
+});
+
+check("fillPadsForAlign turns leftover into pads on the aligned side", () => {
+  const w = {
+    leftNavPx: 272,
+    rightRailPx: 316,
+    feedWidthPx: 760,
+    pagePadLeftPx: 24,
+    pagePadRightPx: 24,
+    columnGapPx: 12,
+  };
+  const order = ["leftNav", "main", "rightRail"] as const;
+  // used = 1348 panels + 48 pads + 4 gaps * 12 = 1444 → leftover 476 at 1920
+  const c = fillPadsForAlign(w, order, 1920, "center");
+  assert.equal(c.pagePadLeftPx, 24 + 238);
+  assert.equal(c.pagePadRightPx, 24 + 238);
+  const l = fillPadsForAlign(w, order, 1920, "left");
+  assert.deepEqual([l.pagePadLeftPx, l.pagePadRightPx], [24, 500]);
+  const r = fillPadsForAlign(w, order, 1920, "right");
+  assert.deepEqual([r.pagePadLeftPx, r.pagePadRightPx], [500, 24]);
+  // A locked pad that would need to grow leaves the layout as drawn.
+  assert.equal(fillPadsForAlign(w, order, 1920, "center", 0, new Set(["pad:left"])), w);
+  // …but only the pad the alignment actually grows matters.
+  const lr = fillPadsForAlign(w, order, 1920, "left", 0, new Set(["pad:left"]));
+  assert.deepEqual([lr.pagePadLeftPx, lr.pagePadRightPx], [24, 500]);
+  assert.equal(fillPadsForAlign(w, order, 1200, "center"), w);
+});
+
+check("column alignment drives grid justify-content (centered by default)", () => {
+  const cases = [
+    [undefined, "center"],
+    ["center", "center"],
+    ["left", "start"],
+    ["right", "end"],
+  ] as const;
+  for (const preset of ["classic", "dualLeft"] as const) {
+    for (const [align, justify] of cases) {
+      const settings = createDefaultSettings();
+      settings.flags.layoutSlots = true;
+      settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, preset);
+      if (align) settings.layoutSlots.align = align;
+      const css = buildStylesheet(settings);
+      assert.match(
+        css,
+        new RegExp(`\\[data-readit-layout-shell\\] \\{[^}]*justify-content: ${justify} !important`),
+        `${preset}/${align ?? "default"}`,
+      );
+    }
+  }
+  assert.equal(createDefaultSettings().layoutSlots.align, "center");
+  const single = createDefaultSettings();
+  single.flags.layoutSlots = true;
+  single.layoutSlots = { ...applyLayoutPreset(single.layoutSlots, "singleColumn"), align: "left" };
+  assert.match(buildStylesheet(single), /margin-left: var\(--readit-page-pad-left, 24px\) !important;\n  margin-right: auto/);
+});
+
+check("stacked nav is not sticky (rail sits below it)", () => {
+  for (const preset of ["dualLeft", "dualRight"] as const) {
+    const settings = createDefaultSettings();
+    settings.flags.layoutSlots = true;
+    settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, preset);
+    const css = buildStylesheet(settings);
+    const rule = css.match(
+      /\[data-readit-slot="leftNav"\] \{\n  grid-row: 1 !important;[^}]*\}/,
+    )?.[0];
+    assert.ok(rule, `${preset}: stacked leftNav rule present`);
+    assert.match(rule!, /position: relative !important/);
+    assert.match(rule!, /top: auto !important/);
+  }
+});
+
+check("leaving single column via any preset shows sidebars again", () => {
+  // Focus Reader = single column + hide.sidebars. Picking Classic (e.g. from
+  // the edit toolbox) must drop the CSS hide, or the rail keeps an empty track.
+  const focus = applyProfile(createDefaultSettings(), "focus-reader");
+  assert.equal(focus.knobs.hide.sidebars, true);
+  const classic = applyLayoutPresetToSettings(focus, "classic");
+  assert.equal(classic.layoutSlots.preset, "classic");
+  assert.equal(classic.knobs.hide.sidebars, false);
+  const single = applyLayoutPresetToSettings(classic, "singleColumn");
+  assert.equal(single.knobs.hide.sidebars, true);
+  const dual = applyLayoutPresetToSettings(createDefaultSettings(), "dualLeft");
+  assert.equal(dual.knobs.hide.sidebars, false);
+  assert.equal(dual.flags.layoutSlots, true);
 });
 
 if (failed > 0) {

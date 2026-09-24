@@ -681,7 +681,13 @@ try {
         navBottomLeRailTop: n.bottom <= r.top + 1,
         sameLeft: Math.abs(n.left - r.left) <= 1,
         sameWidth: Math.abs(n.width - r.width) <= 1,
-        mainSpansStack: m.top <= n.top + 1 && m.bottom >= r.bottom - 1,
+        // rightRail is position:absolute below leftNav (out of grid flow), so
+        // main need not reach the rail's bottom. Require main to start with
+        // the stack and the rail to stay reachable (not cut off by the page).
+        mainTopAligned: Math.abs(m.top - n.top) <= 1,
+        railReachable:
+          r.bottom + window.scrollY <=
+          (document.scrollingElement?.scrollHeight || 0) + 1,
         noOverlap: m.right <= n.left + 1 || n.right <= m.left + 1,
         nav: { top: Math.round(n.top), bottom: Math.round(n.bottom), left: Math.round(n.left), width: Math.round(n.width) },
         rail: { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), width: Math.round(r.width) },
@@ -695,7 +701,8 @@ try {
         geo.navBottomLeRailTop &&
         geo.sameLeft &&
         geo.sameWidth &&
-        geo.mainSpansStack &&
+        geo.mainTopAligned &&
+        geo.railReachable &&
         geo.noOverlap
         ? "pass"
         : "fail",

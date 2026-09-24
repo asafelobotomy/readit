@@ -6,6 +6,7 @@ import type {
   LayoutSlotsConfig,
   MediaMode,
   ReaditSettings,
+  ThemeMode,
 } from "@readit/schema";
 import {
   isSafeElementRuleSelector,
@@ -16,6 +17,7 @@ import {
   clampPanelWidth,
   clampSeparatorWidth,
   clampZoom,
+  shellZoomFactor,
   buildLayoutTracks,
   fitLayoutWidths,
   isStackedPair,
@@ -838,6 +840,11 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] article {
   overflow-x: clip !important;
   box-sizing: border-box !important;
 }
+/* Post pages bleed the card with -mx-xs; capped at 100% that only shifts it
+   left, and main's overflow clip then cuts off its left edge. */
+html.readit-active.readit-layout-slots [data-readit-slot="main"] shreddit-post {
+  margin-inline: 0 !important;
+}
 html.readit-active.readit-layout-slots [data-readit-slot="main"] h1,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] h2,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] h3,
@@ -931,23 +938,6 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] label {
   white-space: nowrap !important;
   max-width: 100% !important;
   min-width: 0 !important;
-}
-html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] {
-  padding-inline: 6px !important;
-  scrollbar-gutter: auto !important;
-}
-html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] * {
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-}
-/* Multi-line titles: clamp instead of letter-stack or hard clip */
-html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] h3,
-html.readit-active.readit-layout-slots.readit-rail-compact [data-readit-slot="rightRail"] a[href*="/comments/"] {
-  white-space: normal !important;
-  display: -webkit-box !important;
-  -webkit-box-orient: vertical !important;
-  -webkit-line-clamp: 2 !important;
-  overflow: hidden !important;
 }`;
     default: {
       const _exhaustive: never = panel;
@@ -968,6 +958,11 @@ function layoutSlotRecipes(
   const padL = clampPagePad(widths.pagePadLeftPx ?? 24);
   const padR = clampPagePad(widths.pagePadRightPx ?? 24);
   const gap = clampColumnGap(widths.columnGapPx ?? 12);
+  // Leftover viewport (after fitting) goes where the edit-toolbar
+  // alignment puts it; columns are centered by default.
+  const align = config.align ?? "center";
+  const justify =
+    align === "left" ? "start" : align === "right" ? "end" : "center";
 
   const parts: string[] = [
     LAYOUT_RECIPE_MARKER,
@@ -1288,7 +1283,8 @@ html.readit-layout-edit.readit-col-dragging * {
 
   if (isStackedPair(placements)) {
     // dualLeft / dualRight — leftNav + rightRail stacked in one CSS Grid
-    // column (real grid-row placement, not flex-wrap), main spans both rows.
+    // column: leftNav in grid row 1 beside main, rightRail absolutely
+    // positioned below leftNav (see the rightRail rule for why).
     // Side must follow placements (custom DnD can be stackedRight without
     // preset === "dualRight").
     const isDualRight = placements.leftNav === "stackedRight";
@@ -1309,7 +1305,7 @@ html.readit-layout-edit.readit-col-dragging * {
   grid-auto-rows: auto !important;
   column-gap: var(--readit-column-gap, 12px) !important;
   row-gap: 0 !important;
-  justify-content: start !important;
+  justify-content: ${justify} !important;
   align-items: start !important;
   box-sizing: border-box !important;
   width: 100% !important;
@@ -1348,6 +1344,11 @@ html.readit-active.readit-layout-slots.readit-layout-pending #left-sidebar-conta
     parts.push(panelWidthRules("main", mainCol));
     parts.push(`html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] {
   grid-row: 1 !important;
+  /* Reddit makes the nav sticky. Stacked, rightRail is anchored just below
+     the nav's in-flow box, so a sticky nav slides down over the rail once
+     infinite scroll makes main taller than the nav. */
+  position: relative !important;
+  top: auto !important;
   height: auto !important;
   max-height: none !important;
   /* Keep the shared stack width even when nav content wants to grow. */
@@ -1398,11 +1399,30 @@ html.readit-active.readit-layout-slots #left-sidebar-container,
 html.readit-active.readit-layout-slots #right-sidebar-container {
   display: none !important;
 }
+/* Reddit's own grids keep a nav track on the shell and a rail track inside
+   the subgrid even with both panels hidden, so the feed lands in a side
+   track (108px wide at 1024px viewports). Collapse both to one track. */
+html.readit-active.readit-layout-slots [data-readit-layout-shell] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+html.readit-active.readit-layout-slots [data-readit-layout-shell] > #subgrid-container {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin-inline: 0 !important;
+}
+html.readit-active.readit-layout-slots [data-readit-layout-shell] .main-container,
+html.readit-active.readit-layout-slots #subgrid-container > div:has(> #main-content) {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+}
 html.readit-active.readit-layout-slots #main-content,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] {
   max-width: var(--readit-feed-width) !important;
   width: 100% !important;
-  margin-inline: auto !important;
+  margin-left: ${align === "left" ? "var(--readit-page-pad-left, 24px)" : "auto"} !important;
+  margin-right: ${align === "right" ? "var(--readit-page-pad-right, 24px)" : "auto"} !important;
 }`);
   } else {
   // classic / navRight / custom (and dualLeft/dualRight if their placements
@@ -1442,7 +1462,7 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] {
   grid-auto-rows: auto !important;
   column-gap: var(--readit-column-gap, 12px) !important;
   row-gap: 0 !important;
-  justify-content: start !important;
+  justify-content: ${justify} !important;
   align-items: start !important;
   box-sizing: border-box !important;
   width: 100% !important;
@@ -1528,8 +1548,17 @@ html.readit-active.readit-layout-slots.readit-layout-pending #left-sidebar-conta
         typeof panelZooms[panel] === "number" ? panelZooms[panel]! : zoomAll,
       );
       if (z === 1) continue;
+      // leftNav has a fixed px width (main/rail fill their track at 100%),
+      // which zoom would multiply past its track into the feed — divide it
+      // back so the zoomed box still matches the track.
+      const navWidth =
+        panel === "leftNav"
+          ? `
+  width: calc(var(--readit-left-nav-width) / ${z}) !important;
+  max-width: calc(var(--readit-left-nav-width) / ${z}) !important;`
+          : "";
       parts.push(`html.readit-active.readit-layout-slots [data-readit-slot="${panel}"] {
-  zoom: ${z};
+  zoom: ${z};${navWidth}
 }`);
     }
   }
@@ -1612,6 +1641,67 @@ html.readit-active.readit-layout-slots.readit-gutter-inset [data-readit-layout-s
   return parts.join("\n\n");
 }
 
+const REDDIT_THEME_CLASSES = ["theme-dark", "theme-light"] as const;
+type RedditThemeClass = (typeof REDDIT_THEME_CLASSES)[number];
+let forcedTheme: "light" | "dark" | null = null;
+/** Reddit's own theme class, captured before we override it (undefined = not captured). */
+let nativeTheme: RedditThemeClass | null | undefined;
+let themeObserver: MutationObserver | null = null;
+
+function enforceForcedTheme(): void {
+  if (!forcedTheme) return;
+  const root = document.documentElement;
+  const want: RedditThemeClass = `theme-${forcedTheme}`;
+  const drop: RedditThemeClass =
+    forcedTheme === "dark" ? "theme-light" : "theme-dark";
+  if (root.classList.contains(drop)) root.classList.remove(drop);
+  if (!root.classList.contains(want)) root.classList.add(want);
+}
+
+/**
+ * Respect tokens.themeMode by switching Reddit's own theme class on <html>
+ * (theme-dark / theme-light swap Reddit's whole palette). "system" leaves
+ * Reddit's own theme alone and restores it if we had overridden it.
+ */
+export function applyThemeMode(mode: ThemeMode, active: boolean): void {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const next = active && mode !== "system" ? mode : null;
+  if (next) {
+    if (nativeTheme === undefined) {
+      nativeTheme =
+        REDDIT_THEME_CLASSES.find((c) => root.classList.contains(c)) ?? null;
+    }
+    forcedTheme = next;
+    enforceForcedTheme();
+    if (!themeObserver) {
+      // Reddit re-applies its theme class (SPA navigation, its own theme
+      // menu). Remember what it wanted so "system" can restore it, then
+      // re-apply ours; our writes are idempotent so this cannot loop.
+      themeObserver = new MutationObserver(() => {
+        if (!forcedTheme) return;
+        const drop: RedditThemeClass =
+          forcedTheme === "dark" ? "theme-light" : "theme-dark";
+        if (root.classList.contains(drop)) nativeTheme = drop;
+        enforceForcedTheme();
+      });
+      themeObserver.observe(root, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    }
+    return;
+  }
+  forcedTheme = null;
+  themeObserver?.disconnect();
+  themeObserver = null;
+  if (nativeTheme !== undefined) {
+    root.classList.remove(...REDDIT_THEME_CLASSES);
+    if (nativeTheme) root.classList.add(nativeTheme);
+    nativeTheme = undefined;
+  }
+}
+
 export function applyStylesheet(settings: ReaditSettings): void {
   let el = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
   if (!el) {
@@ -1623,6 +1713,7 @@ export function applyStylesheet(settings: ReaditSettings): void {
 
   const root = document.documentElement;
   root.classList.toggle("readit-active", !settings.paused);
+  applyThemeMode(settings.knobs.tokens.themeMode, !settings.paused);
   root.classList.toggle(
     "readit-queue-density",
     !settings.paused && settings.knobs.queueDensity,
@@ -1682,7 +1773,7 @@ export function applyStylesheet(settings: ReaditSettings): void {
     root.style.removeProperty("--readit-page-pad-right");
     root.style.removeProperty("--readit-column-gap");
     root.style.removeProperty("--readit-grid-cols");
-    root.classList.remove("readit-nav-compact", "readit-rail-compact");
+    root.classList.remove("readit-nav-compact");
     return;
   }
 
@@ -1705,7 +1796,8 @@ export function applyStylesheet(settings: ReaditSettings): void {
       (settings.layoutSlots.separators || []).length,
     );
     const viewport =
-      document.documentElement.clientWidth || window.innerWidth || 0;
+      (document.documentElement.clientWidth || window.innerWidth || 0) /
+      shellZoomFactor(settings.layoutSlots);
     const fitted = mirrorStackedWidths(
       fitLayoutWidths(
         mirrorStackedWidths(
@@ -1780,7 +1872,7 @@ export function applyStylesheet(settings: ReaditSettings): void {
       root.dataset.readitChromeTop = "top";
     }
     root.dataset.readitChromeBottom = chrome.bottomChrome;
-    // Compact/rail-compact classes are owned by layout-slots after the shell +
+    // Compact classes are owned by layout-slots after the shell +
     // rail are stamped — setting them here (esp. from early.js) hides Reddit's
     // nav before #readit-nav-rail exists and malforms the page on load/SPA.
   } else {
@@ -1790,12 +1882,13 @@ export function applyStylesheet(settings: ReaditSettings): void {
     root.style.removeProperty("--readit-page-pad-right");
     root.style.removeProperty("--readit-column-gap");
     root.style.removeProperty("--readit-grid-cols");
-    root.classList.remove("readit-nav-compact", "readit-rail-compact");
+    root.classList.remove("readit-nav-compact");
   }
 }
 
 export function removeStylesheet(): void {
   document.getElementById(STYLE_ID)?.remove();
+  applyThemeMode("system", false);
   const root = document.documentElement;
   root.classList.remove(
     "readit-active",

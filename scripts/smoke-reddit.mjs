@@ -167,12 +167,16 @@ async function studioEval(page, fn, ...args) {
 }
 
 async function openStudio(page) {
-  await studioEval(page, () => {
+  await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
     if (!root) return;
     if (root.querySelector(".readit-drawer")) return;
     if (!root.querySelector(".readit-fab-menu")) {
       root.querySelector(".readit-fab")?.click();
+      // The menu renders asynchronously; wait for its actions to exist.
+      for (let i = 0; i < 20 && !root.querySelector(".readit-fab-action"); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
     }
     const settingsBtn = [...(root.querySelectorAll(".readit-fab-action") || [])].find(
       (b) => /^Settings$/i.test((b.textContent || "").trim()),
@@ -860,11 +864,9 @@ try {
 
   const widths = await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
-    const row = [...(root?.querySelectorAll(".readit-row") || [])].find((r) =>
-      r.textContent?.includes("Left nav"),
-    );
-    const input = row?.querySelector('input[type="range"]');
+    const input = root?.querySelector('input[type="range"][data-width="nav"]');
     if (!(input instanceof HTMLInputElement)) return { ok: false, reason: "no slider" };
+    if (input.disabled) return { ok: false, reason: "nav slider disabled (nav hidden)" };
     const before = getComputedStyle(document.documentElement)
       .getPropertyValue("--readit-left-nav-width")
       .trim();
@@ -891,23 +893,37 @@ try {
   });
   record("layout.widths", widths.ok ? "pass" : "fail", JSON.stringify(widths));
 
-  // Edit layout mode
+  // Edit layout mode — entered from the FAB action stack ("Edit Mode")
   const editMode = await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
-    const btn = [...(root?.querySelectorAll("button") || [])].find((b) =>
-      /Edit layout/i.test(b.textContent || ""),
+    if (!root) return { ok: false, reason: "no shadow" };
+    if (!root.querySelector(".readit-fab-menu")) {
+      root.querySelector(".readit-fab")?.click();
+      for (let i = 0; i < 20 && !root.querySelector(".readit-fab-action"); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
+    const btn = [...root.querySelectorAll(".readit-fab-action")].find(
+      (b) => (b.textContent || "").trim() === "Edit Mode",
     );
-    if (!btn) return { ok: false, reason: "no edit button" };
+    if (!btn) return { ok: false, reason: "no Edit Mode action" };
     btn.click();
     await new Promise((r) => setTimeout(r, 700));
-    const banner = [...(root?.querySelectorAll(".readit-picker-banner") || [])].some(
+    const banner = [...(root.querySelectorAll(".readit-picker-banner") || [])].some(
       (b) => /Layout edit/i.test(b.textContent || ""),
     );
     const cls = document.documentElement.classList.contains("readit-layout-edit");
     return { armed: banner || cls, banner, cls };
   });
-  await page.keyboard.press("Escape");
-  await sleep(800);
+  // First Escape may only close the FAB menu; the second exits edit mode.
+  for (let i = 0; i < 2; i++) {
+    const still = await studioEval(page, () =>
+      document.documentElement.classList.contains("readit-layout-edit"),
+    );
+    if (!still) break;
+    await page.keyboard.press("Escape");
+    await sleep(800);
+  }
   const editOff = await studioEval(page, () => ({
     banner: !!document
       .querySelector("readit-studio")
@@ -1718,7 +1734,16 @@ try {
 
   // Absolute timestamps on a post
   const clickedPost = await page.evaluate(() => {
-    const a = document.querySelector('a[href*="/comments/"]');
+    // Skip pinned mod posts: they often have no comments, so comment-level
+    // checks (quote buttons) would have nothing to find.
+    const post = [...document.querySelectorAll("shreddit-post")].find(
+      (p) =>
+        !p.hasAttribute("stickied") &&
+        Number(p.getAttribute("comment-count") || 0) >= 5,
+    );
+    const a =
+      post?.querySelector('a[href*="/comments/"]') ||
+      document.querySelector('a[href*="/comments/"]');
     if (!(a instanceof HTMLAnchorElement)) return false;
     a.click();
     return true;

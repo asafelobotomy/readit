@@ -20,7 +20,9 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  z-index: 1;
+  /* Above the edit toolbox: the open FAB menu extends over the toolbox's
+     right end on narrower viewports and must not be hidden behind it. */
+  z-index: 2147483646;
 }
 
 .readit-fab-menu {

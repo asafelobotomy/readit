@@ -3,6 +3,7 @@ import type {
   LayoutColumnPanel,
   LayoutSeparator,
   LayoutSlotId,
+  LayoutPreset,
   LayoutSlotsConfig,
   LayoutZone,
   ReaditSettings,
@@ -21,6 +22,8 @@ import {
   isStackedPair,
   MAX_LAYOUT_SEPARATORS,
   mirrorStackedWidths,
+  fillPadsForAlign,
+  shellZoomFactor,
   movePanelToIndex,
   insertPanelAtIndex,
   normalizeColumnOrder,
@@ -274,6 +277,34 @@ export function syncSidebarsHide(
   };
 }
 
+/**
+ * Apply a layout preset and keep the Simple “Hide sidebars” flag in step:
+ * single column hides them; leaving single column (or any preset while they
+ * are hidden) shows them again, otherwise the rail keeps an empty grid track.
+ */
+export function applyLayoutPresetToSettings(
+  settings: ReaditSettings,
+  preset: LayoutPreset,
+): ReaditSettings {
+  const next: ReaditSettings = {
+    ...settings,
+    flags: { ...settings.flags, layoutSlots: true },
+    layoutSlots: applyLayoutPreset(settings.layoutSlots, preset),
+  };
+  const sidebars =
+    preset === "singleColumn"
+      ? true
+      : settings.layoutSlots.preset === "singleColumn" ||
+          settings.knobs.hide.sidebars
+        ? false
+        : settings.knobs.hide.sidebars;
+  if (sidebars === settings.knobs.hide.sidebars) return next;
+  return {
+    ...next,
+    knobs: { ...next.knobs, hide: { ...next.knobs.hide, sidebars } },
+  };
+}
+
 export type LayoutWidthsPersistDetail = {
   leftNavPx: number;
   rightRailPx: number;
@@ -299,8 +330,21 @@ type FrameKind = "panel" | "pad" | "separator" | "chrome";
 
 type LiveWidths = LayoutWidthBudget;
 
-function viewportBudgetPx(): number {
-  return document.documentElement.clientWidth || window.innerWidth || 0;
+/**
+ * Pointer movement is in screen px; with shell zoom the column tracks are in
+ * unzoomed px, so a drag must move widths by delta / zoom to track the cursor.
+ */
+function dragDeltaPx(screenDelta: number): number {
+  return layoutSettings
+    ? screenDelta / shellZoomFactor(layoutSettings.layoutSlots)
+    : screenDelta;
+}
+
+function viewportBudgetPx(settings: ReaditSettings): number {
+  return (
+    (document.documentElement.clientWidth || window.innerWidth || 0) /
+    shellZoomFactor(settings.layoutSlots)
+  );
 }
 
 function widthsFromSettings(settings: ReaditSettings): LiveWidths {
@@ -419,7 +463,6 @@ function applyLiveColumnWidths(
   root.classList.remove("readit-layout-pending");
 
   root.classList.toggle("readit-nav-compact", live.leftNavPx <= NAV_COMPACT_MAX_PX);
-  root.classList.toggle("readit-rail-compact", live.rightRailPx <= NAV_COMPACT_MAX_PX);
   if (live.leftNavPx <= NAV_COMPACT_MAX_PX) mountNavRail();
   else unmountNavRail();
 
@@ -548,7 +591,7 @@ export function applyFittedShellWidths(
     fitLayoutWidths(
       mirrorStackedWidths(widthsFromSettings(settings), placements),
       budgetColumnOrder(visibleColumnPanels(settings), placements),
-      viewportBudgetPx(),
+      viewportBudgetPx(settings),
       separatorExtraPx(settings),
       locked,
       mode,
@@ -592,7 +635,6 @@ function clearLiveColumnOverrides(): void {
   root.style.removeProperty("--readit-grid-cols");
   root.classList.remove(
     "readit-nav-compact",
-    "readit-rail-compact",
     "readit-layout-pending",
   );
   unmountNavRail();
@@ -1037,6 +1079,51 @@ function positionDropLabel(
   label.style.top = `${Math.round(top)}px`;
 }
 
+/**
+ * Screen-space origin (left edge of the first grid track) and scale for the
+ * width blueprint. Track widths are CSS px before shell zoom, and the grid's
+ * justify-content (column alignment) offsets the tracks inside the shell, so
+ * anchor on the rendered main column instead of the shell's left edge.
+ */
+function trackBlueprint(
+  settings: ReaditSettings,
+  live: LiveWidths,
+  shellRect: DOMRect,
+): { x0: number; z: number } {
+  const z = shellZoomFactor(settings.layoutSlots);
+  const gap = live.columnGapPx;
+  const placements = settings.layoutSlots.placements;
+  let mainOffset: number | null = null;
+  if (isStackedPair(placements)) {
+    mainOffset =
+      live.pagePadLeftPx +
+      gap +
+      (placements.leftNav === "stackedRight" ? 0 : live.leftNavPx + gap);
+  } else {
+    let x = 0;
+    for (const track of buildLayoutTracks(settings.layoutSlots)) {
+      if (track.type === "panel" && track.panel === "main") {
+        mainOffset = x;
+        break;
+      }
+      x +=
+        (track.type === "pad"
+          ? track.side === "left"
+            ? live.pagePadLeftPx
+            : live.pagePadRightPx
+          : track.type === "separator"
+            ? track.widthPx
+            : panelWidthPx(track.panel, live)) + gap;
+    }
+  }
+  const main = document.querySelector('[data-readit-slot="main"]');
+  const mr = main instanceof HTMLElement ? main.getBoundingClientRect() : null;
+  if (mainOffset !== null && mr && mr.width > 0) {
+    return { x0: mr.left - mainOffset * z, z };
+  }
+  return { x0: shellRect.left, z };
+}
+
 /** Blueprint geometry from shell + panel-owned widths (not flaky slot DOM boxes). */
 function computePanelGeometry(
   settings: ReaditSettings,
@@ -1063,19 +1150,20 @@ function computePanelGeometry(
   const r = shell.getBoundingClientRect();
   const top = Math.max(0, r.top);
   const bottom = Math.max(top + 8, Math.min(r.bottom, window.innerHeight));
-  const gap = live.columnGapPx;
+  const { x0, z } = trackBlueprint(settings, live, r);
+  const gap = live.columnGapPx * z;
   const placements = settings.layoutSlots.placements;
 
   // Stacked dual: nav+rail share one horizontal column; vertical extent comes
   // from live DOM so edit frames match the absolute-rail layout.
   if (isStackedPair(placements)) {
-    const stackW = live.leftNavPx;
-    const feedW = live.feedWidthPx;
+    const stackW = live.leftNavPx * z;
+    const feedW = live.feedWidthPx * z;
     const isDualRight = placements.leftNav === "stackedRight";
-    let stackLeft = r.left + live.pagePadLeftPx + gap;
+    let stackLeft = x0 + live.pagePadLeftPx * z + gap;
     let mainLeft = stackLeft + stackW + gap;
     if (isDualRight) {
-      mainLeft = r.left + live.pagePadLeftPx + gap;
+      mainLeft = x0 + live.pagePadLeftPx * z + gap;
       stackLeft = mainLeft + feedW + gap;
     }
     const navEl = document.querySelector(
@@ -1126,7 +1214,7 @@ function computePanelGeometry(
     return out;
   }
 
-  let x = r.left;
+  let x = x0;
   const out: {
     panel: LayoutColumnPanel;
     mid: number;
@@ -1140,15 +1228,16 @@ function computePanelGeometry(
   for (const track of tracks) {
     if (track.type === "pad") {
       x +=
-        (track.side === "left" ? live.pagePadLeftPx : live.pagePadRightPx) +
+        (track.side === "left" ? live.pagePadLeftPx : live.pagePadRightPx) *
+          z +
         gap;
       continue;
     }
     if (track.type === "separator") {
-      x += track.widthPx + gap;
+      x += track.widthPx * z + gap;
       continue;
     }
-    const width = panelWidthPx(track.panel, live);
+    const width = panelWidthPx(track.panel, live) * z;
     if (width < 4) {
       x += width + gap;
       continue;
@@ -1185,8 +1274,9 @@ function computeSeparatorGeometry(
   const r = shell.getBoundingClientRect();
   const top = Math.max(0, r.top);
   const bottom = Math.max(top + 8, Math.min(r.bottom, window.innerHeight));
-  let x = r.left;
-  const gap = live.columnGapPx;
+  const { x0, z } = trackBlueprint(settings, live, r);
+  let x = x0;
+  const gap = live.columnGapPx * z;
   const out: {
     id: string;
     left: number;
@@ -1198,15 +1288,16 @@ function computeSeparatorGeometry(
   for (const track of buildLayoutTracks(settings.layoutSlots)) {
     if (track.type === "pad") {
       x +=
-        (track.side === "left" ? live.pagePadLeftPx : live.pagePadRightPx) +
+        (track.side === "left" ? live.pagePadLeftPx : live.pagePadRightPx) *
+          z +
         gap;
       continue;
     }
     if (track.type === "panel") {
-      x += panelWidthPx(track.panel, live) + gap;
+      x += panelWidthPx(track.panel, live) * z + gap;
       continue;
     }
-    const width = track.widthPx;
+    const width = track.widthPx * z;
     out.push({
       id: track.id,
       left: x,
@@ -1346,7 +1437,10 @@ function placeEditChrome(settings: ReaditSettings): void {
   const sepRects = computeSeparatorGeometry(settings, liveWidths);
   const firstPanel = panelRects[0];
   const lastPanel = panelRects[panelRects.length - 1];
+  // Rightmost content edge. Stacked mode lists the stack after main even
+  // when main is the rightmost column, so take the max, not the last panel.
   let contentRight = lastPanel?.right ?? 0;
+  for (const geo of panelRects) contentRight = Math.max(contentRight, geo.right);
   for (const sep of sepRects) {
     contentRight = Math.max(contentRight, sep.right);
   }
@@ -1354,12 +1448,15 @@ function placeEditChrome(settings: ReaditSettings): void {
     "[data-readit-layout-shell]",
   ) as HTMLElement | null;
   const shellRect = shell?.getBoundingClientRect();
-  const cssRightEdge = shellRect
-    ? shellRect.right - liveWidths.pagePadRightPx
+  const blueprint =
+    shellRect && liveWidths
+      ? trackBlueprint(settings, liveWidths, shellRect)
+      : null;
+  // Pads are the first/last grid tracks: the right pad starts one gap after
+  // the content (alignment decides where leftover viewport goes).
+  const rightPadInner = blueprint
+    ? contentRight + liveWidths.columnGapPx * blueprint.z
     : contentRight;
-  // Right pad is fixed to the shell's right edge (viewport), matching left pad
-  // at the shell start. Free space between content and the pad is intentional.
-  const rightPadInner = cssRightEdge;
 
   for (const geo of panelRects) {
     const panel = geo.panel;
@@ -1491,15 +1588,15 @@ function placeEditChrome(settings: ReaditSettings): void {
     positionFrame(frame, geo.left, geo.top, geo.width, height);
   }
 
-  if (shell && shellRect && liveWidths && firstPanel && lastPanel) {
+  if (shell && shellRect && blueprint && liveWidths && firstPanel && lastPanel) {
     const r = shellRect;
     const top = Math.max(0, r.top);
     const height = Math.min(r.bottom, window.innerHeight) - top;
-    // Pad chrome: left at shell start, right fixed to shell's right edge.
-    const leftPadPx = liveWidths.pagePadLeftPx;
-    const rightPadPx = liveWidths.pagePadRightPx;
-    const leftEdge = r.left + leftPadPx;
-    const rightEdge = cssRightEdge;
+    // Pad chrome sits on the actual first/last tracks (screen px).
+    const leftPadPx = liveWidths.pagePadLeftPx * blueprint.z;
+    const rightPadPx = liveWidths.pagePadRightPx * blueprint.z;
+    const leftEdge = blueprint.x0 + leftPadPx;
+    const rightEdge = rightPadInner;
 
     placePadHandle(
       host,
@@ -1528,7 +1625,7 @@ function placeEditChrome(settings: ReaditSettings): void {
       "left",
       leftPadPx < 72 ? "L" : "Left pad",
     );
-    positionFrame(leftFrame, r.left, top, leftPadPx, height);
+    positionFrame(leftFrame, blueprint.x0, top, leftPadPx, height);
     syncFrameLock(leftFrame, "pad:left", settings);
     const rightFrame = ensureFrame(
       host,
@@ -1553,14 +1650,26 @@ function placeEditChrome(settings: ReaditSettings): void {
 
 function schedulePlaceHandles(settings: ReaditSettings): void {
   window.cancelAnimationFrame(placeHandlesRaf);
+  window.clearTimeout(placeHandlesSettle);
+  // Place with the newest settings at run time: callers can hand in a
+  // snapshot that a later settings apply (e.g. a zoom change) has replaced.
   placeHandlesRaf = window.requestAnimationFrame(() => {
-    placeEditChrome(settings);
+    placeEditChrome(layoutSettings ?? settings);
   });
+  // Zoom / width changes keep reflowing Reddit's columns for a few frames
+  // after the stylesheet lands; a settle pass re-anchors the chrome on the
+  // final column positions. Skipped mid-drag (live positions are tracked).
+  placeHandlesSettle = window.setTimeout(() => {
+    if (!resizeDragging && !columnDragging) {
+      placeEditChrome(layoutSettings ?? settings);
+    }
+  }, 400);
 }
 
 let resizeCleanup: (() => void) | null = null;
 let fitCleanup: (() => void) | null = null;
 let placeHandlesRaf = 0;
+let placeHandlesSettle = 0;
 let resizeListenersBound = false;
 let resizeDragging = false;
 let columnDragging = false;
@@ -1646,6 +1755,42 @@ type ResizeSession =
 
 let resizeSession: ResizeSession | null = null;
 
+/**
+ * Centered layouts spread leftover viewport into equal pads; left/right
+ * alignment keeps the stored pads and lets the grid's justify-content put the
+ * leftover on the far side.
+ */
+function viewportFitMode(settings: ReaditSettings): FitLayoutMode {
+  return (settings.layoutSlots.align ?? "center") === "center"
+    ? "center"
+    : "overflow";
+}
+
+/**
+ * Before a resize drag, move alignment leftover into explicit pads (no visual
+ * change) so the drag trades width with the far pad instead of the grid
+ * re-centering/re-aligning — which would move both edges and let the handle
+ * drift from the cursor. The pads persist with the drag's result.
+ */
+function materializeAlignedPads(settings: ReaditSettings): void {
+  if (!liveWidths) return;
+  const placements = settings.layoutSlots.placements;
+  const next = mirrorStackedWidths(
+    fillPadsForAlign(
+      mirrorStackedWidths(liveWidths, placements),
+      budgetColumnOrder(visibleColumnPanels(settings), placements),
+      viewportBudgetPx(settings),
+      settings.layoutSlots.align ?? "center",
+      separatorExtraPx(settings),
+      widthLockSet(settings.layoutSlots.widthLocks),
+      separatorTrackCount(settings),
+    ),
+    placements,
+  );
+  liveWidths = next;
+  applyLiveColumnWidths(settings, next);
+}
+
 function syncLiveWidthsFromSettings(settings: ReaditSettings): void {
   if (resizeDragging || columnDragging) return;
   liveWidths = applyFittedShellWidths(settings, "overflow");
@@ -1658,13 +1803,16 @@ function mountViewportFit(settings: ReaditSettings): void {
   // mid-drag, where an unrelated settings change (e.g. a knob toggle) would
   // otherwise stomp the width the user is actively dragging.
   if (!resizeDragging && !columnDragging) {
-    liveWidths = applyFittedShellWidths(settings, "center");
+    liveWidths = applyFittedShellWidths(settings, viewportFitMode(settings));
   }
 
   if (fitCleanup) return;
   const onViewportResize = () => {
     if (!layoutSettings || resizeDragging || columnDragging) return;
-    liveWidths = applyFittedShellWidths(layoutSettings, "center");
+    liveWidths = applyFittedShellWidths(
+      layoutSettings,
+      viewportFitMode(layoutSettings),
+    );
     if (layoutSettings.layoutSlots.editMode) {
       schedulePlaceHandles(layoutSettings);
     }
@@ -2087,6 +2235,8 @@ function mountColumnResize(settings: ReaditSettings): void {
   stampLayoutSlots();
   syncLiveWidthsFromSettings(settings);
   placeEditChrome(settings);
+  // Re-place once the new stylesheet (zoom, widths, alignment) has reflowed.
+  schedulePlaceHandles(settings);
 
   if (resizeListenersBound) return;
 
@@ -2266,6 +2416,7 @@ function bindColumnEditListeners(): void {
       resizeDragging = true;
       padHandle.dataset.active = "1";
       document.documentElement.classList.add("readit-col-resizing");
+      materializeAlignedPads(layoutSettings);
       resizeSession = {
         type: "pad",
         side,
@@ -2295,6 +2446,7 @@ function bindColumnEditListeners(): void {
     resizeDragging = true;
     handle.dataset.active = "1";
     document.documentElement.classList.add("readit-col-resizing");
+    materializeAlignedPads(layoutSettings);
     if (isSep) {
       const sep = (layoutSettings.layoutSlots.separators || []).find(
         (s) => s.id === resizeId,
@@ -2431,16 +2583,18 @@ function bindColumnEditListeners(): void {
     if (resizeSession.type === "pad") {
       const desired =
         resizeSession.startPad +
-        (resizeSession.side === "left"
-          ? clientX - resizeSession.startX
-          : resizeSession.startX - clientX);
+        dragDeltaPx(
+          resizeSession.side === "left"
+            ? clientX - resizeSession.startX
+            : resizeSession.startX - clientX,
+        );
       liveWidths = mirrorStackedWidths(
         resizePadInBudget(
           resizeSession.baseline,
           resizeSession.panels,
           resizeSession.side,
           desired,
-          viewportBudgetPx(),
+          viewportBudgetPx(layoutSettings),
           separatorExtraPx(layoutSettings),
           widthLockSet(layoutSettings.layoutSlots.widthLocks),
           separatorTrackCount(layoutSettings),
@@ -2457,10 +2611,11 @@ function bindColumnEditListeners(): void {
       // Right edge: grow/shrink naturally (right edge moves).
       // Left edge: pin the right edge by trading width with the left neighbor
       // panel — otherwise grid growth always moves the separator's right side.
-      const delta =
+      const delta = dragDeltaPx(
         resizeSession.edge === "right"
           ? clientX - resizeSession.startX
-          : resizeSession.startX - clientX;
+          : resizeSession.startX - clientX,
+      );
       const desired = clampSeparatorWidth(resizeSession.startW + delta);
       let applied = desired - resizeSession.startW;
       let seps = (layoutSettings.layoutSlots.separators || []).map((s) =>
@@ -2481,7 +2636,7 @@ function bindColumnEditListeners(): void {
             resizeSession.panels,
             resizeSession.leftPanel,
             neighborStart - applied,
-            viewportBudgetPx(),
+            viewportBudgetPx(layoutSettings),
             "right",
             tentativeExtras,
             widthLockSet(layoutSettings.layoutSlots.widthLocks),
@@ -2526,17 +2681,18 @@ function bindColumnEditListeners(): void {
       return;
     }
 
-    const delta =
+    const delta = dragDeltaPx(
       resizeSession.edge === "right"
         ? clientX - resizeSession.startX
-        : resizeSession.startX - clientX;
+        : resizeSession.startX - clientX,
+    );
     liveWidths = mirrorStackedWidths(
       resizePanelInBudget(
         resizeSession.baseline,
         resizeSession.panels,
         resizeSession.panel,
         resizeSession.startW + delta,
-        viewportBudgetPx(),
+        viewportBudgetPx(layoutSettings),
         resizeSession.edge,
         separatorExtraPx(layoutSettings),
         widthLockSet(layoutSettings.layoutSlots.widthLocks),
@@ -2676,8 +2832,7 @@ export const layoutSlotsFeature: FeatureModule = {
         "readit-col-resizing",
         "readit-col-dragging",
         "readit-nav-compact",
-        "readit-rail-compact",
-      );
+          );
       unmountNavRail();
       delete document.documentElement.dataset.readitLayout;
       delete document.documentElement.dataset.readitColumns;
@@ -2743,8 +2898,7 @@ export const layoutSlotsFeature: FeatureModule = {
       "readit-col-resizing",
       "readit-col-dragging",
       "readit-nav-compact",
-      "readit-rail-compact",
-    );
+      );
     unmountNavRail();
     teardownLayoutGeometry();
   },

@@ -344,6 +344,11 @@ export type LayoutPlacements = z.infer<typeof LayoutPlacementsSchema>;
 
 /** Shared min/max for nav + rail (icon compact → labeled). */
 const SIDE_COLUMN_LIMITS = { min: 64, max: 400 } as const;
+/**
+ * The rail has no icon mode like the nav: below ~240px its cards break into
+ * unreadable fragments, so it keeps a readable floor.
+ */
+const RAIL_COLUMN_LIMITS = { min: 240, max: 400 } as const;
 
 export const LayoutWidthsSchema = z.object({
   /** Icon-rail floor (64) → comfortable labeled nav (400). */
@@ -358,15 +363,15 @@ export const LayoutWidthsSchema = z.object({
         ),
       ),
   ),
-  /** Same band as nav — compact rail uses readit-rail-compact. */
+  /** Readable floor (240) → wide rail (400); no compact rail mode. */
   rightRailPx: z.preprocess(
     (v) => (typeof v === "number" ? v : 316),
     z
       .number()
       .transform((n) =>
         Math.min(
-          SIDE_COLUMN_LIMITS.max,
-          Math.max(SIDE_COLUMN_LIMITS.min, Math.round(n)),
+          RAIL_COLUMN_LIMITS.max,
+          Math.max(RAIL_COLUMN_LIMITS.min, Math.round(n)),
         ),
       ),
   ),
@@ -390,7 +395,7 @@ export type LayoutWidths = z.infer<typeof LayoutWidthsSchema>;
 
 export const LAYOUT_WIDTH_LIMITS = {
   leftNav: SIDE_COLUMN_LIMITS,
-  rightRail: SIDE_COLUMN_LIMITS,
+  rightRail: RAIL_COLUMN_LIMITS,
   main: { min: 480, max: 1600 },
   /**
    * Outer gutters. High enough that equal left/right pads can center a
@@ -412,6 +417,10 @@ export const GutterThemeSchema = z.enum([
   "inset",
 ]);
 export type GutterTheme = z.infer<typeof GutterThemeSchema>;
+
+/** Where leftover viewport width goes once columns are fitted. */
+export const LayoutAlignSchema = z.enum(["left", "center", "right"]);
+export type LayoutAlign = z.infer<typeof LayoutAlignSchema>;
 
 export const LayoutSeparatorSchema = z.object({
   id: z.string(),
@@ -439,6 +448,22 @@ export function clampSeparatorWidth(px: number): number {
 
 export function clampZoom(n: number): number {
   return Math.min(1.5, Math.max(0.85, Math.round(n * 100) / 100));
+}
+
+/**
+ * Zoom applied to the whole layout shell: zoomAll, unless per-panel zoom is
+ * set (the two are never compounded). CSS zoom scales the px column tracks,
+ * so width budgets must fit the viewport divided by this factor.
+ */
+export function shellZoomFactor(config: {
+  zoomAll?: number;
+  zoomByPanel?: Partial<Record<"leftNav" | "main" | "rightRail", number>>;
+}): number {
+  const panel = config.zoomByPanel || {};
+  const hasPanelZoom = (["leftNav", "main", "rightRail"] as const).some(
+    (p) => typeof panel[p] === "number",
+  );
+  return hasPanelZoom ? 1 : clampZoom(config.zoomAll ?? 1);
 }
 
 export function clampPanelWidth(
@@ -550,16 +575,29 @@ function gapTotalPx(
   return Math.max(0, columnCount - 1) * columnGapPx;
 }
 
+/**
+ * Widths below which a panel stops being readable (rail text breaks into
+ * fragments, nav drops into icon mode). Overflow shrinks every panel to these
+ * first and only then to the hard minimums, instead of crushing the last
+ * panel (usually the rail) to 64px while the feed keeps its full width.
+ */
+const READABLE_PANEL_FLOOR_PX: Record<LayoutColumnPanel, number> = {
+  leftNav: 180,
+  main: 480,
+  rightRail: 240,
+};
+
 function stealWidthFromPanel(
   w: LayoutWidthBudget,
   panel: LayoutColumnPanel,
   need: number,
   locked?: ReadonlySet<string>,
+  floorPx?: number,
 ): number {
   if (need <= 0) return 0;
   if (locked?.has(panel)) return 0;
   const cur = readPanelWidth(panel, w);
-  const min = panelWidthLimits(panel).min;
+  const min = Math.max(panelWidthLimits(panel).min, floorPx ?? 0);
   const steal = Math.min(need, Math.max(0, cur - min));
   if (steal > 0) writePanelWidth(panel, w, cur - steal);
   return steal;
@@ -717,6 +755,16 @@ export function fitLayoutWidths(
   let trackExcess = trackUsed - viewport;
   if (trackExcess > 0) {
     for (let i = order.length - 1; i >= 0 && trackExcess > 0; i--) {
+      const panel = order[i]!;
+      trackExcess -= stealWidthFromPanel(
+        next,
+        panel,
+        trackExcess,
+        locked,
+        READABLE_PANEL_FLOOR_PX[panel],
+      );
+    }
+    for (let i = order.length - 1; i >= 0 && trackExcess > 0; i--) {
       trackExcess -= stealWidthFromPanel(next, order[i]!, trackExcess, locked);
     }
     trackUsed = sumPanelWidths(order, next) + gaps + extras;
@@ -765,9 +813,14 @@ export function fitLayoutWidths(
     // Overflow-only: clamp requested pads so they fit, but do not re-center.
     let padUsed = next.pagePadLeftPx + next.pagePadRightPx;
     if (padUsed > padBudget) {
+      // Split the shortfall across both pads so equal pads stay equal (and a
+      // centered layout stays centered); whatever one side can't give (lock
+      // or zero floor) comes from the other.
       let overflow = padUsed - padBudget;
-      overflow -= stealWidthFromPad(next, "right", overflow, locked);
+      const half = Math.ceil(overflow / 2);
+      overflow -= stealWidthFromPad(next, "right", half, locked);
       overflow -= stealWidthFromPad(next, "left", overflow, locked);
+      overflow -= stealWidthFromPad(next, "right", overflow, locked);
     }
   }
 
@@ -792,6 +845,59 @@ export function centerPadsInViewport(
     "center",
     extraTrackCount,
   );
+}
+
+/**
+ * Turn leftover viewport into explicit pads on the side(s) the alignment
+ * puts it (center splits it), so the columns land exactly where
+ * justify-content already drew them. Used before a resize drag: with no
+ * leftover left for the grid to re-align, the far pad absorbs the drag and
+ * the opposite column edge stays pinned under the cursor.
+ */
+export function fillPadsForAlign(
+  widths: LayoutWidthBudget,
+  visibleOrder: readonly LayoutColumnPanel[],
+  viewportPx: number,
+  align: LayoutAlign = "center",
+  extraTracksPx = 0,
+  locked?: ReadonlySet<string>,
+  extraTrackCount = 0,
+): LayoutWidthBudget {
+  const order = visibleOrder.length
+    ? [...visibleOrder]
+    : (["main"] as LayoutColumnPanel[]);
+  const trackCount = order.length + Math.max(0, Math.round(extraTrackCount)) + 2;
+  const used =
+    sumPanelWidths(order, widths) +
+    widths.pagePadLeftPx +
+    widths.pagePadRightPx +
+    gapTotalPx(trackCount, widths.columnGapPx) +
+    Math.max(0, Math.round(extraTracksPx));
+  let leftover = Math.floor(Math.max(0, viewportPx) - used);
+  if (leftover <= 0) return widths;
+  // A locked pad that would need to grow can't take its share without
+  // moving the columns; leave the layout as drawn rather than jump.
+  const needs =
+    align === "left" ? ["pad:right"] : align === "right" ? ["pad:left"] : ["pad:left", "pad:right"];
+  if (needs.some((k) => locked?.has(k))) return widths;
+  const next = { ...widths };
+  const give = (side: "left" | "right", amount: number): number => {
+    if (amount <= 0) return 0;
+    const cur = side === "left" ? next.pagePadLeftPx : next.pagePadRightPx;
+    const add = Math.min(amount, Math.max(0, LAYOUT_WIDTH_LIMITS.pagePad.max - cur));
+    if (side === "left") next.pagePadLeftPx = cur + add;
+    else next.pagePadRightPx = cur + add;
+    return add;
+  };
+  if (align === "left") {
+    give("right", leftover);
+  } else if (align === "right") {
+    give("left", leftover);
+  } else {
+    leftover -= give("left", Math.floor(leftover / 2));
+    give("right", leftover);
+  }
+  return next;
 }
 
 /** Overflow clamp without rewriting pad equality (live edge resize). */
@@ -1060,6 +1166,8 @@ export const LayoutSlotsConfigSchema = z.object({
     .max(MAX_LAYOUT_SEPARATORS)
     .default([]),
   gutterTheme: GutterThemeSchema.default("plain"),
+  /** Column alignment in the viewport (edit toolbar). */
+  align: LayoutAlignSchema.default("center"),
   /** Global visual zoom (1 = 100%). */
   zoomAll: z.preprocess(
     (v) => (typeof v === "number" ? v : 1),
@@ -1249,13 +1357,21 @@ export function isStackedPair(placements: LayoutPlacements): boolean {
 }
 
 /** In stacked mode rightRail mirrors leftNav's width (they share one grid column). */
+/**
+ * Stacked nav + rail share one column, so it can't go below the rail's
+ * readable floor (the nav's icon mode is unavailable in dual layouts).
+ */
+export function stackedColumnWidth(leftNavPx: number): number {
+  return Math.max(LAYOUT_WIDTH_LIMITS.rightRail.min, leftNavPx);
+}
+
 export function mirrorStackedWidths(
   widths: LayoutWidthBudget,
   placements: LayoutPlacements,
 ): LayoutWidthBudget {
-  return isStackedPair(placements)
-    ? { ...widths, rightRailPx: widths.leftNavPx }
-    : widths;
+  if (!isStackedPair(placements)) return widths;
+  const shared = stackedColumnWidth(widths.leftNavPx);
+  return { ...widths, leftNavPx: shared, rightRailPx: shared };
 }
 
 /** Drop the mirrored panel from budget sums so its column isn't double-counted. */
@@ -1293,9 +1409,11 @@ export function applyLayoutPreset(
   // CSS paint / live fit never diverge. Per-panel zoom on the stack is cleared
   // (Zoom Sel would scale nav/rail past the grid track and overlap the feed).
   if (isStackedPair(placements)) {
+    const shared = stackedColumnWidth(next.widths.leftNavPx);
     next.widths = {
       ...next.widths,
-      rightRailPx: next.widths.leftNavPx,
+      leftNavPx: shared,
+      rightRailPx: shared,
     };
     if (next.zoomByPanel) {
       next.zoomByPanel = {

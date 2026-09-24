@@ -33,6 +33,7 @@ import {
   addLayoutSeparator,
   applyColumnOrder,
   applyLayoutPreset,
+  applyLayoutPresetToSettings,
   clearLayoutSlotMarks,
   COLUMN_PANEL_LABELS,
   getEditSelection,
@@ -282,6 +283,7 @@ export {
 export {
   applyColumnOrder,
   applyLayoutPreset,
+  applyLayoutPresetToSettings,
   clearLayoutSlotMarks,
   COLUMN_PANEL_LABELS,
   LAYOUT_SLOTS,

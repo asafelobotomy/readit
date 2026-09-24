@@ -134,12 +134,16 @@ async function studioEval(page, fn, ...args) {
 }
 
 async function openStudio(page) {
-  await studioEval(page, () => {
+  await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
     if (!root) return;
     if (root.querySelector(".readit-drawer")) return;
     if (!root.querySelector(".readit-fab-menu")) {
       root.querySelector(".readit-fab")?.click();
+      // The menu renders asynchronously; wait for its actions to exist.
+      for (let i = 0; i < 20 && !root.querySelector(".readit-fab-action"); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
     }
     const settingsBtn = [...(root.querySelectorAll(".readit-fab-action") || [])].find(
       (b) => /^Settings$/i.test((b.textContent || "").trim()),
@@ -643,6 +647,11 @@ try {
   await sleep(3500);
   await dismissConsent(page);
   await sleep(800);
+  // A previous suite may leave a preset (e.g. single column) that hides the
+  // left nav; restore Classic before judging whether the nav is ready.
+  await enableClassicLayout(page);
+  await closeStudio(page);
+  await sleep(600);
 
   const ready = await waitForNavReady(page, { timeoutMs: 20_000 });
   if (!ready.ok) {

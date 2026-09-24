@@ -3,6 +3,7 @@ import {
   CQS_TIERS,
   ALL_FEATURES,
   applyLayoutPreset,
+  applyLayoutPresetToSettings,
   cleanRedditUrl,
   COLUMN_PANEL_LABELS,
   computeCqsRiskScore,
@@ -35,6 +36,7 @@ import {
   resizePadInBudget,
   resizePanelInBudget,
   resolveProfileIcon,
+  shellZoomFactor,
   widthLockSet,
   type CqsTier,
   type ElementRule,
@@ -46,6 +48,7 @@ import {
   type ProfileIconId,
   type ReaditSettings,
   type StudioLocale,
+  type ThemeMode,
   type UserNote,
   type UserTag,
 } from "@readit/schema";
@@ -713,32 +716,9 @@ function LayoutTab({
   const healthById = new Map(slotHealth.map((s) => [s.id, s]));
 
   const applyPreset = (preset: LayoutPreset) => {
-    void onCommit(`Layout: ${preset}`, (s) => {
-      const next = {
-        ...s,
-        flags: { ...s.flags, layoutSlots: true },
-        layoutSlots: applyLayoutPreset(s.layoutSlots, preset),
-      };
-      if (preset === "singleColumn") {
-        return {
-          ...next,
-          knobs: {
-            ...next.knobs,
-            hide: { ...next.knobs.hide, sidebars: true },
-          },
-        };
-      }
-      if (s.layoutSlots.preset === "singleColumn" || s.knobs.hide.sidebars) {
-        return {
-          ...next,
-          knobs: {
-            ...next.knobs,
-            hide: { ...next.knobs.hide, sidebars: false },
-          },
-        };
-      }
-      return next;
-    });
+    void onCommit(`Layout: ${preset}`, (s) =>
+      applyLayoutPresetToSettings(s, preset),
+    );
   };
 
   return (
@@ -890,11 +870,13 @@ function LayoutTab({
       <div class="readit-section">
         <h2>Widths</h2>
         <p class="readit-muted">
-          Panel-owned — travel with the panel when moved. Outer pads share the
-          leftover viewport equally so columns stay centered (default 24px each
-          until fitted). Drag edges on-page when “Allow moving columns” is on.
-          Nav & Rail share {LAYOUT_WIDTH_LIMITS.leftNav.min}–{LAYOUT_WIDTH_LIMITS.leftNav.max}px
-          (icon/compact ≤168px). Feed {LAYOUT_WIDTH_LIMITS.main.min}–{LAYOUT_WIDTH_LIMITS.main.max}px.
+          Panel-owned — travel with the panel when moved. Leftover viewport is
+          placed by the alignment chosen in the edit toolbar (centered by
+          default). Drag edges on-page when “Allow moving columns” is on.
+          Nav {LAYOUT_WIDTH_LIMITS.leftNav.min}–{LAYOUT_WIDTH_LIMITS.leftNav.max}px
+          (icon/compact ≤168px). Rail {LAYOUT_WIDTH_LIMITS.rightRail.min}–{LAYOUT_WIDTH_LIMITS.rightRail.max}px;
+          stacked nav + rail share the rail's range.
+          Feed {LAYOUT_WIDTH_LIMITS.main.min}–{LAYOUT_WIDTH_LIMITS.main.max}px.
           Separators {LAYOUT_WIDTH_LIMITS.separator.min}–{LAYOUT_WIDTH_LIMITS.separator.max}px.
           Pads {LAYOUT_WIDTH_LIMITS.pagePad.min}–{LAYOUT_WIDTH_LIMITS.pagePad.max}px (mirrored when unlocked).
         </p>
@@ -903,7 +885,11 @@ function LayoutTab({
           <input
             type="range"
             data-width="nav"
-            min={LAYOUT_WIDTH_LIMITS.leftNav.min}
+            min={
+              isStackedPair(cfg.placements)
+                ? LAYOUT_WIDTH_LIMITS.rightRail.min
+                : LAYOUT_WIDTH_LIMITS.leftNav.min
+            }
             max={LAYOUT_WIDTH_LIMITS.leftNav.max}
             value={cfg.widths.leftNavPx}
             disabled={cfg.placements.leftNav === "hidden"}
@@ -933,7 +919,8 @@ function LayoutTab({
                     order,
                     "leftNav",
                     v,
-                    window.innerWidth || document.documentElement.clientWidth || 0,
+                    (window.innerWidth || document.documentElement.clientWidth || 0) /
+                      shellZoomFactor(s.layoutSlots),
                     "right",
                     separatorExtraPx(s),
                     widthLockSet(s.layoutSlots.widthLocks),
@@ -1017,7 +1004,8 @@ function LayoutTab({
                   order,
                   "rightRail",
                   v,
-                  window.innerWidth || document.documentElement.clientWidth || 0,
+                  (window.innerWidth || document.documentElement.clientWidth || 0) /
+                    shellZoomFactor(s.layoutSlots),
                   "right",
                   separatorExtraPx(s),
                     widthLockSet(s.layoutSlots.widthLocks),
@@ -1074,7 +1062,8 @@ function LayoutTab({
                   order,
                   "left",
                   v,
-                  window.innerWidth || document.documentElement.clientWidth || 0,
+                  (window.innerWidth || document.documentElement.clientWidth || 0) /
+                    shellZoomFactor(s.layoutSlots),
                   separatorExtraPx(s),
                     widthLockSet(s.layoutSlots.widthLocks),
                     separatorTrackCount(s),
@@ -1130,7 +1119,8 @@ function LayoutTab({
                   order,
                   "right",
                   v,
-                  window.innerWidth || document.documentElement.clientWidth || 0,
+                  (window.innerWidth || document.documentElement.clientWidth || 0) /
+                    shellZoomFactor(s.layoutSlots),
                   separatorExtraPx(s),
                     widthLockSet(s.layoutSlots.widthLocks),
                     separatorTrackCount(s),
@@ -1493,6 +1483,28 @@ function SimpleTab({
               }));
             }}
           />
+        </div>
+        <div class="readit-row">
+          <span>Theme</span>
+          <select
+            class="readit-select"
+            style={{ width: 160 }}
+            value={settings.knobs.tokens.themeMode}
+            onChange={(e) => {
+              const themeMode = e.currentTarget.value as ThemeMode;
+              void onCommit("Theme", (s) => ({
+                ...s,
+                knobs: {
+                  ...s.knobs,
+                  tokens: { ...s.knobs.tokens, themeMode },
+                },
+              }));
+            }}
+          >
+            <option value="system">Reddit default</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
         </div>
         <div class="readit-row">
           <span>Font scale</span>

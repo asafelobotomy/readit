@@ -33,6 +33,7 @@ function profileLayoutRecipe(
       editMode: false,
       separators: [],
       gutterTheme: "plain",
+      align: "center",
       zoomAll: 1,
       zoomByPanel: {},
       widthLocks: {},
