@@ -10,11 +10,12 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { evidenceDir, repoRelative } from "./smoke-paths.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const extensionPath = path.resolve(root, "dist/chrome-mv3");
-const outDir = path.resolve(root, "docs/smoke-evidence");
+const outDir = evidenceDir(root);
 const userData = path.resolve(root, ".smoke-profile");
 const cdpEndpoint = (process.env.READIT_CDP || "").trim();
 
@@ -2005,7 +2006,7 @@ try {
     mode: cdpMode ? "cdp-puppeteer" : "launch-playwright",
     cdpEndpoint: cdpEndpoint || null,
     extensionId: extensionId || null,
-    extensionPath,
+    extensionPath: repoRelative(root, extensionPath),
     results,
     pass: results.filter((r) => r.status === "pass").length,
     fail: results.filter((r) => r.status === "fail").length,

@@ -4,7 +4,7 @@
  * Default: Playwright Chromium + --load-extension=dist/chrome-mv3
  * Brave:   READIT_CDP=http://127.0.0.1:9222 (npm run smoke:edit:brave)
  *
- * Evidence → docs/smoke-evidence/edit/
+ * Evidence → .smoke-evidence/edit/ (READIT_EVIDENCE_DIR overrides)
  * Checklist → docs/smoke-checklist-edit.md (statuses patched at end)
  */
 import { chromium } from "playwright";
@@ -13,11 +13,12 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { evidenceDir, repoRelative } from "./smoke-paths.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const extensionPath = path.resolve(root, "dist/chrome-mv3");
-const outDir = path.resolve(root, "docs/smoke-evidence/edit");
+const outDir = evidenceDir(root, "edit");
 const checklistPath = path.resolve(root, "docs/smoke-checklist-edit.md");
 const userData = path.resolve(root, ".smoke-profile-edit");
 const cdpEndpoint = (process.env.READIT_CDP || "").trim();
@@ -833,7 +834,7 @@ try {
     pass: summary.pass,
     fail: summary.fail,
     skip: summary.skip,
-    evidence: outDir,
+    evidence: repoRelative(root, outDir),
   });
   if (cdpMode) puppeteerBrowser?.disconnect();
   else await playwrightContext?.close().catch(() => {});

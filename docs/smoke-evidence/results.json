@@ -3,7 +3,7 @@
   "mode": "cdp-puppeteer",
   "cdpEndpoint": "http://127.0.0.1:9222",
   "extensionId": "jejcocmfppabgmlibooijkhnogalikme",
-  "extensionPath": "/home/solon/GitHub/readit/dist/chrome-mv3",
+  "extensionPath": "dist/chrome-mv3",
   "results": [
     {
       "id": "unit.noise_css",
