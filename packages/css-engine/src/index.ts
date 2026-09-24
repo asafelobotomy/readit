@@ -17,6 +17,7 @@ import {
   clampPanelWidth,
   clampSeparatorWidth,
   clampZoom,
+  panelContentAlign,
   shellZoomFactor,
   buildLayoutTracks,
   fitLayoutWidths,
@@ -500,16 +501,43 @@ html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] button {
   max-width: 100% !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
-  overflow: hidden !important;
+}
+/* Labelled nav: wrap names/labels onto more lines instead of truncating;
+   rows grow from Reddit's 40px row height as needed. (Icon mode ≤168px
+   hides labels by design — see the container query below.) */
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a,
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] summary {
+  height: auto !important;
+  min-height: 40px !important;
 }
 html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a > span,
-html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] a [class*="truncate"],
-html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] li span {
-  min-width: 0 !important;
-  flex: 1 1 auto !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] [class*="truncate"],
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] li span,
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] summary span,
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] h2,
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] h3,
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] [class*="whitespace-nowrap"],
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] [class*="text-ellipsis"] {
+  /* Never narrower than the longest word (Reddit's min-w-0 would let a
+     label squeeze to a sliver beside icons / badges). Shrink to wrap, but
+     don't grow — growing would soak up the row and defeat content alignment. */
+  min-width: auto !important;
+  flex: 0 1 auto !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+  -webkit-line-clamp: unset !important;
+}
+/* Text columns beside icons keep their longest word instead of squeezing
+   to a sliver. Games-drawer cards carry a 56px icon that leaves no room in
+   a narrow nav, so their row wraps and the text drops below the icon
+   (plain nav rows wrap their label beside the icon instead). */
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] .min-w-0 {
+  min-width: auto !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] games-section-badge-wrapper .flex:has(> .min-w-0) {
+  flex-wrap: wrap !important;
 }
 html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] img,
 html.readit-active.readit-layout-slots [data-readit-slot="leftNav"] svg,
@@ -840,6 +868,17 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] article {
   overflow-x: clip !important;
   box-sizing: border-box !important;
 }
+/* Labels Reddit truncates in feed cards / comment headers (link URLs,
+   subreddit and author names, flair, recommendation reasons) wrap instead.
+   URLs have no break opportunities, hence "anywhere". Body copy never uses
+   these utility classes. */
+html.readit-active.readit-layout-slots [data-readit-slot="main"] :is(shreddit-post, shreddit-comment, .masthead) :is(.truncate, [class*="text-ellipsis"], [class*="whitespace-nowrap"], [class*="line-clamp"]) {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  -webkit-line-clamp: unset !important;
+  overflow-wrap: anywhere !important;
+}
 /* Post pages bleed the card with -mx-xs; capped at 100% that only shifts it
    left, and main's overflow clip then cuts off its left edge. */
 html.readit-active.readit-layout-slots [data-readit-slot="main"] shreddit-post {
@@ -850,18 +889,18 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] h2,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] h3,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] a[slot="title"],
 html.readit-active.readit-layout-slots [data-readit-slot="main"] [slot="title"] {
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  display: -webkit-box !important;
-  -webkit-box-orient: vertical !important;
-  -webkit-line-clamp: 3 !important;
+  /* Headings/titles show their full text — wrap, never clamp. */
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  -webkit-line-clamp: unset !important;
   max-width: 100% !important;
   overflow-wrap: break-word !important;
-  word-break: break-word !important;
+  word-break: normal !important;
 }
 /* Cap replaced media to the feed column — never force height:auto on
    iframes/players (collapses Devvit webviews and aspect-ratio shells). */
-html.readit-active.readit-layout-slots [data-readit-slot="main"] img,
+html.readit-active.readit-layout-slots [data-readit-slot="main"] img:not(.absolute),
 html.readit-active.readit-layout-slots [data-readit-slot="main"] video,
 html.readit-active.readit-layout-slots [data-readit-slot="main"] canvas {
   max-width: 100% !important;
@@ -873,13 +912,27 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] shreddit-player
 html.readit-active.readit-layout-slots [data-readit-slot="main"] [slot="post-media-container"] {
   max-width: 100% !important;
 }
-html.readit-active.readit-layout-slots [data-readit-slot="main"] img.absolute,
-html.readit-active.readit-layout-slots [data-readit-slot="main"] [class*="absolute"] img {
+/* Reddit's blurred backdrop layers (absolute, w-full, object-fit: cover)
+   must keep filling the media box — only cap them to it. */
+html.readit-active.readit-layout-slots [data-readit-slot="main"] img.absolute {
   max-width: 100% !important;
-  width: auto !important;
-  left: 0 !important;
-  right: 0 !important;
-  inset-inline: 0 !important;
+}
+/* Post media boxes have a fixed height (Reddit's aspect shell). Inside them,
+   use Reddit's own sizing — fill the box, object-fit: contain — so the whole
+   picture shows centered over the blurred backdrop. (height:auto above would
+   scale images to the wider readit feed and crop them; a natural-width image
+   would hug the left edge.) Link thumbnails live outside this slot. */
+html.readit-active.readit-layout-slots [data-readit-slot="main"] [slot="post-media-container"] img:not(.absolute) {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  margin-inline: auto !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="main"] [slot="post-media-container"] :is(video, shreddit-player, shreddit-aspect-ratio, gallery-carousel, iframe) {
+  margin-inline: auto !important;
 }`;
     case "rightRail":
       return `html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] {
@@ -910,9 +963,10 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"],
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] *,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] *::before,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] *::after {
-  overflow-wrap: normal !important;
+  /* break-word only splits words too long for the line (it doesn't shrink
+     min-content like "anywhere"), so text can't stack letter-by-letter. */
+  overflow-wrap: break-word !important;
   word-break: normal !important;
-  word-wrap: normal !important;
   hyphens: none !important;
   writing-mode: horizontal-tb !important;
 }
@@ -924,26 +978,99 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] iframe {
   height: auto !important;
   object-fit: contain !important;
 }
+/* Rail headings, titles, names and buttons wrap to their full text; body
+   copy (p/li) keeps Reddit's own flow. */
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] h1,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] h2,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] h3,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] h4,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] button,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] a,
-html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] p,
-html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] li,
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] span,
-html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] label {
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] label,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] summary,
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] [class*="truncate"],
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] [class*="line-clamp"],
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] [class*="whitespace-nowrap"],
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] [class*="text-ellipsis"] {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  -webkit-line-clamp: unset !important;
   max-width: 100% !important;
+}
+/* Wrapping text must never get narrower than its longest word — with
+   Reddit's min-w-0 a text column beside a thumbnail shrinks to a sliver and
+   stacks letter by letter. Media gives up width instead. */
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] * {
+  min-width: auto !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] :is(img, video, picture, faceplate-img, shreddit-player, [class*="thumbnail"]),
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] .shrink-0:has(img, video, faceplate-img, shreddit-player) {
   min-width: 0 !important;
+  flex-shrink: 1 !important;
+}
+/* Reddit sizes rail internals for its own 316px rail; when readit narrows the
+   rail, fixed-width cards would be cut off at the rail's edge. */
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] :where(div, aside, section, header, p, li, faceplate-partial, faceplate-tracker, shreddit-async-loader) {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }`;
     default: {
       const _exhaustive: never = panel;
       return _exhaustive;
     }
   }
+}
+
+/**
+ * Per-column alignment of text, icons and avatars (edit toolbar "Text").
+ * Text aligns via text-align; rows of icon + label / avatar + name / actions
+ * via justify-content — except rows Reddit spaces on purpose (justify-between
+ * etc., e.g. title … menu). Long-form body copy stays start-aligned.
+ */
+function contentAlignRules(config: LayoutSlotsConfig): string {
+  const out: string[] = [];
+  for (const panel of ["leftNav", "main", "rightRail"] as const) {
+    const align = panelContentAlign(config, panel);
+    if (align === "start") continue;
+    const slot = `html.readit-active.readit-layout-slots [data-readit-slot="${panel}"]`;
+    const justify = align === "center" ? "center" : "flex-end";
+    out.push(`/* readit-content-align:${panel}:${align} */
+${slot} {
+  text-align: ${align} !important;
+}
+${slot} :is(.flex, [class~="nd:flex"], [class~="s:flex"], [class~="m:flex"]):not(.flex-col):not([class*="justify-between"]):not([class*="justify-around"]):not([class*="justify-evenly"]) {
+  justify-content: ${justify} !important;
+}
+/* Two-part rows (content … controls, e.g. a post's credit line): the leading
+   group takes the free space and aligns within it; controls stay put. */
+${slot} [class*="justify-between"] > .flex:first-child:not(.flex-col) {
+  /* grow into free space only — don't change how it shares tight space
+     (that squeezed rail thumbnails to slivers) */
+  flex-grow: 1 !important;
+  justify-content: ${justify} !important;
+}
+/* A spaced row holding a single item (e.g. a post's NSFW / flair tags) has
+   nothing to space — align it like a plain row. */
+${slot} [class*="justify-between"]:has(> :only-child) {
+  justify-content: ${justify} !important;
+}
+${slot} :is(p, li, blockquote, pre, [slot="text-body"], shreddit-post-text-body, .md, [id$="-post-rtjson-content"], shreddit-comment [slot="comment"]) {
+  text-align: start !important;
+}${
+      panel === "leftNav" && align === "end"
+        ? `
+/* Right-aligned nav labels would slide under the collapse (☰) control
+   pinned to the Home row's right edge — move it to the free left edge. */
+${slot} div:has(> rpl-tooltip) {
+  right: auto !important;
+  left: 4px !important;
+}`
+        : ""
+    }`);
+  }
+  return out.join("\n");
 }
 
 function layoutSlotRecipes(
@@ -1039,6 +1166,11 @@ html.readit-layout-edit .readit-layout-frame {
   touch-action: none;
   overflow: hidden;
 }
+/* Separators can be 8px wide — let the "Sep" chip hang over the edge
+   rather than be clipped by the frame. */
+html.readit-layout-edit .readit-layout-frame[data-kind="separator"] {
+  overflow: visible;
+}
 html.readit-layout-edit .readit-layout-frame[data-kind="pad"] {
   border-style: dashed;
   background: color-mix(in srgb, CanvasText 6%, transparent);
@@ -1103,7 +1235,9 @@ html.readit-layout-edit .readit-drop-moving {
   color: #fff;
   background: color-mix(in srgb, var(--readit-accent) 92%, #000);
   box-shadow: 0 2px 8px color-mix(in srgb, #000 35%, transparent);
-  white-space: nowrap;
+  /* Wrap within max-width instead of spilling past the chip background. */
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 html.readit-layout-edit .readit-drop-label[data-anchor="center"] {
   transform: translateX(-50%);
@@ -1332,7 +1466,7 @@ html.readit-active.readit-layout-slots [data-readit-layout-shell] > shreddit-asy
 html.readit-active.readit-layout-slots [data-readit-layout-shell] > :not([data-readit-slot]):not(#subgrid-container):not(.main-container):not(shreddit-async-loader) {
   display: contents !important;
 }
-html.readit-active.readit-layout-slots [data-readit-layout-shell] #subgrid-container > :not([data-readit-slot]):not(.main-container):not(#main-content):not([id*="right-sidebar"]) {
+html.readit-active.readit-layout-slots [data-readit-layout-shell] #subgrid-container > :not([data-readit-slot]):not(.main-container):not(#main-content):not([id*="right-sidebar"]):not(.masthead) {
   display: contents !important;
 }
 html.readit-active.readit-layout-slots.readit-layout-pending.readit-nav-compact #left-sidebar-container:not([data-readit-slot]),
@@ -1493,7 +1627,7 @@ html.readit-active.readit-layout-slots [data-readit-layout-shell] > shreddit-asy
 html.readit-active.readit-layout-slots [data-readit-layout-shell] > :not([data-readit-slot]):not([data-readit-separator]):not(#subgrid-container):not(.main-container):not(shreddit-async-loader) {
   display: contents !important;
 }
-html.readit-active.readit-layout-slots [data-readit-layout-shell] #subgrid-container > :not([data-readit-slot]):not(.main-container):not(#main-content):not([id*="right-sidebar"]) {
+html.readit-active.readit-layout-slots [data-readit-layout-shell] #subgrid-container > :not([data-readit-slot]):not(.main-container):not(#main-content):not([id*="right-sidebar"]):not(.masthead) {
   display: contents !important;
 }
 html.readit-active.readit-layout-slots [data-readit-separator] {
@@ -1528,6 +1662,32 @@ html.readit-active.readit-layout-slots.readit-layout-pending #left-sidebar-conta
   if (placements.subHeader === "hidden") parts.push(hide("subHeader"));
   }
 
+  if (preset !== "singleColumn") {
+    // Subreddit masthead (banner, name, Join / Create Post) sits beside the
+    // columns inside #subgrid-container. Flattened, its pieces became grid
+    // items and landed in the pad tracks, pushing its buttons off-screen.
+    // Keep it whole across the content columns, with the columns below it.
+    parts.push(`html.readit-active.readit-layout-slots [data-readit-layout-shell] #subgrid-container > .masthead {
+  display: block !important;
+  grid-column: 2 / -2 !important;
+  grid-row: 1 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+html.readit-active.readit-layout-slots [data-readit-layout-shell]:has(#subgrid-container > .masthead) [data-readit-slot="leftNav"],
+html.readit-active.readit-layout-slots [data-readit-layout-shell]:has(#subgrid-container > .masthead) [data-readit-slot="main"],
+html.readit-active.readit-layout-slots [data-readit-layout-shell]:has(#subgrid-container > .masthead) [data-readit-separator] {
+  grid-row: 2 !important;
+}
+html.readit-active.readit-layout-slots [data-readit-layout-shell]:has(#subgrid-container > .masthead) [data-readit-slot="rightRail"] {
+  grid-row: 2 / span 1 !important;
+}`);
+  }
+
+  parts.push(contentAlignRules(config));
+
   // Zoom — either global on shell, or per-panel (not both compounded).
   const zoomAll = clampZoom(config.zoomAll ?? 1);
   const panelZooms = config.zoomByPanel || {};
@@ -1561,6 +1721,21 @@ html.readit-active.readit-layout-slots.readit-layout-pending #left-sidebar-conta
   zoom: ${z};${navWidth}
 }`);
     }
+  }
+
+  // Reddit's gallery carousel measures slide width in zoomed screen px and
+  // writes it back as CSS px, so under any zoom its slides overflow the media
+  // box and sit off-center. Cancel the zoom on the carousel (so its measure
+  // and CSS agree) and scale its width back up to fill the box.
+  const mainZoom = clampZoom(
+    typeof panelZooms.main === "number" ? panelZooms.main : zoomAll,
+  );
+  if (mainZoom !== 1) {
+    parts.push(`html.readit-active.readit-layout-slots [data-readit-slot="main"] gallery-carousel {
+  zoom: ${Math.round((1 / mainZoom) * 10000) / 10000} !important;
+  width: calc(100% * ${mainZoom}) !important;
+  max-width: none !important;
+}`);
   }
 
   parts.push(`html.readit-active {

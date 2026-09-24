@@ -1,3 +1,4 @@
+import { normalizeSubredditName } from "@readit/schema";
 import type { FeatureModule } from "./utils.js";
 import {
   clearMarks,
@@ -5,6 +6,7 @@ import {
   isModRoute,
   isProcessed,
   markProcessed,
+  unmarkProcessed,
 } from "./utils.js";
 
 function softDisableIfToolbox(ctx: { settings: { toolboxDetected: boolean; flags: { modQuickActions: boolean } } }): boolean {
@@ -56,6 +58,20 @@ export function findNativeModControl(
   return null;
 }
 
+/** Whether `post` belongs to one of the user's linked moderated subreddits. */
+export function isModeratedPost(
+  post: Element,
+  linked: ReadonlySet<string>,
+): boolean {
+  if (linked.size === 0) return false;
+  const raw =
+    post.getAttribute("subreddit-name") ||
+    post.getAttribute("subreddit-prefixed-name") ||
+    "";
+  const name = normalizeSubredditName(raw);
+  return !!name && linked.has(name);
+}
+
 export const modQuickActionsFeature: FeatureModule = {
   id: "modQuickActions",
   tier: "advanced",
@@ -67,7 +83,18 @@ export const modQuickActionsFeature: FeatureModule = {
     if (!ctx.settings.flags.modQuickActions) return;
     if (softDisableIfToolbox(ctx)) return;
 
+    // Only on subreddits the user linked as moderated (Mod tab). Re-run on
+    // every settings change / DOM scan, so unlinking removes existing bars.
+    const linked = new Set(ctx.settings.modSubreddits);
     document.querySelectorAll("shreddit-post").forEach((post) => {
+      const allowed = isModeratedPost(post, linked);
+      if (!allowed) {
+        if (isProcessed(post, "modQuickActions")) {
+          post.querySelector(":scope > .readit-mod-bar")?.remove();
+          unmarkProcessed(post, "modQuickActions");
+        }
+        return;
+      }
       if (isProcessed(post, "modQuickActions")) return;
       const bar = document.createElement("div");
       bar.className = "readit-mod-bar";

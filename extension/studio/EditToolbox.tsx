@@ -6,6 +6,7 @@ import {
   onReadit,
 } from "@readit/features";
 import type {
+  ContentAlign,
   FontFamily,
   FontWeight,
   GutterTheme,
@@ -25,6 +26,7 @@ import {
   MAX_LAYOUT_SEPARATORS,
   mirrorStackedWidths,
   normalizeColumnOrder,
+  panelContentAlign,
   shellZoomFactor,
   widthLockSet,
 } from "@readit/schema";
@@ -166,6 +168,13 @@ export function EditToolbox({ settings, commit }: Props) {
       : clampZoom(
           cfg.zoomByPanel?.[selectedPanels[0]!] ?? cfg.zoomAll ?? 1,
         );
+
+  // "Text" follows the same target as Zoom: every column when nothing is
+  // selected, otherwise the selected columns (showing the first one's value).
+  const currentContentAlign: ContentAlign =
+    zoomTarget === "all"
+      ? (cfg.contentAlign ?? "start")
+      : panelContentAlign(cfg, selectedPanels[0]!);
 
   return (
     <div
@@ -324,6 +333,37 @@ export function EditToolbox({ settings, commit }: Props) {
         </label>
       </div>
 
+      <div
+        class="readit-edit-toolbox-group"
+        title={
+          zoomTarget === "all"
+            ? "Align text, icons and avatars in every column"
+            : "Align text, icons and avatars in the selected columns"
+        }
+      >
+        <span class="readit-edit-label">
+          Text {zoomTarget === "all" ? "All" : "Sel"}
+        </span>
+        {(
+          [
+            ["start", "Left"],
+            ["center", "Center"],
+            ["end", "Right"],
+          ] as const
+        ).map(([align, label]) => (
+          <button
+            type="button"
+            key={align}
+            class="readit-edit-chip"
+            data-content-align={align}
+            data-active={currentContentAlign === align ? "true" : "false"}
+            onClick={() => void applyContentAlign(commit, selectedPanels, align)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div class="readit-edit-toolbox-group" title="Zoom">
         <span class="readit-edit-label">
           Zoom {zoomTarget === "all" ? "All" : "Sel"}
@@ -406,6 +446,33 @@ export function EditToolbox({ settings, commit }: Props) {
       </button>
     </div>
   );
+}
+
+async function applyContentAlign(
+  commit: Props["commit"],
+  selectedPanels: LayoutColumnPanel[],
+  align: ContentAlign,
+): Promise<void> {
+  if (selectedPanels.length === 0) {
+    // Global: every column, clearing per-column overrides (like Zoom All).
+    await commit(`Text align all ${align}`, (s) => ({
+      ...s,
+      layoutSlots: {
+        ...s.layoutSlots,
+        contentAlign: align,
+        contentAlignByPanel: {},
+      },
+    }));
+    return;
+  }
+  await commit(`Text align selected ${align}`, (s) => {
+    const contentAlignByPanel = { ...(s.layoutSlots.contentAlignByPanel || {}) };
+    for (const p of selectedPanels) contentAlignByPanel[p] = align;
+    return {
+      ...s,
+      layoutSlots: { ...s.layoutSlots, contentAlignByPanel },
+    };
+  });
 }
 
 async function applyZoom(

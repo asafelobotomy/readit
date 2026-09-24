@@ -28,6 +28,7 @@ import {
 } from "../packages/features/src/hide-and-filter.ts";
 import {
   findNativeModControl,
+  isModeratedPost,
   matchesNativeModLabel,
   modHighlightFeature,
 } from "../packages/features/src/mod.ts";
@@ -47,6 +48,7 @@ import {
   isSafeHttpUrl,
   parseLightweightSync,
   migrateSettings,
+  normalizeSubredditName,
   previewImport,
   ReaditSettingsSchema,
   repairSettings,
@@ -414,6 +416,45 @@ check("stylesheet skips unsafe element-rule selectors", () => {
 });
 
 // —— 5. Mod quick actions only report what really happened ——
+
+check("subreddit names normalize for mod linking", () => {
+  assert.equal(normalizeSubredditName("r/Cherry_Jammm_"), "cherry_jammm_");
+  assert.equal(normalizeSubredditName("/r/AskReddit/"), "askreddit");
+  assert.equal(normalizeSubredditName("https://www.reddit.com/r/pics/"), "pics");
+  assert.equal(normalizeSubredditName("u/CherryJammm"), "u_cherryjammm");
+  assert.equal(normalizeSubredditName("u_cherryjammm"), "u_cherryjammm");
+  assert.equal(normalizeSubredditName("askreddit"), "askreddit");
+  assert.equal(normalizeSubredditName("r/has space"), null);
+  assert.equal(normalizeSubredditName(""), null);
+  assert.equal(normalizeSubredditName("r/<script>"), null);
+});
+
+check("modSubreddits: stored normalized, deduped, bad entries dropped", () => {
+  const raw = {
+    ...createDefaultSettings(),
+    modSubreddits: ["r/Pics", "pics", "bad name!", "u/Me"],
+  };
+  const migrated = migrateSettings(raw);
+  assert.deepEqual(migrated.modSubreddits, ["pics", "u_me"]);
+  assert.deepEqual(createDefaultSettings().modSubreddits, []);
+  const legacy = { ...createDefaultSettings() } as Record<string, unknown>;
+  delete legacy.modSubreddits;
+  assert.deepEqual(migrateSettings(legacy).modSubreddits, []);
+});
+
+check("mod quick actions only on linked subreddits", () => {
+  const post = (attrs: Record<string, string>) =>
+    ({ getAttribute: (k: string) => attrs[k] ?? null }) as unknown as Element;
+  const linked = new Set(["cherry_jammm_", "u_cherryjammm"]);
+  assert.equal(isModeratedPost(post({ "subreddit-name": "cherry_jammm_" }), linked), true);
+  assert.equal(isModeratedPost(post({ "subreddit-name": "Cherry_Jammm_" }), linked), true);
+  assert.equal(isModeratedPost(post({ "subreddit-prefixed-name": "r/cherry_jammm_" }), linked), true);
+  assert.equal(isModeratedPost(post({ "subreddit-name": "u_cherryjammm" }), linked), true);
+  assert.equal(isModeratedPost(post({ "subreddit-name": "AskReddit" }), linked), false);
+  assert.equal(isModeratedPost(post({}), linked), false);
+  // Nothing linked → no mod tools anywhere.
+  assert.equal(isModeratedPost(post({ "subreddit-name": "cherry_jammm_" }), new Set()), false);
+});
 
 check("mod labels match whole names only", () => {
   assert.equal(matchesNativeModLabel("Lock", "Lock post"), true);

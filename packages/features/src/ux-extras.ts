@@ -252,8 +252,10 @@ export const commentUxFeature: FeatureModule = {
       btn.className = "readit-quote-btn";
       btn.textContent = "Quote";
       btn.title = "Quote into composer";
+      // Own the text box: Reddit's action row would otherwise lend it
+      // nowrap / hidden overflow and a fixed height that clips the label.
       btn.style.cssText =
-        "margin-left:6px;font-size:11px;padding:2px 6px;border:1px solid #555;border-radius:4px;background:#222;color:#eee;cursor:pointer;";
+        "margin-left:6px;font-size:11px;line-height:1.3;padding:2px 6px;height:auto;min-height:0;white-space:normal;overflow:visible;text-overflow:clip;border:1px solid #555;border-radius:4px;background:#222;color:#eee;cursor:pointer;";
       btn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();

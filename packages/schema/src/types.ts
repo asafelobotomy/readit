@@ -451,6 +451,10 @@ export type GutterTheme = z.infer<typeof GutterThemeSchema>;
 export const LayoutAlignSchema = z.enum(["left", "center", "right"]);
 export type LayoutAlign = z.infer<typeof LayoutAlignSchema>;
 
+/** Alignment of text, icons and avatars inside a column (edit toolbar). */
+export const ContentAlignSchema = z.enum(["start", "center", "end"]);
+export type ContentAlign = z.infer<typeof ContentAlignSchema>;
+
 export const LayoutSeparatorSchema = z.object({
   id: z.string(),
   after: LayoutColumnPanelSchema,
@@ -1197,6 +1201,16 @@ export const LayoutSlotsConfigSchema = z.object({
   gutterTheme: GutterThemeSchema.default("plain"),
   /** Column alignment in the viewport (edit toolbar). */
   align: LayoutAlignSchema.default("center"),
+  /** Content alignment for every column (edit toolbar "Text All"). */
+  contentAlign: ContentAlignSchema.default("start"),
+  /** Per-column content alignment overrides ("Text Sel"). */
+  contentAlignByPanel: z
+    .object({
+      leftNav: ContentAlignSchema.optional(),
+      main: ContentAlignSchema.optional(),
+      rightRail: ContentAlignSchema.optional(),
+    })
+    .default({}),
   /** Global visual zoom (1 = 100%). */
   zoomAll: z.preprocess(
     (v) => (typeof v === "number" ? v : 1),
@@ -1662,6 +1676,45 @@ export const ProfilePackSchema = z.object({
 });
 export type ProfilePack = z.infer<typeof ProfilePackSchema>;
 
+/**
+ * Normalize user input or Reddit data to the form Reddit's post
+ * `subreddit-name` attribute uses: lowercase, no `r/` prefix; profile
+ * subreddits are `u_<username>`. Returns null for anything that isn't a
+ * plausible subreddit name.
+ */
+export function normalizeSubredditName(input: string): string | null {
+  let s = String(input ?? "").trim().toLowerCase();
+  s = s.replace(/^https?:\/\/(?:[a-z]+\.)?reddit\.com/, "");
+  s = s.replace(/^\/+/, "").replace(/\/+$/, "");
+  const profile = s.match(/^(?:u|user)\/([a-z0-9_-]+)$/);
+  if (profile) s = `u_${profile[1]}`;
+  else s = s.replace(/^r\//, "");
+  return /^(?:u_[a-z0-9_-]{2,30}|[a-z0-9_]{2,21})$/.test(s) ? s : null;
+}
+
+/** Effective content alignment for a column: its override, else the global one. */
+export function panelContentAlign(
+  config: {
+    contentAlign?: ContentAlign;
+    contentAlignByPanel?: Partial<Record<LayoutColumnPanel, ContentAlign>>;
+  },
+  panel: LayoutColumnPanel,
+): ContentAlign {
+  return config.contentAlignByPanel?.[panel] ?? config.contentAlign ?? "start";
+}
+
+/** A linked moderated subreddit, stored normalized (see normalizeSubredditName). */
+export const ModSubredditSchema = z
+  .string()
+  .transform((v, ctx) => {
+    const name = normalizeSubredditName(v);
+    if (!name) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "not a subreddit name" });
+      return z.NEVER;
+    }
+    return name;
+  });
+
 export const ReaditSettingsSchema = z.object({
   version: z.literal(SETTINGS_VERSION).default(SETTINGS_VERSION),
   paused: z.boolean().default(false),
@@ -1683,6 +1736,14 @@ export const ReaditSettingsSchema = z.object({
   cannedReplies: z.array(CannedReplySchema).default([]),
   modMacros: z.array(ModMacroSchema).default([]),
   usernotes: z.array(UserNoteSchema).default([]),
+  /**
+   * Subreddits the user moderates, linked in the Mod tab. Mod quick actions
+   * only appear on posts from these; empty means no mod tools anywhere.
+   */
+  modSubreddits: z
+    .array(ModSubredditSchema)
+    .default([])
+    .transform((names) => [...new Set(names)]),
   cqsSnapshots: z.array(CqsSnapshotSchema).default([]),
   cqsRiskEvents: z.array(CqsRiskEventSchema).default([]),
   cqsPrefs: CqsPrefsSchema.default({}),

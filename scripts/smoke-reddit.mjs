@@ -1602,14 +1602,91 @@ try {
   });
   record("mod.desk_profile", modTab.ok ? "pass" : "fail", JSON.stringify(modTab));
 
+  // Quick actions are gated to subreddits linked in the Mod tab: none while
+  // nothing is linked; after linking one visible post's subreddit, bars only
+  // on that subreddit's posts; unlinking removes them again. The user's own
+  // linked list is restored afterwards.
   await sleep(800);
-  const modBar = await page.evaluate(
-    () => document.querySelectorAll(".readit-mod-bar").length,
+  const modState = () =>
+    page.evaluate(() => {
+      const posts = [...document.querySelectorAll("shreddit-post")];
+      const withBar = posts.filter((p) => p.querySelector(":scope > .readit-mod-bar"));
+      return {
+        bars: withBar.length,
+        subs: [...new Set(withBar.map((p) => (p.getAttribute("subreddit-name") || "").toLowerCase()))],
+        firstSub: (posts[0]?.getAttribute("subreddit-name") || "").toLowerCase(),
+      };
+    });
+  const unlinkAll = () =>
+    studioEval(page, async () => {
+      const root = document.querySelector("readit-studio")?.shadowRoot;
+      for (let i = 0; i < 50; i++) {
+        const btn = [...(root?.querySelectorAll('[data-section="mod-subreddits"] button') || [])].find(
+          (b) => b.textContent?.trim() === "Unlink",
+        );
+        if (!btn) break;
+        btn.click();
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    });
+  const savedLinks = await studioEval(page, () =>
+    [...(document.querySelector("readit-studio")?.shadowRoot?.querySelectorAll('[data-section="mod-subreddits"] .readit-row > span') || [])]
+      .map((s) => s.textContent?.trim() || "")
+      .filter(Boolean),
   );
+  await unlinkAll();
+  await sleep(800);
+  const none = await modState();
+  let linkedState = { bars: 0, subs: [], firstSub: none.firstSub };
+  if (none.firstSub) {
+    await studioEval(
+      page,
+      async (sub) => {
+        const root = document.querySelector("readit-studio")?.shadowRoot;
+        const section = root?.querySelector('[data-section="mod-subreddits"]');
+        const input = section?.querySelector('input[placeholder="r/subreddit"]');
+        if (!(input instanceof HTMLInputElement)) return;
+        input.value = `r/${sub}`;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 100));
+        [...section.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Link")?.click();
+      },
+      none.firstSub,
+    );
+    await sleep(1200);
+    linkedState = await modState();
+  }
+  await unlinkAll();
+  await sleep(800);
+  const unlinked = await modState();
+  // Restore the user's links.
+  for (const name of savedLinks) {
+    await studioEval(
+      page,
+      async (n) => {
+        const section = document
+          .querySelector("readit-studio")
+          ?.shadowRoot?.querySelector('[data-section="mod-subreddits"]');
+        const input = section?.querySelector('input[placeholder="r/subreddit"]');
+        if (!(input instanceof HTMLInputElement)) return;
+        input.value = n;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 100));
+        [...section.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Link")?.click();
+        await new Promise((r) => setTimeout(r, 250));
+      },
+      name,
+    );
+  }
   record(
     "mod.quick_bar",
-    modBar > 0 ? "pass" : "fail",
-    `bars=${modBar}`,
+    none.bars === 0 &&
+      linkedState.bars > 0 &&
+      linkedState.subs.every((s) => s === none.firstSub) &&
+      unlinked.bars === 0
+      ? "pass"
+      : "fail",
+    JSON.stringify({ unlinkedBars: none.bars, linked: linkedState, afterUnlink: unlinked.bars }),
   );
 
   const macro = await studioEval(page, async () => {
@@ -1787,10 +1864,15 @@ try {
         await new Promise((r) => setTimeout(r, 900));
       }
     });
-    await sleep(1200);
-    const quoteCount = await page.evaluate(
-      () => document.querySelectorAll("button.readit-quote-btn").length,
-    );
+    // Buttons arrive with readit's DOM scans as comments load — poll rather
+    // than read once (a slow comment load made a single read flaky).
+    let quoteCount = 0;
+    for (let i = 0; i < 12 && quoteCount === 0; i++) {
+      await sleep(500);
+      quoteCount = await page.evaluate(
+        () => document.querySelectorAll("button.readit-quote-btn").length,
+      );
+    }
     record(
       "track.later.quote_dom",
       quoteCount > 0 ? "pass" : "fail",

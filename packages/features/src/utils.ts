@@ -45,6 +45,10 @@ export function markProcessed(el: Element, featureId: string): void {
   el.setAttribute(`${ATTR}-${featureId}`, "1");
 }
 
+export function unmarkProcessed(el: Element, featureId: string): void {
+  el.removeAttribute(`${ATTR}-${featureId}`);
+}
+
 export function isProcessed(el: Element, featureId: string): boolean {
   return el.getAttribute(`${ATTR}-${featureId}`) === "1";
 }

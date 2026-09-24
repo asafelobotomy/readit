@@ -25,6 +25,18 @@
   z-index: 2147483646;
 }
 
+/* Open drawer: sit just left of it so the FAB never covers drawer content. */
+.readit-fab-wrap[data-drawer-open="1"] {
+  right: calc(min(420px, 100vw) + 16px);
+}
+/* Full-width drawer on narrow screens: nowhere clear to sit — hide the FAB
+   (the drawer has its own Close). */
+@media (max-width: 500px) {
+  .readit-fab-wrap[data-drawer-open="1"] {
+    display: none;
+  }
+}
+
 .readit-fab-menu {
   display: flex;
   flex-direction: column;
@@ -44,7 +56,9 @@
   font-weight: 600;
   cursor: pointer;
   text-align: center;
-  white-space: nowrap;
+  /* Full label, wrapping if the menu is ever too narrow. */
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .readit-fab-action:hover {
@@ -155,13 +169,14 @@
   border-radius: 6px;
   padding: 3px 6px;
   font-size: 11px;
-  max-width: 110px;
+  /* Selects can't wrap, so size to the chosen option instead of clipping it. */
+  max-width: none;
 }
 
 .readit-edit-label {
   font-size: 11px;
   color: #bbb;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .readit-edit-zoom {

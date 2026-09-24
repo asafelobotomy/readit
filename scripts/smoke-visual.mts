@@ -310,7 +310,7 @@ function pageChecks(): Issue[] {
     // the topmost element at its own center point.
     const obscured: string[] = [];
     for (const el of sr.querySelectorAll<HTMLElement>(
-      ".readit-fab, .readit-fab-action, .readit-edit-toolbox button, .readit-edit-toolbox select, .readit-drawer .readit-tab",
+      ".readit-fab, .readit-fab-action, .readit-edit-toolbox button, .readit-edit-toolbox select, .readit-drawer button, .readit-drawer input, .readit-drawer select, .readit-drawer label",
     )) {
       const r = vis(el);
       if (!r || r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) continue;
@@ -339,7 +339,6 @@ function pageChecks(): Issue[] {
         el.children.length === 0 &&
         el.scrollWidth > el.clientWidth + 2 &&
         el.clientWidth > 0 &&
-        cs.textOverflow !== "ellipsis" &&
         /hidden|clip/.test(cs.overflow + cs.overflowX)
       ) {
         clipped.push(`"${text.slice(0, 30)}" ${el.scrollWidth}>${el.clientWidth}`);
@@ -383,6 +382,151 @@ function pageChecks(): Issue[] {
         }
       }
     }
+  }
+
+  // Headings, titles, names and buttons must show their full text (wrap,
+  // not truncate). Skips body copy, screen-reader-only text, script text and
+  // the nav's icon mode (labels hidden by design).
+  {
+    const truncated = new Set<string>();
+    const isBody = (el: Element) =>
+      !!el.closest('p, [slot="text-body"], shreddit-post-text-body, [id$="-post-rtjson-content"], .md, shreddit-comment') &&
+      !el.matches("h1,h2,h3,h4,h5,h6,button,label,[slot=title]");
+    const visibleText = (el: Element) => {
+      let t = "";
+      const walk = (n: Node) => {
+        for (const c of n.childNodes) {
+          if (c.nodeType === Node.TEXT_NODE) t += c.textContent;
+          else if (c instanceof Element) {
+            if (c.matches("script, style, faceplate-screen-reader-content, .sr-only, .screen-reader-content")) continue;
+            walk(c);
+          }
+        }
+      };
+      walk(el);
+      return t.replace(/\s+/g, " ").trim();
+    };
+    const compactNav = html.classList.contains("readit-nav-compact");
+    const check = (root: ParentNode, where: string) => {
+      for (const el of root.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6,a,button,label,summary,span,div,[slot=title]")) {
+        if (el.children.length > 3) continue;
+        if (compactNav && el.closest('[data-readit-slot="leftNav"]')) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > vh) continue;
+        if (isBody(el)) continue;
+        const text = visibleText(el);
+        if (text.length < 3) continue;
+        // Deliberate: community names wider than the whole nav row.
+        if (el.hasAttribute("data-readit-ellipsis")) continue;
+        const cs = getComputedStyle(el);
+        if (!/hidden|clip/.test(cs.overflow + cs.overflowX + cs.overflowY)) continue;
+        const cutW = el.scrollWidth > el.clientWidth + 1;
+        const cutH =
+          el.scrollHeight > el.clientHeight + 2 &&
+          (cs.webkitLineClamp !== "none" || cs.whiteSpace === "nowrap" || cs.textOverflow === "ellipsis");
+        if (cutW || cutH) {
+          const slot = el.closest("[data-readit-slot]")?.getAttribute("data-readit-slot") ?? "-";
+          const cls = String(el.className).split(/\s+/).slice(0, 3).join(".");
+          const parent = el.parentElement;
+          const pcls = parent ? `${parent.tagName.toLowerCase()}.${String(parent.className).split(/\s+/).slice(0, 2).join(".")}` : "";
+          truncated.add(
+            `${where}/${slot}: "${text.slice(0, 32)}" <${el.tagName.toLowerCase()}.${cls}> in <${pcls}> ${cutW ? `w ${el.scrollWidth}>${el.clientWidth}` : `h ${el.scrollHeight}>${el.clientHeight}`} ws=${cs.whiteSpace} to=${cs.textOverflow} lc=${cs.webkitLineClamp}`,
+          );
+        }
+      }
+    };
+    check(document, "page");
+    for (const scope of document.querySelectorAll('[data-readit-slot="leftNav"], [data-readit-slot="rightRail"]')) {
+      for (const host of scope.querySelectorAll("*")) {
+        if (host.shadowRoot) check(host.shadowRoot, host.tagName.toLowerCase());
+      }
+    }
+    if (truncated.size) {
+      issues.push({ kind: "truncated", detail: [...truncated].slice(0, 6).join("; ") });
+    }
+    // Letter stacking: a wrapping label squeezed so narrow it breaks every
+    // couple of characters (e.g. a name beside a thumbnail).
+    const stacked = new Set<string>();
+    for (const el of document.querySelectorAll<HTMLElement>(
+      '[data-readit-slot] :is(h1,h2,h3,h4,a,span,button,label,summary,[slot=title])',
+    )) {
+      if (el.children.length > 2 || el.closest("#readit-nav-rail")) continue;
+      if (html.classList.contains("readit-nav-compact") && el.closest('[data-readit-slot="leftNav"]')) continue;
+      const text = visibleText(el);
+      if (text.length < 6 || !/[a-z]{3}/i.test(text)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 || r.bottom < 0 || r.top > vh) continue;
+      const cs = getComputedStyle(el);
+      const fs = parseFloat(cs.fontSize) || 14;
+      const lh = parseFloat(cs.lineHeight) || fs * 1.3;
+      if (r.width < fs * 3.5 && r.height > lh * 3.2) {
+        stacked.add(`"${text.slice(0, 24)}" ${Math.round(r.width)}×${Math.round(r.height)}`);
+      }
+    }
+    if (stacked.size) {
+      issues.push({ kind: "stacked", detail: [...stacked].slice(0, 5).join("; ") });
+    }
+  }
+
+  // Post media (image bitmaps under object-fit, gallery slides, players) must
+  // be centered in its media box.
+  {
+    const offCenter: string[] = [];
+    for (const box of document.querySelectorAll<HTMLElement>('[data-readit-slot="main"] shreddit-post [slot="post-media-container"]')) {
+      const cr = box.getBoundingClientRect();
+      if (cr.width < 80 || cr.bottom < 0 || cr.top > vh) continue;
+      const img = [...box.querySelectorAll<HTMLImageElement>("img:not(.absolute)")].find((i) => {
+        const r = i.getBoundingClientRect();
+        return i.naturalWidth > 0 && r.width > 40 && r.left < cr.right && r.right > cr.left;
+      });
+      let left: number | null = null;
+      let right: number | null = null;
+      if (img) {
+        const r = img.getBoundingClientRect();
+        const fit = getComputedStyle(img).objectFit;
+        const scale = fit === "contain" ? Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight) : r.width / img.naturalWidth;
+        const bw = Math.min(r.width, img.naturalWidth * scale);
+        const bl = r.left + (r.width - bw) / 2;
+        left = bl - cr.left;
+        right = cr.right - (bl + bw);
+      } else {
+        const p = box.querySelector("shreddit-player");
+        if (p) {
+          const r = p.getBoundingClientRect();
+          left = r.left - cr.left;
+          right = cr.right - r.right;
+        }
+      }
+      if (left !== null && right !== null && Math.abs(left - right) > 4) {
+        offCenter.push(`${Math.round(left)}/${Math.round(right)} in ${Math.round(cr.width)}`);
+      }
+    }
+    if (offCenter.length) issues.push({ kind: "off-center", detail: `media L/R gaps ${offCenter.slice(0, 4).join("; ")}` });
+  }
+
+  // Wrapped labels must not collide: text rows in the nav/rail may not
+  // overlap one another.
+  for (const id of ["leftNav", "rightRail"]) {
+    const scope = document.querySelector(`[data-readit-slot="${id}"]`);
+    if (!scope || !slots[id]) continue;
+    if (id === "leftNav" && html.classList.contains("readit-nav-compact")) continue;
+    const rows = [...scope.querySelectorAll<HTMLElement>("a, summary, h2, h3")]
+      .map((el) => [el, vis(el)] as const)
+      .filter((pair): pair is readonly [HTMLElement, DOMRect] => !!pair[1] && pair[1].top < vh && pair[1].bottom > 0)
+      .filter(([el]) => (el.textContent || "").trim().length > 0);
+    let found = "";
+    for (let i = 0; i < rows.length && !found; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        const [ea, ra] = rows[i]!;
+        const [eb, rb] = rows[j]!;
+        if (ea.contains(eb) || eb.contains(ea)) continue;
+        if (overlap(ra, rb) > 24) {
+          found = `"${(ea.textContent || "").trim().slice(0, 20)}" overlaps "${(eb.textContent || "").trim().slice(0, 20)}"`;
+          break;
+        }
+      }
+    }
+    if (found) issues.push({ kind: "overlap", detail: `${id} text: ${found}` });
   }
 
   // Left nav labels clipped without ellipsis (wide nav only)
@@ -442,6 +586,9 @@ async function capture(
   await goto(opts.url);
   await closeUi();
   await page.evaluate(() => window.scrollTo(0, 0));
+  // Park the pointer so Reddit hover cards (community / user previews) don't
+  // pop over the layout being checked.
+  await page.mouse.move(1, 1);
   await putSettings(opts.settings);
   await sleep(1400);
   if (opts.ui) await opts.ui();
@@ -560,6 +707,24 @@ try {
     vw: 1024,
     vh: 768,
     settings: withLayout(base(), (l) => ({ ...l, align: "right", editMode: true })),
+  });
+
+  // 2c. Content alignment (edit toolbar "Text All" / "Text Sel")
+  const text = (
+    st: ReaditSettings,
+    all: "start" | "center" | "end",
+    byPanel: ReaditSettings["layoutSlots"]["contentAlignByPanel"] = {},
+  ): ReaditSettings => withLayout(st, (l) => ({ ...l, contentAlign: all, contentAlignByPanel: byPanel }));
+  await capture("text", "all-center", { url: HOME, settings: text(base(), "center") });
+  await capture("text", "all-end", { url: HOME, settings: text(base(), "end") });
+  await capture("text", "nav-end-main-center", { url: HOME, settings: text(base(), "start", { leftNav: "end", main: "center" }) });
+  await capture("text", "rail-center-1024", { url: HOME, vw: 1024, vh: 768, settings: text(base(), "start", { rightRail: "center" }) });
+  await capture("text", "dualLeft-center", { url: HOME, settings: text(preset("dualLeft"), "center") });
+  await capture("text", "single-end", { url: HOME, settings: text(preset("singleColumn"), "end") });
+  await capture("text", "sub-center", { url: SUB, settings: text(base(), "center") });
+  await capture("text", "edit-all-center", {
+    url: HOME,
+    settings: withLayout(text(base(), "center"), (l) => ({ ...l, editMode: true })),
   });
 
   // 3. Hidden panels / stacked custom

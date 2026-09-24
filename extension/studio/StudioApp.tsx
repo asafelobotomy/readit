@@ -33,6 +33,7 @@ import {
   LAYOUT_WIDTH_LIMITS,
   mirrorStackedWidths,
   normalizeColumnOrder,
+  normalizeSubredditName,
   resizePadInBudget,
   resizePanelInBudget,
   resolveProfileIcon,
@@ -62,6 +63,10 @@ import {
 } from "../lib/settings";
 import type { StudioApi } from "./mount";
 import { readLightweightSync } from "../lib/sync";
+import {
+  detectModeratedSubreddits,
+  displaySubredditName,
+} from "../lib/mod-subreddits";
 import { STUDIO_LOCALES, t } from "./i18n";
 import { buildSelector, isStudioEvent } from "./picker";
 import { EditToolbox, KOFI_URL, REPO_URL } from "./EditToolbox";
@@ -309,7 +314,7 @@ export function StudioApp({ api }: { api: StudioApi }) {
 
   return (
     <>
-      <div class="readit-fab-wrap">
+      <div class="readit-fab-wrap" data-drawer-open={open ? "1" : "0"}>
         {fabMenu && (
           <div class="readit-fab-menu" role="menu">
             <button
@@ -2429,6 +2434,144 @@ function CreateTab({
   );
 }
 
+function ModSubredditsSection({
+  settings,
+  onCommit,
+  flash,
+}: {
+  settings: ReaditSettings;
+  onCommit: (
+    label: string,
+    mutator: (s: ReaditSettings) => ReaditSettings,
+  ) => Promise<void>;
+  flash: (msg: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [detected, setDetected] = useState<string[] | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState("");
+  const linked = settings.modSubreddits;
+  const suggestions = (detected ?? []).filter((n) => !linked.includes(n));
+
+  const link = (names: string[], label: string) =>
+    onCommit(label, (s) => ({
+      ...s,
+      modSubreddits: [...new Set([...s.modSubreddits, ...names])],
+    }));
+
+  const addDraft = () => {
+    const name = normalizeSubredditName(draft);
+    if (!name) {
+      flash("Enter a subreddit like r/example");
+      return;
+    }
+    void link([name], `Link ${displaySubredditName(name)}`);
+    setDraft("");
+  };
+
+  const detect = async () => {
+    setDetecting(true);
+    setDetectError("");
+    try {
+      setDetected(await detectModeratedSubreddits());
+    } catch (err) {
+      setDetected(null);
+      setDetectError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  return (
+    <div class="readit-section" data-section="mod-subreddits">
+      <h2>Moderated subreddits</h2>
+      <p class="readit-muted">
+        Mod quick actions only appear on posts from subreddits linked here.
+        {linked.length === 0 && " None linked yet, so mod tools are off everywhere."}
+      </p>
+      {linked.map((name) => (
+        <div class="readit-row" key={name}>
+          <span>{displaySubredditName(name)}</span>
+          <button
+            type="button"
+            class="readit-btn"
+            onClick={() =>
+              void onCommit(`Unlink ${displaySubredditName(name)}`, (s) => ({
+                ...s,
+                modSubreddits: s.modSubreddits.filter((n) => n !== name),
+              }))
+            }
+          >
+            Unlink
+          </button>
+        </div>
+      ))}
+      <div class="readit-row">
+        <input
+          class="readit-input"
+          placeholder="r/subreddit"
+          value={draft}
+          onInput={(e) => setDraft(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") addDraft();
+          }}
+        />
+        <button type="button" class="readit-btn" onClick={addDraft}>
+          Link
+        </button>
+      </div>
+      <div class="readit-row">
+        <button
+          type="button"
+          class="readit-btn primary"
+          disabled={detecting}
+          onClick={() => void detect()}
+        >
+          {detecting ? "Detecting…" : "Detect my subreddits"}
+        </button>
+      </div>
+      {detectError && <p class="readit-muted">{detectError}</p>}
+      {detected && suggestions.length === 0 && (
+        <p class="readit-muted">
+          {detected.length === 0
+            ? "Reddit lists no subreddits you moderate."
+            : "Every subreddit you moderate is already linked."}
+        </p>
+      )}
+      {suggestions.length > 0 && (
+        <>
+          <p class="readit-muted">Found on Reddit — choose which to link:</p>
+          {suggestions.map((name) => (
+            <div class="readit-row" key={name}>
+              <span>{displaySubredditName(name)}</span>
+              <button
+                type="button"
+                class="readit-btn"
+                onClick={() => void link([name], `Link ${displaySubredditName(name)}`)}
+              >
+                Link
+              </button>
+            </div>
+          ))}
+          {suggestions.length > 1 && (
+            <div class="readit-row">
+              <button
+                type="button"
+                class="readit-btn primary"
+                onClick={() =>
+                  void link(suggestions, `Link ${suggestions.length} subreddits`)
+                }
+              >
+                Link all {suggestions.length}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function ModTab({
   settings,
   onCommit,
@@ -2454,6 +2597,7 @@ function ModTab({
           avoid DOM fights.
         </p>
       )}
+      <ModSubredditsSection settings={settings} onCommit={onCommit} flash={flash} />
       <div class="readit-section">
         <h2>Mod Desk toggles</h2>
         {(

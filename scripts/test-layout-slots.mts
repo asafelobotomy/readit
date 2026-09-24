@@ -24,6 +24,7 @@ import {
 } from "../packages/features/src/nav-rail.ts";
 import {
   applyProfile,
+  panelContentAlign,
   fillPadsForAlign,
   shellZoomFactor,
   BUILTIN_PROFILES,
@@ -1353,6 +1354,68 @@ check("column alignment drives grid justify-content (centered by default)", () =
   single.flags.layoutSlots = true;
   single.layoutSlots = { ...applyLayoutPreset(single.layoutSlots, "singleColumn"), align: "left" };
   assert.match(buildStylesheet(single), /margin-left: var\(--readit-page-pad-left, 24px\) !important;\n  margin-right: auto/);
+});
+
+check("headings, titles and nav/rail labels wrap instead of truncating", () => {
+  for (const preset of ["classic", "dualLeft"] as const) {
+    const settings = createDefaultSettings();
+    settings.flags.layoutSlots = true;
+    settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, preset);
+    const css = buildStylesheet(settings);
+    const rules = (slot: string) =>
+      [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter(([, sel]) => sel!.includes(`[data-readit-slot="${slot}"]`) && !sel!.includes("readit-nav-compact") && !sel!.includes("@container"))
+        .map(([, sel, body]) => ({ sel: sel!, body: body! }));
+    for (const slot of ["rightRail", "main"]) {
+      for (const { sel, body } of rules(slot)) {
+        assert.doesNotMatch(body, /text-overflow:\s*ellipsis/, `${preset} ${slot}: ${sel.trim().slice(0, 80)}`);
+        assert.doesNotMatch(body, /-webkit-line-clamp:\s*\d/, `${preset} ${slot}: ${sel.trim().slice(0, 80)}`);
+      }
+    }
+    assert.match(css, /\[slot="title"\] \{[^}]*white-space: normal !important/);
+  }
+});
+
+check("feed media: backdrops untouched, images centered, galleries unzoomed", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  settings.layoutSlots = applyLayoutPreset(settings.layoutSlots, "classic");
+  let css = buildStylesheet(settings);
+  assert.match(css, /\[slot="post-media-container"\] img:not\(\.absolute\) \{[^}]*object-fit: contain !important;[^}]*object-position: center/);
+  assert.doesNotMatch(css, /img\.absolute \{[^}]*object-fit/);
+  assert.doesNotMatch(css, /gallery-carousel \{[^}]*zoom/);
+  settings.layoutSlots = { ...settings.layoutSlots, zoomByPanel: { main: 1.25 } };
+  css = buildStylesheet(settings);
+  assert.match(css, /gallery-carousel \{\n  zoom: 0\.8 !important;\n  width: calc\(100% \* 1\.25\)/);
+});
+
+check("content alignment: global, per-column override, body stays start", () => {
+  const base = createDefaultSettings();
+  base.flags.layoutSlots = true;
+  base.layoutSlots = applyLayoutPreset(base.layoutSlots, "classic");
+  assert.equal(base.layoutSlots.contentAlign, "start");
+  assert.doesNotMatch(buildStylesheet(base), /readit-content-align:/);
+
+  const all = structuredClone(base);
+  all.layoutSlots.contentAlign = "center";
+  const cssAll = buildStylesheet(all);
+  for (const p of ["leftNav", "main", "rightRail"]) {
+    assert.match(cssAll, new RegExp(`readit-content-align:${p}:center`));
+  }
+  assert.match(cssAll, /justify-content: center !important/);
+  assert.match(cssAll, /:not\(\[class\*="justify-between"\]\)/);
+  assert.match(cssAll, /shreddit-comment \[slot="comment"\]\) \{\n  text-align: start !important/);
+
+  const one = structuredClone(base);
+  one.layoutSlots.contentAlign = "center";
+  one.layoutSlots.contentAlignByPanel = { main: "end", rightRail: "start" };
+  const cssOne = buildStylesheet(one);
+  assert.match(cssOne, /readit-content-align:leftNav:center/);
+  assert.match(cssOne, /readit-content-align:main:end/);
+  assert.match(cssOne, /justify-content: flex-end !important/);
+  assert.doesNotMatch(cssOne, /readit-content-align:rightRail/);
+  assert.equal(panelContentAlign(one.layoutSlots, "rightRail"), "start");
+  assert.equal(panelContentAlign(one.layoutSlots, "leftNav"), "center");
 });
 
 check("stacked nav is not sticky (rail sits below it)", () => {

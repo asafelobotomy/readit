@@ -1,3 +1,4 @@
+import { textWrapFeature } from "./text-wrap.js";
 import { applyStylesheet, removeStylesheet } from "@readit/css-engine";
 import type { FeatureFlags, FeatureHealth, ReaditSettings } from "@readit/schema";
 import {
@@ -106,6 +107,7 @@ export const ALL_FEATURES: FeatureModule[] = [
   modUsernotesFeature,
   modHighlightFeature,
   headerMascotFeature,
+  textWrapFeature,
 ];
 
 /** Features safe to re-run on DOM mutations (idempotent via marks). */
@@ -124,6 +126,7 @@ const SCAN_FEATURE_IDS = new Set([
   "commentUx",
   "followingFeed",
   "headerMascot",
+  "textWrap",
 ]);
 
 export type FeatureRuntime = {

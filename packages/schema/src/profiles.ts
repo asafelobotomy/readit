@@ -34,6 +34,8 @@ function profileLayoutRecipe(
       separators: [],
       gutterTheme: "plain",
       align: "center",
+      contentAlign: "start",
+      contentAlignByPanel: {},
       zoomAll: 1,
       zoomByPanel: {},
       widthLocks: {},
@@ -487,6 +489,7 @@ export function createDefaultSettings(): ReaditSettings {
       },
     ],
     usernotes: [],
+    modSubreddits: [],
     cqsSnapshots: [],
     cqsRiskEvents: [],
     cqsPrefs: {
