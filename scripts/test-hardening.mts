@@ -1,6 +1,8 @@
 /**
  * Unit checks for settings hardening: private event bus, field-level settings
- * repair, import preview, mark-read history, and element-picker guards.
+ * repair, import preview, mark-read history, element-picker guards, and the
+ * medium-severity fixes (mod actions, import URLs/selectors, filters, CQS
+ * attribution, mutation ownership).
  * Run: npm run test:hardening
  */
 import assert from "node:assert/strict";
@@ -12,17 +14,35 @@ import {
 } from "../packages/css-engine/src/index.ts";
 import { emitReadit, onReadit } from "../packages/features/src/bus.ts";
 import {
+  isInsideUserContent,
+  isOwnRemovalMarker,
+  normalizeUsername,
+} from "../packages/features/src/cqs.ts";
+import {
+  filtersFeature,
+  parseRedditScore,
+  postMatchesRule,
+  type FilterablePost,
+} from "../packages/features/src/hide-and-filter.ts";
+import {
+  findNativeModControl,
+  matchesNativeModLabel,
+} from "../packages/features/src/mod.ts";
+import { isReaditMutation } from "../packages/features/src/mutations.ts";
+import {
   MARK_READ_MAX_VISITED,
   mergeVisited,
 } from "../packages/features/src/ux-extras.ts";
 import {
   createDefaultSettings,
+  isSafeHttpUrl,
   migrateSettings,
   previewImport,
   ReaditSettingsSchema,
   repairSettings,
   SETTINGS_VERSION,
   unwrapImport,
+  type FilterRule,
   type ReaditSettings,
 } from "../packages/schema/src/index.ts";
 import { buildSelector, isStudioEvent } from "../extension/studio/picker.ts";
@@ -367,6 +387,261 @@ check("stylesheet skips unsafe element-rule selectors", () => {
   const css = buildStylesheet(s);
   assert.equal(css.includes("readit-studio { display: none"), false);
   assert.ok(css.includes("#right-sidebar-container { display: none !important; }"));
+});
+
+// —— 5. Mod quick actions only report what really happened ——
+
+check("mod labels match whole names only", () => {
+  assert.equal(matchesNativeModLabel("Lock", "Lock post"), true);
+  assert.equal(matchesNativeModLabel("Lock", "Lock comments"), true);
+  assert.equal(matchesNativeModLabel("Lock", "Block user"), false);
+  assert.equal(matchesNativeModLabel("Lock", "Unlock"), false);
+  assert.equal(matchesNativeModLabel("Remove", "Remove"), true);
+  assert.equal(matchesNativeModLabel("Remove", "Remove from saved"), false);
+  assert.equal(matchesNativeModLabel("Spam", "Mark as spam"), true);
+  assert.equal(matchesNativeModLabel("Spam", "Report spam wave"), false);
+  assert.equal(matchesNativeModLabel("Approve", "  approve  POST "), true);
+  assert.equal(matchesNativeModLabel("Approve", null), false);
+});
+
+function fakeLabeled(label: string, inReaditBar = false) {
+  return {
+    getAttribute: (n: string) => (n === "aria-label" ? label : null),
+    closest: (sel: string) => (inReaditBar && sel.includes("readit-mod-bar") ? {} : null),
+  };
+}
+
+check("native mod control lookup skips readit's own bar and near-misses", () => {
+  const block = fakeLabeled("Block user");
+  const ours = fakeLabeled("Lock", true);
+  const post = {
+    shadowRoot: null,
+    querySelectorAll: () => [block, ours],
+  } as unknown as Element;
+  assert.equal(findNativeModControl(post, "Lock"), null);
+
+  const real = fakeLabeled("Lock post");
+  const shadowPost = {
+    shadowRoot: { querySelectorAll: () => [real] },
+    querySelectorAll: () => [block],
+  } as unknown as Element;
+  assert.equal(findNativeModControl(shadowPost, "Lock"), real);
+});
+
+// —— 6. Imported packs can't carry script URLs or stylesheet injection ——
+
+check("only http(s) URLs are safe link targets", () => {
+  assert.equal(isSafeHttpUrl("https://www.reddit.com/r/x/comments/1/"), true);
+  assert.equal(isSafeHttpUrl("http://redd.it/abc"), true);
+  for (const bad of [
+    "javascript:alert(1)",
+    " JavaScript:alert(1)",
+    "data:text/html,<b>x</b>",
+    "/r/relative",
+    "",
+  ]) {
+    assert.equal(isSafeHttpUrl(bad), false, bad);
+  }
+});
+
+check("imports drop script URLs and unsafe selectors, keep the rest", () => {
+  const settings = stored();
+  settings.savedItems = [
+    { id: "s1", url: "javascript:alert(document.cookie)", title: "evil", folderId: "inbox", addedAt: 1 },
+    { id: "s2", url: "https://www.reddit.com/r/x/", title: "ok", folderId: "inbox", addedAt: 2 },
+  ];
+  settings.elementRules = [
+    { id: "e1", selector: "a{} body{background:url(https://evil.example/)}", action: "hide", label: "", enabled: true },
+    { id: "e2", selector: "#right-sidebar-container", action: "hide", label: "", enabled: true },
+  ];
+  settings.usernotes = [
+    { id: "n1", username: "bob", type: "misc", text: "hi", link: "javascript:x", createdAt: 1 },
+  ];
+  const preview = previewImport({ kind: "readit-export", exportedAt: 1, settings });
+  assert.equal(preview.ok, true);
+  assert.match(preview.warnings[0] ?? "", /reset to defaults/);
+  const m = migrateSettings(unwrapImport({ kind: "readit-export", exportedAt: 1, settings }));
+  assert.deepEqual(m.savedItems.map((i) => i.id), ["s2"]);
+  assert.deepEqual(m.elementRules.map((r) => r.id), ["e2"]);
+  assert.equal(m.usernotes.length, 1);
+  assert.equal(m.usernotes[0]!.link, undefined);
+});
+
+// —— 7. Filters ——
+
+check("vote counts parse like Reddit renders them", () => {
+  assert.equal(parseRedditScore("1,234"), 1234);
+  assert.equal(parseRedditScore("1.2k"), 1200);
+  assert.equal(parseRedditScore("3.4M"), 3_400_000);
+  assert.equal(parseRedditScore("-5"), -5);
+  assert.equal(parseRedditScore("42"), 42);
+  assert.equal(parseRedditScore(""), null);
+  assert.equal(parseRedditScore("Vote"), null);
+  assert.equal(parseRedditScore(null), null);
+  assert.equal(parseRedditScore(undefined), null);
+});
+
+const basePost: FilterablePost = {
+  text: "",
+  author: "",
+  subreddit: "",
+  link: "",
+  flair: "",
+  score: null,
+};
+const karmaRule: FilterRule = {
+  id: "k",
+  kind: "karmaMax",
+  pattern: "100",
+  enabled: true,
+} as FilterRule;
+
+check("karma ceiling ignores unknown scores and reads k/M", () => {
+  assert.equal(postMatchesRule({ ...basePost, score: null }, karmaRule), false);
+  assert.equal(postMatchesRule({ ...basePost, score: parseRedditScore("1.2k") }, karmaRule), false);
+  assert.equal(postMatchesRule({ ...basePost, score: 50 }, karmaRule), true);
+});
+
+type FakePost = {
+  attrs: Map<string, string>;
+  style: { display: string };
+  textContent: string;
+  getAttribute: (n: string) => string | null;
+  setAttribute: (n: string, v: string) => void;
+  removeAttribute: (n: string) => void;
+  querySelector: () => null;
+};
+
+function fakePost(text: string): FakePost {
+  const attrs = new Map<string, string>();
+  return {
+    attrs,
+    style: { display: "" },
+    textContent: text,
+    getAttribute: (n) => attrs.get(n) ?? null,
+    setAttribute: (n, v) => void attrs.set(n, v),
+    removeAttribute: (n) => void attrs.delete(n),
+    querySelector: () => null,
+  };
+}
+
+check("editing or removing a filter rule unhides the posts it hid", () => {
+  const posts = [fakePost("big spoiler inside"), fakePost("cats")];
+  const prevDocument = (globalThis as { document?: unknown }).document;
+  (globalThis as { document?: unknown }).document = {
+    querySelectorAll: (sel: string) =>
+      sel.includes("[data-readit-feature-filters")
+        ? posts.filter((p) => p.attrs.has("data-readit-feature-filters"))
+        : posts,
+  };
+  try {
+    const settings = createDefaultSettings();
+    settings.flags.filters = true;
+    const ctx = (filters: FilterRule[]) => ({
+      settings: { ...settings, filters },
+      subreddit: null,
+      pathname: "/",
+    });
+    const spoiler = { id: "f", kind: "keyword", pattern: "spoiler", enabled: true } as FilterRule;
+
+    filtersFeature.apply(ctx([spoiler]));
+    assert.deepEqual(posts.map((p) => p.style.display), ["none", ""]);
+
+    filtersFeature.apply(ctx([{ ...spoiler, enabled: false }]));
+    assert.deepEqual(posts.map((p) => p.style.display), ["", ""]);
+
+    filtersFeature.apply(ctx([{ ...spoiler, pattern: "cats" }]));
+    assert.deepEqual(posts.map((p) => p.style.display), ["", "none"]);
+
+    filtersFeature.apply(ctx([]));
+    assert.deepEqual(posts.map((p) => p.style.display), ["", ""]);
+  } finally {
+    filtersFeature.teardown({} as never);
+    (globalThis as { document?: unknown }).document = prevDocument;
+  }
+});
+
+// —— 8. CQS signals are attributed to the user's own content ——
+
+function inAuthored(author: string | null, userContent = true) {
+  return {
+    closest: (sel: string) =>
+      author !== null && (sel.includes("shreddit-comment") || (userContent && sel.includes(".md")))
+        ? { getAttribute: (n: string) => (n === "author" ? author : null) }
+        : null,
+  };
+}
+
+check("usernames normalize", () => {
+  assert.equal(normalizeUsername(" u/Alice "), "alice");
+  assert.equal(normalizeUsername("/u/Bob/"), "bob");
+  assert.equal(normalizeUsername(""), "");
+  assert.equal(normalizeUsername(undefined), "");
+});
+
+check("removal markers only count on your own content", () => {
+  assert.equal(isOwnRemovalMarker(inAuthored("someone_else"), "me"), false);
+  assert.equal(isOwnRemovalMarker(inAuthored("Me"), "u/me"), true);
+  // No configured username → can't attribute → ignored.
+  assert.equal(isOwnRemovalMarker(inAuthored("me"), ""), false);
+  assert.equal(isOwnRemovalMarker(inAuthored(null), "me"), false);
+});
+
+check("restriction text inside posts/comments is not account messaging", () => {
+  assert.equal(isInsideUserContent(inAuthored("anyone")), true);
+  assert.equal(isInsideUserContent({ closest: () => null }), false);
+});
+
+// —— 9. Mutation filter judges changed nodes, not data-readit-* attributes ——
+
+const READIT_OWNED = new Set(["readit-user-tag", "readit-mod-bar", "readit-layout-frame"]);
+
+function el(cls: string, parent: FakeNode | null = null): FakeNode {
+  const node: FakeNode = {
+    nodeType: 1,
+    cls,
+    parentElement: parent,
+    closest(_sel: string) {
+      for (let n: FakeNode | null = node; n; n = n.parentElement) {
+        if (READIT_OWNED.has(n.cls)) return n;
+      }
+      return null;
+    },
+  };
+  return node;
+}
+type FakeNode = {
+  nodeType: number;
+  cls: string;
+  parentElement: FakeNode | null;
+  closest: (sel: string) => FakeNode | null;
+};
+const text = (parent: FakeNode | null) => ({ nodeType: 3, parentElement: parent });
+
+check("Reddit updates inside readit-stamped elements still trigger a rescan", () => {
+  // #main-content carries data-readit-slot, but it is Reddit's element.
+  const main = el("main-content");
+  const feedSwap = { target: main, addedNodes: [el("shreddit-feed")], removedNodes: [] };
+  assert.equal(isReaditMutation([feedSwap]), false);
+
+  const mixed = {
+    target: main,
+    addedNodes: [el("readit-user-tag"), el("shreddit-post")],
+    removedNodes: [],
+  };
+  assert.equal(isReaditMutation([mixed]), false);
+});
+
+check("readit's own insertions and in-widget edits are skipped", () => {
+  const link = el("a");
+  const badge = { target: link, addedNodes: [el("readit-user-tag")], removedNodes: [] };
+  const bar = el("readit-mod-bar");
+  const btn = el("button", bar);
+  const relabel = { target: btn, addedNodes: [text(btn)], removedNodes: [text(null)] };
+  const frameGone = { target: el("host"), addedNodes: [], removedNodes: [el("readit-layout-frame")] };
+  assert.equal(isReaditMutation([badge, relabel, frameGone]), true);
+  const emptyOnReddit = { target: link, addedNodes: [], removedNodes: [] };
+  assert.equal(isReaditMutation([emptyOnReddit]), false);
 });
 
 if (failed > 0) {

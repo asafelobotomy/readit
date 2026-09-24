@@ -186,6 +186,44 @@ function similarity(a: string, b: string): number {
   return inter / Math.max(wa.size, wb.size);
 }
 
+/** "u/Name", "/u/Name/", " name " → "name"; "" when unset. */
+export function normalizeUsername(raw: string | null | undefined): string {
+  return String(raw ?? "")
+    .trim()
+    .replace(/^\/?u\//i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+type ClosestLike = {
+  closest: (selector: string) => { getAttribute: (name: string) => string | null } | null;
+};
+
+/** Author of the post/comment containing `el`, lowercased; "" if unknown. */
+export function contentAuthor(el: ClosestLike): string {
+  return normalizeUsername(
+    el.closest("shreddit-comment, shreddit-post")?.getAttribute("author"),
+  );
+}
+
+/**
+ * A removal marker only says something about *your* CQS when it sits on your
+ * own post/comment. Without a configured username it can't be attributed, so
+ * it's ignored rather than counting other people's removed comments.
+ */
+export function isOwnRemovalMarker(el: ClosestLike, username: string): boolean {
+  const me = normalizeUsername(username);
+  return Boolean(me) && contentAuthor(el) === me;
+}
+
+/** Posts/comments are user-written text, not Reddit account messaging. */
+const USER_CONTENT_SELECTOR =
+  "shreddit-post, shreddit-comment, article, [slot='text-body'], [slot='comment'], [id*='-post-rtjson-content'], .md";
+
+export function isInsideUserContent(el: { closest: (s: string) => unknown }): boolean {
+  return Boolean(el.closest(USER_CONTENT_SELECTOR));
+}
+
 type CqsRuntime = {
   settings: ReaditSettings | null;
   recentBodies: string[];
@@ -206,8 +244,17 @@ function getRuntime(): CqsRuntime {
   return w.__readitCqs;
 }
 
-function scanWhatIsMyCqs(): void {
+function scanWhatIsMyCqs(settings: ReaditSettings): void {
   if (!/\/r\/whatismycqs\b/i.test(location.pathname)) return;
+  // The bot answers on each asker's own post; on someone else's thread the
+  // tier is theirs. Only enforceable once the user has told us who they are.
+  const me = normalizeUsername(settings.cqsPrefs.username);
+  if (me) {
+    const threadAuthor = normalizeUsername(
+      document.querySelector("shreddit-post")?.getAttribute("author"),
+    );
+    if (threadAuthor !== me) return;
+  }
   const comments = document.querySelectorAll(
     "shreddit-comment, [data-testid='comment'], .Comment",
   );
@@ -267,13 +314,14 @@ function scanFriction(ctxSettings: ReaditSettings): void {
     .forEach((el) => {
       if (isProcessed(el, "cqsRem")) return;
       markProcessed(el, "cqsRem");
+      if (!isOwnRemovalMarker(el, ctxSettings.cqsPrefs.username)) return;
       emitPersist({
         type: "risk",
         event: {
           id: createId("cqr"),
           kind: "removal",
           confidence: "community",
-          message: "Possible removal/filter marker on page — avoid repeat posting in this community.",
+          message: "Removal/filter marker on your content — avoid repeat posting in this community.",
           at: Date.now(),
           path,
         },
@@ -281,8 +329,11 @@ function scanFriction(ctxSettings: ReaditSettings): void {
     });
 
   // Restriction banners
+  // Reddit's own messaging only — a post or comment *discussing* a ban
+  // is not a restriction on this account.
   const restrict = [...document.querySelectorAll("h1, h2, p, faceplate-banner")].find(
     (el) =>
+      !isInsideUserContent(el) &&
       /account (has been )?(suspended|banned|locked|restricted)|ban evasion|inauthentic activity/i.test(
         el.textContent || "",
       ),
@@ -303,7 +354,6 @@ function scanFriction(ctxSettings: ReaditSettings): void {
     });
   }
 
-  void ctxSettings;
 }
 
 function attachSubmitGuards(settings: ReaditSettings): void {
@@ -414,7 +464,7 @@ export const cqsTrackerFeature: FeatureModule = {
     "Log Contributor Quality Score tiers from r/WhatIsMyCQS and warn on contribution-risk heuristics.",
   apply(ctx) {
     if (!ctx.settings.flags.cqsTracker) return;
-    scanWhatIsMyCqs();
+    scanWhatIsMyCqs(ctx.settings);
     scanFriction(ctx.settings);
     attachSubmitGuards(ctx.settings);
   },
