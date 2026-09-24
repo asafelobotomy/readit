@@ -6,7 +6,7 @@ Automated harness: `npm run smoke` (Playwright Chromium) or `npm run smoke:brave
 
 Unit: `npm test` (layout recipes + settings hardening)
 
-Evidence: [`docs/smoke-evidence/`](smoke-evidence/) · results: [`results.json`](smoke-evidence/results.json) — committed snapshot. New runs write to the git-ignored `.smoke-evidence/`; set `READIT_EVIDENCE_DIR=docs/smoke-evidence` to refresh the snapshot.
+Evidence: committed results [`results.json`](smoke-evidence/results.json). Runs write screenshots + results to the git-ignored `.smoke-evidence/`; set `READIT_EVIDENCE_DIR=docs/smoke-evidence` to refresh the committed results (screenshots there stay git-ignored).
 
 **Feedback tracks (v4):** focused audit + checklist → [`smoke-checklist-v4-tracks.md`](smoke-checklist-v4-tracks.md)
 

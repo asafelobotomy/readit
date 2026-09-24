@@ -4,8 +4,9 @@ import path from "node:path";
  * Where smoke runs write screenshots + results.json.
  *
  * Defaults to the git-ignored `.smoke-evidence/` so routine runs don't add
- * megabytes of screenshots to the repo. To refresh the committed snapshot in
- * docs/, run with READIT_EVIDENCE_DIR=docs/smoke-evidence.
+ * megabytes of screenshots to the repo. READIT_EVIDENCE_DIR=docs/smoke-evidence
+ * refreshes the committed results.json files; screenshots written there are
+ * git-ignored too (they were purged from history to keep clones small).
  */
 export function evidenceDir(root, sub = "") {
   const base = process.env.READIT_EVIDENCE_DIR

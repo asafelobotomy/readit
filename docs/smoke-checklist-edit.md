@@ -6,7 +6,7 @@ End-to-end coverage of the **FAB action stack**, **bottom edit toolbox island**,
 
 **Harness:** `npm run smoke:edit` (Playwright) · `npm run smoke:edit:brave` (CDP `:9222`)
 
-**Evidence:** [`docs/smoke-evidence/edit/`](smoke-evidence/edit/) · results: [`results.json`](smoke-evidence/edit/results.json)
+**Evidence:** committed results: [`results.json`](smoke-evidence/edit/results.json) · screenshots from a run land in `.smoke-evidence/edit/` (git-ignored; not committed)
 
 **Unit:** `npm run test:layout` (separator budget, zoom/font/gutter CSS)
 

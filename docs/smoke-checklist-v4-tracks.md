@@ -2,7 +2,7 @@
 
 **Scope:** Now / Next / Later from the peer-feedback canvas.  
 **Harness:** `npm run test:layout` (unit) + `npm run smoke` / `npm run smoke:brave` (E2E).  
-**Evidence:** [`docs/smoke-evidence/`](smoke-evidence/) · [`results.json`](smoke-evidence/results.json)
+**Evidence:** [`results.json`](smoke-evidence/results.json) · screenshots from a run land in `.smoke-evidence/` (git-ignored; not committed)
 
 Legend: **U** = unit · **A** = automated E2E · **M** = manual · ✓ pass · ✗ fail · — skip
 

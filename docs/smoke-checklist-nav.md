@@ -6,7 +6,7 @@ End-to-end coverage of **thin / compact Nav**: icon rail, community avatars + bo
 
 **Harness:** `npm run smoke:nav` (Playwright) · `npm run smoke:nav:brave` (CDP `:9222`)
 
-**Evidence:** [`docs/smoke-evidence/nav/`](smoke-evidence/nav/) · results: [`results.json`](smoke-evidence/nav/results.json)
+**Evidence:** committed results: [`results.json`](smoke-evidence/nav/results.json) · screenshots from a run land in `.smoke-evidence/nav/` (git-ignored; not committed)
 
 **Unit:** `npm run test:layout` (includes `classifyNavSection` + compact CSS markers)
 

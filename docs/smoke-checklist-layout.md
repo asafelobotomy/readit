@@ -6,7 +6,7 @@ End-to-end coverage of **layout slots**: presets, widths/pads/gaps, edit-mode ch
 
 **Harness:** `npm run smoke:layout` (Playwright) · `npm run smoke:layout:brave` (CDP `:9222`)
 
-**Evidence:** [`docs/smoke-evidence/layout/`](smoke-evidence/layout/) · results: [`results.json`](smoke-evidence/layout/results.json)
+**Evidence:** committed results: [`results.json`](smoke-evidence/layout/results.json) · screenshots from a run land in `.smoke-evidence/layout/` (git-ignored; not committed)
 
 **Unit:** `npm run test:layout`
 

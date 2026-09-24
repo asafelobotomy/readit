@@ -4,6 +4,8 @@ node_modules
 dist
 .smoke-profile
 .smoke-evidence/
+# Screenshots were purged from history to keep clones small; results.json stays.
+docs/smoke-evidence/**/*.png
 .smoke-profile-*/
 *.log
 .DS_Store

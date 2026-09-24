@@ -50,7 +50,7 @@ npm run check:versions   # workspace + lockfile versions agree (run in CI)
 npm run smoke            # end-to-end against live New Reddit (local only)
 ```
 
-Smoke runs save screenshots and `results.json` to the git-ignored `.smoke-evidence/`. To refresh the committed snapshot under `docs/smoke-evidence/`, run with `READIT_EVIDENCE_DIR=docs/smoke-evidence`.
+Smoke runs save screenshots and `results.json` to the git-ignored `.smoke-evidence/`. To refresh the committed `results.json` files under `docs/smoke-evidence/`, run with `READIT_EVIDENCE_DIR=docs/smoke-evidence`; screenshots are never committed (they were purged from history to keep clones small).
 
 ## Profiles
 
