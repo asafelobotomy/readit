@@ -109,12 +109,13 @@ export function validateImport(raw: unknown): ImportPreview {
   return previewImport(raw);
 }
 
-export async function importSettings(raw: unknown): Promise<ReaditSettings> {
+/** Validated, migrated settings from an import payload; throws when unusable. */
+export function settingsFromImport(raw: unknown): ReaditSettings {
   const preview = previewImport(raw);
   if (!preview.ok) {
     throw new Error(preview.errors.join("; ") || "Invalid import");
   }
-  return saveSettings(migrateSettings(unwrapImport(raw)));
+  return migrateSettings(unwrapImport(raw));
 }
 
 export function watchSettings(

@@ -1,22 +1,27 @@
 import { applyStylesheet } from "@readit/css-engine";
-import type { ReaditSettings } from "@readit/schema";
 import { loadSettings, watchSettings } from "../lib/settings";
+import { isMainScriptActive, withSubOverride } from "../lib/overrides";
 
 /**
  * Early inject — apply CSS tokens before paint to reduce FOUC.
+ *
+ * Only until the main content script starts: after that it owns the
+ * stylesheet, and re-applying here too rebuilt it twice per settings change
+ * (and without the subreddit override or Toolbox state).
  */
 export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
   runAt: "document_start",
   async main() {
-    let settings = await loadSettings();
-    const apply = (next: ReaditSettings) => {
-      settings = next;
-      if (document.documentElement) {
-        applyStylesheet(settings);
+    const settings = await loadSettings();
+    if (isMainScriptActive()) return;
+    if (document.documentElement) applyStylesheet(withSubOverride(settings));
+    const unwatch = watchSettings((next) => {
+      if (isMainScriptActive()) {
+        unwatch();
+        return;
       }
-    };
-    apply(settings);
-    watchSettings(apply);
+      if (document.documentElement) applyStylesheet(withSubOverride(next));
+    });
   },
 });

@@ -20,10 +20,12 @@ import {
   onReadit,
 } from "@readit/features";
 import {
+  applyLightweightSync,
   budgetColumnOrder,
   CHROME_HEIGHT_LIMITS,
   clampPanelWidth,
   createId,
+  effectiveMarkReadMode,
   formatProfileLayoutBlurb,
   isSafeHttpUrl,
   isStackedPair,
@@ -49,15 +51,15 @@ import {
 } from "@readit/schema";
 import {
   exportSettings,
-  importSettings,
+  settingsFromImport,
   loadSettings,
   mutateSettings,
   patchSettings,
   switchProfile,
   validateImport,
-  watchSettings,
 } from "../lib/settings";
 import type { StudioApi } from "./mount";
+import { readLightweightSync } from "../lib/sync";
 import { STUDIO_LOCALES, t } from "./i18n";
 import { buildSelector, isStudioEvent } from "./picker";
 import { EditToolbox, KOFI_URL, REPO_URL } from "./EditToolbox";
@@ -135,17 +137,11 @@ export function StudioApp({ api }: { api: StudioApi }) {
       const next = await loadSettings();
       setSettings({ ...next, toolboxDetected: toolbox });
     });
-    const unwatch = watchSettings((next) => {
-      setSettings({
-        ...next,
-        toolboxDetected:
-          document.documentElement.dataset.readitToolbox === "1",
-      });
-    });
+    // No separate storage watcher: the content script re-emits every change
+    // as "settings-updated" (a second watcher re-parsed each write again).
     return () => {
       offOpen();
       offUpdated();
-      unwatch();
     };
   }, []);
 
@@ -395,22 +391,23 @@ export function StudioApp({ api }: { api: StudioApi }) {
             e.preventDefault();
             const startX = e.clientX;
             const startW = settings.knobs.tokens.feedWidthPx;
+            // Per-drag width. It used to live on `window`, so a click without
+            // moving re-committed the previous drag's width, undoing any
+            // slider change made since.
+            let dragW = startW;
             const onMove = (ev: MouseEvent) => {
               const delta = ev.clientX - startX;
-              const next = Math.min(1600, Math.max(480, startW + delta * 2));
+              dragW = clampPanelWidth("main", startW + delta * 2);
               document.documentElement.style.setProperty(
                 "--readit-feed-width",
-                `${next}px`,
+                `${dragW}px`,
               );
-              (window as unknown as { __readitWidth?: number }).__readitWidth =
-                next;
             };
             const onUp = async () => {
               window.removeEventListener("mousemove", onMove);
               window.removeEventListener("mouseup", onUp);
-              const w =
-                (window as unknown as { __readitWidth?: number }).__readitWidth ??
-                startW;
+              if (dragW === startW) return;
+              const w = dragW;
               await commit("Resize feed", (s) => ({
                 ...s,
                 knobs: {
@@ -649,7 +646,12 @@ export function StudioApp({ api }: { api: StudioApi }) {
               accept="application/json"
               style={{ display: "none" }}
               onChange={async (e) => {
-                const file = e.currentTarget.files?.[0];
+                // Capture now: currentTarget is null once the handler awaits,
+                // which used to throw before the reset below and left the
+                // input holding the file (re-picking it fired no change).
+                const input = e.currentTarget;
+                const file = input.files?.[0];
+                input.value = "";
                 if (!file) return;
                 try {
                   const text = await file.text();
@@ -674,13 +676,12 @@ export function StudioApp({ api }: { api: StudioApi }) {
                     flash("Import cancelled");
                     return;
                   }
-                  const next = await importSettings(raw);
-                  setSettings(next);
-                  flash("Imported settings");
+                  const imported = settingsFromImport(raw);
+                  // Through commit() so the import lands on the undo stack.
+                  await commit("Import settings", () => imported);
                 } catch {
                   flash("Import failed");
                 }
-                e.currentTarget.value = "";
               }}
             />
           </div>
@@ -1702,12 +1703,15 @@ function SimpleTab({
             <input
               type="checkbox"
               checked={settings.syncLightweight}
-              onChange={(e) => {
+              onChange={async (e) => {
                 const checked = e.currentTarget.checked;
-                void onCommit("Lightweight sync", (s) => ({
-                  ...s,
-                  syncLightweight: checked,
-                }));
+                // Adopt what other devices already synced before pushing,
+                // instead of overwriting it with this device's values.
+                const remote = checked ? await readLightweightSync() : null;
+                void onCommit("Lightweight sync", (s) => {
+                  const next = { ...s, syncLightweight: checked };
+                  return remote ? applyLightweightSync(next, remote) : next;
+                });
               }}
             />
             Sync lightweight prefs (profile id / mode / pause)
@@ -2214,7 +2218,11 @@ function CreateTab({
           <select
             class="readit-select"
             style={{ width: 140 }}
-            value={settings.markReadPrefs.mode}
+            value={
+              settings.flags.markRead
+                ? effectiveMarkReadMode(settings.markReadPrefs.mode)
+                : "off"
+            }
             onChange={(e) => {
               const mode = e.currentTarget.value as MarkReadMode;
               void onCommit("Mark-read mode", (s) => ({

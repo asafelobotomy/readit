@@ -10,6 +10,7 @@ import {
   CLASSIC_LAYOUT_PLACEMENTS,
   SETTINGS_VERSION,
   applyLayoutPreset,
+  effectiveMarkReadMode,
   normalizeColumnOrder,
 } from "./types.js";
 
@@ -543,6 +544,13 @@ export function applyProfile(
     activeProfileId: profile.id,
     knobs: structuredClone(profile.knobs),
     flags: { ...settings.flags, ...structuredClone(profile.flags) },
+    // Keep the studio's mark-read mode in step with the flag the profile sets.
+    markReadPrefs: {
+      ...settings.markReadPrefs,
+      mode: profile.flags.markRead
+        ? effectiveMarkReadMode(settings.markReadPrefs.mode)
+        : settings.markReadPrefs.mode,
+    },
     feedPrefs: {
       ...settings.feedPrefs,
       followingDefault: profile.flags.followingFeed

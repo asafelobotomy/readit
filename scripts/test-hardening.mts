@@ -2,7 +2,8 @@
  * Unit checks for settings hardening: private event bus, field-level settings
  * repair, import preview, mark-read history, element-picker guards, and the
  * medium-severity fixes (mod actions, import URLs/selectors, filters, CQS
- * attribution, mutation ownership).
+ * attribution, mutation ownership), and the low-severity ones (J/K targeting,
+ * lightweight sync, exact-name filters, mark-read mode).
  * Run: npm run test:hardening
  */
 import assert from "node:assert/strict";
@@ -29,13 +30,18 @@ import {
   matchesNativeModLabel,
 } from "../packages/features/src/mod.ts";
 import { isReaditMutation } from "../packages/features/src/mutations.ts";
+import { nextPostIndex } from "../packages/features/src/reader-creator.ts";
 import {
   MARK_READ_MAX_VISITED,
   mergeVisited,
 } from "../packages/features/src/ux-extras.ts";
 import {
+  applyLightweightSync,
+  applyProfile,
   createDefaultSettings,
+  effectiveMarkReadMode,
   isSafeHttpUrl,
+  parseLightweightSync,
   migrateSettings,
   previewImport,
   ReaditSettingsSchema,
@@ -642,6 +648,90 @@ check("readit's own insertions and in-widget edits are skipped", () => {
   assert.equal(isReaditMutation([badge, relabel, frameGone]), true);
   const emptyOnReddit = { target: link, addedNodes: [], removedNodes: [] };
   assert.equal(isReaditMutation([emptyOnReddit]), false);
+});
+
+// —— Low severity ——
+
+check("J/K picks the next/previous post from viewport tops", () => {
+  // Post 1 sits at the anchor (just scrolled there): J → 2, K → 0.
+  const tops = [-900, 64, 700, 1400];
+  assert.equal(nextPostIndex(tops, "j"), 2);
+  assert.equal(nextPostIndex(tops, "k"), 0);
+  // Mid-post (current top above the anchor): K returns to its start.
+  assert.equal(nextPostIndex([-300, 500], "k"), 0);
+  assert.equal(nextPostIndex([-300, 500], "j"), 1);
+  // Top of the feed, nothing above the anchor yet.
+  assert.equal(nextPostIndex([120, 800], "j"), 0);
+  assert.equal(nextPostIndex([120, 800], "k"), 0);
+  // End of the feed stays on the last post.
+  assert.equal(nextPostIndex([-2000, 64], "j"), 1);
+  assert.equal(nextPostIndex([], "j"), null);
+});
+
+check("synced payloads are validated", () => {
+  assert.deepEqual(
+    parseLightweightSync({ activeProfileId: "dense-power", mode: "advanced", paused: true }),
+    { activeProfileId: "dense-power", mode: "advanced", paused: true },
+  );
+  for (const bad of [
+    null,
+    "x",
+    { activeProfileId: "a", mode: "turbo", paused: false },
+    { activeProfileId: 5, mode: "simple", paused: false },
+    { activeProfileId: "a", mode: "simple" },
+  ]) {
+    assert.equal(parseLightweightSync(bad), null, JSON.stringify(bad));
+  }
+});
+
+check("applying a synced profile brings its knobs, ignores unknown ids", () => {
+  const base = createDefaultSettings();
+  const switched = applyLightweightSync(base, {
+    activeProfileId: "dense-power",
+    mode: base.mode,
+    paused: false,
+  });
+  assert.equal(switched.activeProfileId, "dense-power");
+  assert.deepEqual(switched.knobs, applyProfile(base, "dense-power").knobs);
+
+  const unknown = applyLightweightSync(base, {
+    activeProfileId: "only-on-other-device",
+    mode: "advanced",
+    paused: true,
+  });
+  assert.equal(unknown.activeProfileId, base.activeProfileId);
+  assert.equal(unknown.mode, "advanced");
+  assert.equal(unknown.paused, true);
+
+  // Identical payload → same object, so pull doesn't re-save (no sync echo).
+  const same = applyLightweightSync(base, {
+    activeProfileId: base.activeProfileId,
+    mode: base.mode,
+    paused: base.paused,
+  });
+  assert.equal(same, base);
+});
+
+check("user/subreddit filters match whole names", () => {
+  const user = { id: "u", kind: "user", pattern: "u/bob", enabled: true } as FilterRule;
+  assert.equal(postMatchesRule({ ...basePost, author: "bob" }, user), true);
+  assert.equal(postMatchesRule({ ...basePost, author: "u/Bob" }, user), true);
+  assert.equal(postMatchesRule({ ...basePost, author: "bobby" }, user), false);
+  const sub = { id: "s", kind: "subreddit", pattern: "pics", enabled: true } as FilterRule;
+  assert.equal(postMatchesRule({ ...basePost, subreddit: "r/pics" }, sub), true);
+  assert.equal(postMatchesRule({ ...basePost, subreddit: "r/picsofdogs" }, sub), false);
+});
+
+check("mark-read mode shown matches the mode in effect", () => {
+  assert.equal(effectiveMarkReadMode("off"), "open");
+  assert.equal(effectiveMarkReadMode("onScroll"), "onScroll");
+  const base = createDefaultSettings();
+  assert.equal(base.markReadPrefs.mode, "off");
+  const profile = base.profiles.find((p) => p.flags.markRead);
+  assert.ok(profile, "a builtin profile enables mark-read");
+  const next = applyProfile(base, profile.id);
+  assert.equal(next.flags.markRead, true);
+  assert.equal(next.markReadPrefs.mode, "open");
 });
 
 if (failed > 0) {

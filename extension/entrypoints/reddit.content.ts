@@ -2,7 +2,6 @@ import {
   appendCqsRiskEvent,
   appendCqsSnapshot,
   createFeatureRuntime,
-  currentSubreddit,
   emitReadit,
   isReaditMutation,
   onReadit,
@@ -14,27 +13,10 @@ import {
 } from "@readit/schema";
 import { createShadowRootUi } from "wxt/utils/content-script-ui/shadow-root";
 import { loadSettings, mutateSettings, watchSettings } from "../lib/settings";
+import { markMainScriptActive, withSubOverride } from "../lib/overrides";
 import { loadVisitedPosts } from "../lib/visited";
 import { mountStudio } from "../studio/mount";
 import "../studio/studio.css";
-
-function withSubOverride(settings: ReaditSettings): ReaditSettings {
-  const sub = currentSubreddit(location.pathname);
-  if (!sub) return settings;
-  const override = settings.subredditOverrides.find(
-    (o) => o.subreddit.toLowerCase() === sub.toLowerCase(),
-  );
-  if (!override) return settings;
-  return {
-    ...settings,
-    knobs: {
-      ...settings.knobs,
-      tokens: { ...settings.knobs.tokens, ...override.tokens },
-      hide: { ...settings.knobs.hide, ...override.hide },
-      mediaMode: override.mediaMode ?? settings.knobs.mediaMode,
-    },
-  };
-}
 
 export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
@@ -45,6 +27,8 @@ export default defineContentScript({
       visitedPosts: await loadVisitedPosts(),
     });
     let settings = await loadSettings();
+    // From here this script owns the stylesheet; early.content stops re-applying.
+    markMainScriptActive();
     runtime.applyAll(withSubOverride(settings));
 
     const reapply = (next: ReaditSettings) => {
@@ -60,6 +44,8 @@ export default defineContentScript({
     // Persist requests from the layout editor / CQS tracker. These arrive on
     // the extension-private bus, never on `window`, so page scripts cannot
     // forge storage writes; saveSettings() re-validates every write anyway.
+    // No `.then(reapply)`: the storage watcher above already re-applies each
+    // write once (it used to run the full apply twice per write).
     const unsubscribers = [
       onReadit("layout-widths", (detail) => {
         void mutateSettings((current) => ({
@@ -83,7 +69,7 @@ export default defineContentScript({
               feedWidthPx: detail.feedWidthPx,
             },
           },
-        })).then(reapply);
+        }));
       }),
 
       onReadit("layout-order", (detail) => {
@@ -103,7 +89,7 @@ export default defineContentScript({
               ),
             },
           };
-        }).then(reapply);
+        });
       }),
 
       onReadit("layout-pads", (detail) => {
@@ -117,7 +103,7 @@ export default defineContentScript({
               pagePadRightPx: detail.pagePadRightPx,
             },
           },
-        })).then(reapply);
+        }));
       }),
 
       onReadit("layout-separators", (detail) => {
@@ -128,7 +114,7 @@ export default defineContentScript({
             preset: "custom",
             separators: detail.separators.slice(0, 3),
           },
-        })).then(reapply);
+        }));
       }),
 
       onReadit("layout-width-locks", (detail) => {
@@ -138,7 +124,7 @@ export default defineContentScript({
             ...current.layoutSlots,
             widthLocks: detail.widthLocks,
           },
-        })).then(reapply);
+        }));
       }),
 
       onReadit("cqs-persist", (detail) => {
@@ -147,7 +133,7 @@ export default defineContentScript({
           detail.type === "snapshot"
             ? appendCqsSnapshot(current, detail.snapshot)
             : appendCqsRiskEvent(current, detail.event),
-        ).then(reapply);
+        );
       }),
     ];
     ctx.onInvalidated(() => {

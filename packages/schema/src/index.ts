@@ -13,3 +13,8 @@ export {
   type ImportPreview,
   type RepairResult,
 } from "./sanitize.js";
+export {
+  applyLightweightSync,
+  parseLightweightSync,
+  type LightweightSync,
+} from "./lightweight-sync.js";

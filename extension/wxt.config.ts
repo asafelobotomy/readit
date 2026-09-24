@@ -17,7 +17,7 @@ export default defineConfig({
     name: "readit",
     description:
       "Profile-first New Reddit workspace for readers, creators, and mods — live in-page customization.",
-    permissions: ["storage", "activeTab"],
+    permissions: ["storage"],
     host_permissions: ["*://*.reddit.com/*"],
     optional_permissions: [],
     web_accessible_resources: [
