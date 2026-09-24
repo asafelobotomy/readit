@@ -73,8 +73,8 @@ export const userTagsFeature: FeatureModule = {
     // labels/colors and deleted tags show up without a reload.
     document.querySelectorAll('a[href*="/user/"]').forEach((a) => {
       const href = a.getAttribute("href") || "";
-      const m = href.match(/\/user\/([^/?#]+)/i);
-      const tag = m ? map.get(m[1].toLowerCase()) : undefined;
+      const user = href.match(/\/user\/([^/?#]+)/i)?.[1];
+      const tag = user ? map.get(user.toLowerCase()) : undefined;
       const next = a.nextElementSibling;
       let badge =
         next instanceof HTMLElement && next.classList.contains("readit-user-tag")
