@@ -6,6 +6,7 @@ import type {
   ReaditSettings,
 } from "@readit/schema";
 import { createId } from "@readit/schema";
+import { emitReadit, type CqsPersistDetail } from "./bus.js";
 import type { FeatureModule } from "./utils.js";
 import { clearMarks, isProcessed, markProcessed } from "./utils.js";
 
@@ -109,13 +110,8 @@ export function confidenceLabel(c: CqsRiskConfidence): string {
   }
 }
 
-function emitPersist(
-  detail:
-    | { type: "snapshot"; snapshot: CqsSnapshot }
-    | { type: "risk"; event: CqsRiskEvent }
-    | { type: "submit_stamps"; stamps: number[] },
-): void {
-  window.dispatchEvent(new CustomEvent("readit:cqs-persist", { detail }));
+function emitPersist(detail: CqsPersistDetail): void {
+  emitReadit("cqs-persist", detail);
 }
 
 function showPageBanner(message: string, severity: "info" | "warn" = "warn"): void {

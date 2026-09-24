@@ -3,6 +3,7 @@ import {
   addLayoutSeparator,
   applyLayoutPreset,
   getEditSelection,
+  onReadit,
 } from "@readit/features";
 import type {
   FontFamily,
@@ -70,12 +71,9 @@ export function EditToolbox({ settings, commit }: Props) {
   const sepCount = cfg.separators?.length ?? 0;
 
   useEffect(() => {
-    const onSel = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ selected?: string[] }>).detail;
-      setSelected(detail?.selected || []);
-    };
-    window.addEventListener("readit:edit-selection", onSel);
-    return () => window.removeEventListener("readit:edit-selection", onSel);
+    return onReadit("edit-selection", (detail) => {
+      setSelected(detail.selected);
+    });
   }, []);
 
   const selectedPanels = selected.filter(

@@ -97,6 +97,26 @@ async function reloadReaditExtension(browser, extensionId) {
   }
 }
 
+/**
+ * Run `fn` in the extension's own popup page (chrome.* APIs available).
+ * The content script only accepts settings writes from extension code, so the
+ * harness can no longer poke it with page-world `readit:*` events.
+ */
+async function extensionEval(fn, arg) {
+  if (!extensionId) throw new Error("readit extension id unknown");
+  const host = puppeteerBrowser || playwrightContext;
+  const extPage = await host.newPage();
+  try {
+    await extPage.goto(`chrome-extension://${extensionId}/popup.html`, {
+      waitUntil: "domcontentloaded",
+    });
+    return await extPage.evaluate(fn, arg);
+  } finally {
+    await extPage.close().catch(() => {});
+    await page?.bringToFront?.().catch?.(() => {});
+  }
+}
+
 async function studioEval(page, fn, ...args) {
   return page.evaluate(fn, ...args);
 }
@@ -365,11 +385,23 @@ try {
   });
   await sleep(350);
 
-  const viaEvent = await studioEval(page, async () => {
-    // Ensure edit mode off before testing open-studio → Settings only
+  // Ensure edit mode off before testing open-studio → Settings only
+  await studioEval(page, () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    await new Promise((r) => setTimeout(r, 200));
-    window.dispatchEvent(new CustomEvent("readit:open-studio"));
+  });
+  await sleep(200);
+  // Same path as the popup's "Open studio": runtime message → content script.
+  await extensionEval(async () => {
+    const tabs = await chrome.tabs.query({ url: ["*://*.reddit.com/*"] });
+    await Promise.all(
+      tabs.map((tab) =>
+        tab.id
+          ? chrome.tabs.sendMessage(tab.id, { type: "readit:open-studio" }).catch(() => {})
+          : undefined,
+      ),
+    );
+  });
+  const viaEvent = await studioEval(page, async () => {
     await new Promise((r) => setTimeout(r, 450));
     const root = document.querySelector("readit-studio")?.shadowRoot;
     return {

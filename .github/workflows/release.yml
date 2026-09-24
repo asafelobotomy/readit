@@ -71,7 +71,7 @@ jobs:
 
       - name: Unit tests
         if: steps.ver.outputs.bumped == 'true'
-        run: npm run test:layout
+        run: npm test
 
       - name: Build + zip Chrome MV3
         if: steps.ver.outputs.bumped == 'true'

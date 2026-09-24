@@ -1,27 +1,42 @@
-import type { FeatureModule } from "./utils.js";
+import type { FeatureContext, FeatureModule } from "./utils.js";
 import { clearMarks, isProcessed, markProcessed } from "./utils.js";
 
-const VISITED_KEY = "readit.visitedPosts";
-const MAX_VISITED = 400;
+export const MARK_READ_MAX_VISITED = 400;
 
-function loadVisited(): Set<string> {
-  try {
-    const raw = localStorage.getItem(VISITED_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw) as string[];
-    return new Set(Array.isArray(arr) ? arr : []);
-  } catch {
-    return new Set();
+/** Union of two histories (oldest first), `newer` ordered last, capped to the newest entries. */
+export function mergeVisited(
+  older: readonly string[],
+  newer: readonly string[],
+): string[] {
+  const set = new Set<string>();
+  for (const key of [...older, ...newer]) {
+    set.delete(key);
+    set.add(key);
   }
+  return [...set].slice(-MARK_READ_MAX_VISITED);
 }
 
-function saveVisited(set: Set<string>): void {
-  const arr = Array.from(set).slice(-MAX_VISITED);
-  try {
-    localStorage.setItem(VISITED_KEY, JSON.stringify(arr));
-  } catch {
-    /* quota */
+/** In-memory history for this tab, seeded once from the host's store. */
+let visited: Set<string> | null = null;
+
+function visitedSet(ctx: FeatureContext): Set<string> {
+  if (!visited) {
+    visited = new Set(
+      (ctx.visitedPosts?.initial ?? []).slice(-MARK_READ_MAX_VISITED),
+    );
   }
+  return visited;
+}
+
+function rememberVisited(ctx: FeatureContext, key: string): void {
+  const set = visitedSet(ctx);
+  // Re-insert so recently seen posts are evicted last.
+  set.delete(key);
+  set.add(key);
+  while (set.size > MARK_READ_MAX_VISITED) {
+    set.delete(set.values().next().value as string);
+  }
+  ctx.visitedPosts?.save([...set]);
 }
 
 function postKey(post: Element): string | null {
@@ -54,15 +69,14 @@ export const markReadFeature: FeatureModule = {
     if (!ctx.settings.flags.markRead) return;
     const prefs = ctx.settings.markReadPrefs;
     const mode = prefs.mode === "off" ? "open" : prefs.mode;
-    const visited = loadVisited();
+    const visited = visitedSet(ctx);
     const opacity = prefs.dimOpacity;
 
     const stamp = (post: Element) => {
       const key = postKey(post);
       if (!key) return;
-      visited.add(key);
+      rememberVisited(ctx, key);
       applyDim(post as HTMLElement, opacity);
-      saveVisited(visited);
     };
 
     document.querySelectorAll("shreddit-post").forEach((post) => {
@@ -110,9 +124,7 @@ export const markReadFeature: FeatureModule = {
     }
 
     if (/\/comments\//.test(location.pathname)) {
-      const path = location.pathname.replace(/\/$/, "");
-      visited.add(path);
-      saveVisited(visited);
+      rememberVisited(ctx, location.pathname.replace(/\/$/, ""));
     }
   },
   teardown() {

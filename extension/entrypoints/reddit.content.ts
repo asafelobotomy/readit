@@ -3,22 +3,17 @@ import {
   appendCqsSnapshot,
   createFeatureRuntime,
   currentSubreddit,
-  syncSidebarsHide,
+  emitReadit,
+  onReadit,
 } from "@readit/features";
-import type {
-  CqsRiskEvent,
-  CqsSnapshot,
-  LayoutColumnPanel,
-  LayoutPreset,
-  ReaditSettings,
-} from "@readit/schema";
+import type { ReaditSettings } from "@readit/schema";
 import {
-  applyLayoutPreset,
   normalizeColumnOrder,
   placementsFromColumnOrder,
 } from "@readit/schema";
 import { createShadowRootUi } from "wxt/utils/content-script-ui/shadow-root";
 import { loadSettings, mutateSettings, watchSettings } from "../lib/settings";
+import { loadVisitedPosts } from "../lib/visited";
 import { mountStudio } from "../studio/mount";
 import "../studio/studio.css";
 
@@ -69,17 +64,13 @@ function isReaditMutation(mutations: MutationRecord[]): boolean {
   return mutations.every((m) => isOurs(m.target));
 }
 
-type CqsPersistDetail =
-  | { type: "snapshot"; snapshot: CqsSnapshot }
-  | { type: "risk"; event: CqsRiskEvent }
-  | { type: "submit_stamps"; stamps: number[] };
-
 export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
   cssInjectionMode: "ui",
   async main(ctx) {
     const runtime = createFeatureRuntime({
       mascotUrl: (icon) => browser.runtime.getURL(`/mascots/${icon}.png`),
+      visitedPosts: await loadVisitedPosts(),
     });
     let settings = await loadSettings();
     runtime.applyAll(withSubOverride(settings));
@@ -87,175 +78,108 @@ export default defineContentScript({
     const reapply = (next: ReaditSettings) => {
       settings = next;
       runtime.applyAll(withSubOverride(next));
-      window.dispatchEvent(
-        new CustomEvent("readit:settings-updated", { detail: next }),
-      );
+      // Internal bus only — a window event would hand the full settings
+      // (usernotes, tags, filters) to reddit.com's own scripts.
+      emitReadit("settings-updated", next);
     };
 
     watchSettings(reapply);
 
-    ctx.addEventListener(window, "readit:layout-widths", (ev) => {
-      const detail = (
-        ev as CustomEvent<{
-          leftNavPx?: number;
-          rightRailPx?: number;
-          feedWidthPx?: number;
-          pagePadLeftPx?: number;
-          pagePadRightPx?: number;
-          columnGapPx?: number;
-        }>
-      ).detail;
-      if (!detail) return;
-      void mutateSettings((current) => ({
-        ...current,
-        layoutSlots: {
-          ...current.layoutSlots,
-          widths: {
-            ...current.layoutSlots.widths,
-            leftNavPx:
-              detail.leftNavPx ?? current.layoutSlots.widths.leftNavPx,
-            rightRailPx:
-              detail.rightRailPx ?? current.layoutSlots.widths.rightRailPx,
-            pagePadLeftPx:
-              detail.pagePadLeftPx ??
-              current.layoutSlots.widths.pagePadLeftPx ??
-              24,
-            pagePadRightPx:
-              detail.pagePadRightPx ??
-              current.layoutSlots.widths.pagePadRightPx ??
-              24,
-            columnGapPx:
-              detail.columnGapPx ?? current.layoutSlots.widths.columnGapPx ?? 12,
-          },
-        },
-        knobs: {
-          ...current.knobs,
-          tokens: {
-            ...current.knobs.tokens,
-            feedWidthPx:
-              detail.feedWidthPx ?? current.knobs.tokens.feedWidthPx,
-          },
-        },
-      })).then(reapply);
-    });
-
-    ctx.addEventListener(window, "readit:layout-order", (ev) => {
-      const detail = (
-        ev as CustomEvent<{ columnOrder?: LayoutColumnPanel[] }>
-      ).detail;
-      if (!detail?.columnOrder?.length) return;
-      void mutateSettings((current) => {
-        const columnOrder = normalizeColumnOrder(detail.columnOrder!);
-        return {
+    // Persist requests from the layout editor / CQS tracker. These arrive on
+    // the extension-private bus, never on `window`, so page scripts cannot
+    // forge storage writes; saveSettings() re-validates every write anyway.
+    const unsubscribers = [
+      onReadit("layout-widths", (detail) => {
+        void mutateSettings((current) => ({
           ...current,
-          flags: { ...current.flags, layoutSlots: true },
+          layoutSlots: {
+            ...current.layoutSlots,
+            widths: {
+              ...current.layoutSlots.widths,
+              leftNavPx: detail.leftNavPx,
+              rightRailPx: detail.rightRailPx,
+              pagePadLeftPx: detail.pagePadLeftPx,
+              pagePadRightPx: detail.pagePadRightPx,
+              columnGapPx:
+                detail.columnGapPx ?? current.layoutSlots.widths.columnGapPx ?? 12,
+            },
+          },
+          knobs: {
+            ...current.knobs,
+            tokens: {
+              ...current.knobs.tokens,
+              feedWidthPx: detail.feedWidthPx,
+            },
+          },
+        })).then(reapply);
+      }),
+
+      onReadit("layout-order", (detail) => {
+        if (!detail.columnOrder.length) return;
+        void mutateSettings((current) => {
+          const columnOrder = normalizeColumnOrder(detail.columnOrder);
+          return {
+            ...current,
+            flags: { ...current.flags, layoutSlots: true },
+            layoutSlots: {
+              ...current.layoutSlots,
+              preset: "custom",
+              columnOrder,
+              placements: placementsFromColumnOrder(
+                columnOrder,
+                current.layoutSlots.placements,
+              ),
+            },
+          };
+        }).then(reapply);
+      }),
+
+      onReadit("layout-pads", (detail) => {
+        void mutateSettings((current) => ({
+          ...current,
+          layoutSlots: {
+            ...current.layoutSlots,
+            widths: {
+              ...current.layoutSlots.widths,
+              pagePadLeftPx: detail.pagePadLeftPx,
+              pagePadRightPx: detail.pagePadRightPx,
+            },
+          },
+        })).then(reapply);
+      }),
+
+      onReadit("layout-separators", (detail) => {
+        void mutateSettings((current) => ({
+          ...current,
           layoutSlots: {
             ...current.layoutSlots,
             preset: "custom",
-            columnOrder,
-            placements: placementsFromColumnOrder(
-              columnOrder,
-              current.layoutSlots.placements,
-            ),
+            separators: detail.separators.slice(0, 3),
           },
-        };
-      }).then(reapply);
-    });
+        })).then(reapply);
+      }),
 
-    ctx.addEventListener(window, "readit:layout-pads", (ev) => {
-      const detail = (
-        ev as CustomEvent<{
-          pagePadLeftPx?: number;
-          pagePadRightPx?: number;
-        }>
-      ).detail;
-      if (!detail) return;
-      void mutateSettings((current) => ({
-        ...current,
-        layoutSlots: {
-          ...current.layoutSlots,
-          widths: {
-            ...current.layoutSlots.widths,
-            pagePadLeftPx:
-              detail.pagePadLeftPx ??
-              current.layoutSlots.widths.pagePadLeftPx ??
-              24,
-            pagePadRightPx:
-              detail.pagePadRightPx ??
-              current.layoutSlots.widths.pagePadRightPx ??
-              24,
-          },
-        },
-      })).then(reapply);
-    });
-
-    ctx.addEventListener(window, "readit:layout-separators", (ev) => {
-      const detail = (
-        ev as CustomEvent<{
-          separators?: ReaditSettings["layoutSlots"]["separators"];
-        }>
-      ).detail;
-      if (!detail?.separators) return;
-      void mutateSettings((current) => ({
-        ...current,
-        layoutSlots: {
-          ...current.layoutSlots,
-          preset: "custom",
-          separators: detail.separators!.slice(0, 3),
-        },
-      })).then(reapply);
-    });
-
-    ctx.addEventListener(window, "readit:layout-width-locks", (ev) => {
-      const detail = (
-        ev as CustomEvent<{
-          widthLocks?: Record<string, boolean>;
-        }>
-      ).detail;
-      if (!detail?.widthLocks) return;
-      void mutateSettings((current) => ({
-        ...current,
-        layoutSlots: {
-          ...current.layoutSlots,
-          widthLocks: detail.widthLocks!,
-        },
-      })).then(reapply);
-    });
-
-    ctx.addEventListener(window, "readit:layout-preset", (ev) => {
-      const detail = (ev as CustomEvent<{ preset?: LayoutPreset }>).detail;
-      const preset = detail?.preset;
-      if (!preset) return;
-      void mutateSettings((current) => {
-        let next: ReaditSettings = {
+      onReadit("layout-width-locks", (detail) => {
+        void mutateSettings((current) => ({
           ...current,
-          flags: { ...current.flags, layoutSlots: true },
-          layoutSlots: applyLayoutPreset(current.layoutSlots, preset),
-        };
-        if (preset === "singleColumn") {
-          next = syncSidebarsHide(next, true);
-        } else if (
-          current.layoutSlots.preset === "singleColumn" ||
-          current.knobs.hide.sidebars
-        ) {
-          next = syncSidebarsHide(next, false);
-        }
-        return next;
-      }).then(reapply);
-    });
+          layoutSlots: {
+            ...current.layoutSlots,
+            widthLocks: detail.widthLocks,
+          },
+        })).then(reapply);
+      }),
 
-    ctx.addEventListener(window, "readit:cqs-persist", (ev) => {
-      const detail = (ev as CustomEvent<CqsPersistDetail>).detail;
-      if (!detail || detail.type === "submit_stamps") return;
-      void mutateSettings((current) => {
-        if (detail.type === "snapshot") {
-          return appendCqsSnapshot(current, detail.snapshot);
-        }
-        if (detail.type === "risk") {
-          return appendCqsRiskEvent(current, detail.event);
-        }
-        return current;
-      }).then(reapply);
+      onReadit("cqs-persist", (detail) => {
+        if (detail.type === "submit_stamps") return;
+        void mutateSettings((current) =>
+          detail.type === "snapshot"
+            ? appendCqsSnapshot(current, detail.snapshot)
+            : appendCqsRiskEvent(current, detail.event),
+        ).then(reapply);
+      }),
+    ];
+    ctx.onInvalidated(() => {
+      for (const off of unsubscribers) off();
     });
 
     ctx.addEventListener(window, "wxt:locationchange", () => {
@@ -305,10 +229,10 @@ export default defineContentScript({
 
     browser.runtime.onMessage.addListener((msg) => {
       if (msg?.type === "readit:open-studio") {
-        window.dispatchEvent(new CustomEvent("readit:open-studio"));
+        emitReadit("open-studio");
       }
       if (msg?.type === "readit:settings-changed") {
-        window.dispatchEvent(new CustomEvent("readit:settings-updated"));
+        emitReadit("settings-updated");
       }
     });
   },

@@ -1,8 +1,8 @@
 import type { LayoutPlacements, LayoutPreset, ReaditSettings } from "./types.js";
+import { repairSettings } from "./sanitize.js";
 import {
   CLASSIC_COLUMN_ORDER,
   CLASSIC_LAYOUT_PLACEMENTS,
-  ReaditSettingsSchema,
   SETTINGS_VERSION,
   columnOrderFromPlacements,
   normalizeColumnOrder,
@@ -76,21 +76,18 @@ export function migrateSettings(raw: unknown): ReaditSettings {
   const version =
     typeof record.version === "number" ? record.version : 0;
 
+  // Field-level validation: invalid values are dropped/defaulted individually
+  // instead of the old all-or-nothing parse, whose failure path kept the raw
+  // object completely unvalidated.
   if (version < 1) {
-    const merged = {
-      ...defaults,
+    const repaired = repairSettings({
       ...record,
-      version: 1,
       profiles:
         Array.isArray(record.profiles) && record.profiles.length > 0
           ? record.profiles
           : defaults.profiles,
-    };
-    const parsed = ReaditSettingsSchema.safeParse({
-      ...merged,
-      version: SETTINGS_VERSION,
     });
-    let base = parsed.success ? parsed.data : defaults;
+    let base = repaired?.settings ?? defaults;
     base = ensureBuiltinProfiles(applyV2CqsDefaults(base));
     base = applyV3LayoutDefaults(base);
     base = applyV4FeedbackDefaults(base);
@@ -101,17 +98,7 @@ export function migrateSettings(raw: unknown): ReaditSettings {
     );
   }
 
-  const parsed = ReaditSettingsSchema.safeParse({
-    ...record,
-    version: SETTINGS_VERSION,
-  });
-  let base = parsed.success
-    ? parsed.data
-    : ensureBuiltinProfiles({
-        ...defaults,
-        ...(raw as Partial<ReaditSettings>),
-        version: SETTINGS_VERSION,
-      } as ReaditSettings);
+  let base = repairSettings(record)?.settings ?? defaults;
 
   base = ensureBuiltinProfiles(base);
 

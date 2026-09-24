@@ -6,3 +6,10 @@ export {
   formatProfileLayoutBlurb,
 } from "./profiles.js";
 export { migrateSettings } from "./migrate.js";
+export {
+  previewImport,
+  repairSettings,
+  unwrapImport,
+  type ImportPreview,
+  type RepairResult,
+} from "./sanitize.js";

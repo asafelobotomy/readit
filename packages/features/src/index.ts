@@ -146,6 +146,8 @@ export type FeatureRuntimeOptions = {
   /** Resolves a bundled mascot icon id to an extension-page URL; only the
    * host app (which has the WebExtension runtime APIs) can provide this. */
   mascotUrl?: FeatureContext["mascotUrl"];
+  /** Mark-read history persistence (extension storage). */
+  visitedPosts?: FeatureContext["visitedPosts"];
 };
 
 export function createFeatureRuntime(
@@ -161,6 +163,7 @@ export function createFeatureRuntime(
     subreddit: currentSubreddit(location.pathname),
     pathname: location.pathname,
     mascotUrl: options.mascotUrl,
+    visitedPosts: options.visitedPosts,
   });
 
   return {
@@ -250,6 +253,10 @@ export function createFeatureRuntime(
 }
 
 export type { FeatureContext, FeatureModule };
+export type { VisitedPostsStore } from "./utils.js";
+export { MARK_READ_MAX_VISITED, mergeVisited } from "./ux-extras.js";
+export { emitReadit, onReadit } from "./bus.js";
+export type { CqsPersistDetail, ReaditBusEvent, ReaditBusEvents } from "./bus.js";
 export {
   cleanRedditUrl,
   currentSubreddit,
