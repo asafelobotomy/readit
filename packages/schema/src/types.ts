@@ -220,6 +220,17 @@ export type FeatureFlags = z.infer<typeof FeatureFlagsSchema>;
 export const MarkReadModeSchema = z.enum(["off", "open", "onScroll"]);
 export type MarkReadMode = z.infer<typeof MarkReadModeSchema>;
 
+/**
+ * Mode actually in effect while the markRead flag is on. The flag is the
+ * on/off switch; a stored "off" mode under an enabled flag (e.g. from a
+ * profile that turns the flag on) means the default, "open".
+ */
+export function effectiveMarkReadMode(
+  mode: MarkReadMode,
+): Exclude<MarkReadMode, "off"> {
+  return mode === "off" ? "open" : mode;
+}
+
 export const MarkReadPrefsSchema = z.object({
   mode: MarkReadModeSchema.default("off"),
   dimOpacity: z.number().min(0.15).max(0.9).default(0.45),

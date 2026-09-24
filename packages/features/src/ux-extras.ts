@@ -1,3 +1,4 @@
+import { effectiveMarkReadMode } from "@readit/schema";
 import type { FeatureContext, FeatureModule } from "./utils.js";
 import { clearMarks, isProcessed, markProcessed } from "./utils.js";
 
@@ -58,6 +59,52 @@ function applyDim(post: HTMLElement, opacity: number): void {
   post.dataset.readitVisited = "1";
 }
 
+type MarkReadLive = {
+  ctx: FeatureContext;
+  mode: "open" | "onScroll";
+  opacity: number;
+};
+
+/** Current settings for the long-lived listener/observer below. */
+let markReadLive: MarkReadLive | null = null;
+let markReadClick: ((ev: Event) => void) | null = null;
+let markReadIo: IntersectionObserver | null = null;
+let markReadObserved = new WeakSet<Element>();
+
+const POST_LINK_SELECTOR = 'a[href*="/comments/"], a[slot="title"]';
+
+function stampVisited(post: Element): void {
+  if (!markReadLive) return;
+  const key = postKey(post);
+  if (!key) return;
+  rememberVisited(markReadLive.ctx, key);
+  applyDim(post as HTMLElement, markReadLive.opacity);
+}
+
+/**
+ * One delegated listener for "open" mode. Per-post listeners used to be
+ * added on every enable (duplicates after off → on) and were never removed,
+ * so they kept stamping after switching to "on scroll".
+ */
+function onPostLinkClick(ev: Event): void {
+  if (markReadLive?.mode !== "open") return;
+  const path = ev.composedPath();
+  const link = path.find(
+    (n): n is Element => n instanceof Element && n.matches(POST_LINK_SELECTOR),
+  );
+  if (!link) return;
+  const post = path.find(
+    (n): n is Element => n instanceof Element && n.localName === "shreddit-post",
+  );
+  if (post) stampVisited(post);
+}
+
+function stopMarkReadObserver(): void {
+  markReadIo?.disconnect();
+  markReadIo = null;
+  markReadObserved = new WeakSet();
+}
+
 export const markReadFeature: FeatureModule = {
   id: "markRead",
   tier: "advanced",
@@ -68,59 +115,41 @@ export const markReadFeature: FeatureModule = {
   apply(ctx) {
     if (!ctx.settings.flags.markRead) return;
     const prefs = ctx.settings.markReadPrefs;
-    const mode = prefs.mode === "off" ? "open" : prefs.mode;
+    const mode = effectiveMarkReadMode(prefs.mode);
+    markReadLive = { ctx, mode, opacity: prefs.dimOpacity };
     const visited = visitedSet(ctx);
-    const opacity = prefs.dimOpacity;
+    const posts = document.querySelectorAll("shreddit-post");
 
-    const stamp = (post: Element) => {
+    posts.forEach((post) => {
       const key = postKey(post);
-      if (!key) return;
-      rememberVisited(ctx, key);
-      applyDim(post as HTMLElement, opacity);
-    };
-
-    document.querySelectorAll("shreddit-post").forEach((post) => {
-      const key = postKey(post);
-      if (key && visited.has(key)) {
-        applyDim(post as HTMLElement, opacity);
-      }
-      if (isProcessed(post, "markRead")) return;
-      markProcessed(post, "markRead");
-
-      if (mode === "open") {
-        post.addEventListener(
-          "click",
-          (ev) => {
-            const t = ev.target as Element | null;
-            if (t?.closest('a[href*="/comments/"], a[slot="title"]')) {
-              stamp(post);
-            }
-          },
-          true,
-        );
-      }
+      if (key && visited.has(key)) applyDim(post as HTMLElement, prefs.dimOpacity);
     });
 
-    const prev = (window as unknown as { __readitMarkReadIo?: IntersectionObserver })
-      .__readitMarkReadIo;
-    prev?.disconnect();
-    delete (window as unknown as { __readitMarkReadIo?: IntersectionObserver })
-      .__readitMarkReadIo;
+    if (mode === "open" && !markReadClick) {
+      markReadClick = onPostLinkClick;
+      document.addEventListener("click", markReadClick, true);
+    }
 
     if (mode === "onScroll") {
-      const io = new IntersectionObserver(
+      // One observer for the page; only newly rendered posts get observed
+      // (it used to be rebuilt over every post on each DOM-mutation scan).
+      markReadIo ??= new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
-            if (!entry.isIntersecting) continue;
-            if (entry.intersectionRatio < 0.55) continue;
-            stamp(entry.target);
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
+              stampVisited(entry.target);
+            }
           }
         },
         { threshold: [0.55] },
       );
-      document.querySelectorAll("shreddit-post").forEach((p) => io.observe(p));
-      (window as unknown as { __readitMarkReadIo?: IntersectionObserver }).__readitMarkReadIo =
-        io;
+      posts.forEach((p) => {
+        if (markReadObserved.has(p)) return;
+        markReadObserved.add(p);
+        markReadIo!.observe(p);
+      });
+    } else {
+      stopMarkReadObserver();
     }
 
     if (/\/comments\//.test(location.pathname)) {
@@ -128,13 +157,16 @@ export const markReadFeature: FeatureModule = {
     }
   },
   teardown() {
-    (window as unknown as { __readitMarkReadIo?: IntersectionObserver }).__readitMarkReadIo
-      ?.disconnect();
+    if (markReadClick) {
+      document.removeEventListener("click", markReadClick, true);
+      markReadClick = null;
+    }
+    stopMarkReadObserver();
+    markReadLive = null;
     document.querySelectorAll("[data-readit-visited]").forEach((el) => {
       (el as HTMLElement).style.opacity = "";
       delete (el as HTMLElement).dataset.readitVisited;
     });
-    clearMarks("markRead");
   },
   health: () =>
     document.querySelector("shreddit-post") || /\/comments\//.test(location.pathname)

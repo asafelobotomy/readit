@@ -65,15 +65,25 @@ export type FilterablePost = {
   score: number | null;
 };
 
+/** "u/Name", "/r/pics/", " Pics " → "name" / "pics". */
+function bareName(raw: string, prefix: "u" | "r"): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(new RegExp(`^/?${prefix}/`), "")
+    .replace(/\/+$/, "");
+}
+
 export function postMatchesRule(post: FilterablePost, rule: FilterRule): boolean {
   const p = rule.pattern.toLowerCase();
   switch (rule.kind) {
     case "keyword":
       return post.text.toLowerCase().includes(p);
+    // Whole names: "bob" must not hide u/bobby, nor "pics" r/picsofdogs.
     case "user":
-      return post.author.toLowerCase().includes(p.replace(/^u\//, ""));
+      return bareName(post.author, "u") === bareName(p, "u");
     case "subreddit":
-      return post.subreddit.toLowerCase().includes(p.replace(/^r\//, ""));
+      return bareName(post.subreddit, "r") === bareName(p, "r");
     case "url":
       return post.link.toLowerCase().includes(p);
     case "flair":

@@ -26,6 +26,36 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return false;
 }
 
+/** Viewport y where a post counts as "current" — just below Reddit's sticky header. */
+export const KB_NAV_ANCHOR_PX = 64;
+const KB_NAV_SLOP_PX = 4;
+
+/**
+ * Which post J/K should move to, from the posts' viewport tops
+ * (getBoundingClientRect().top, in feed order).
+ *
+ * The old code compared `offsetTop` (relative to each post's offset parent,
+ * not the page) against scrollY, and after scrolling a post to the top it
+ * counted the *next* post as current, so J skipped one.
+ */
+export function nextPostIndex(
+  tops: readonly number[],
+  key: "j" | "k",
+  anchor = KB_NAV_ANCHOR_PX,
+): number | null {
+  if (!tops.length) return null;
+  let current = -1;
+  for (let i = 0; i < tops.length; i++) {
+    if (tops[i]! <= anchor + KB_NAV_SLOP_PX) current = i;
+    else break;
+  }
+  if (key === "j") return Math.min(tops.length - 1, current + 1);
+  if (current < 0) return 0;
+  // K on a post that is partly scrolled past goes back to its own start.
+  if (tops[current]! < anchor - KB_NAV_SLOP_PX) return current;
+  return Math.max(0, current - 1);
+}
+
 export const userTagsFeature: FeatureModule = {
   id: "userTags",
   tier: "advanced",
@@ -38,27 +68,41 @@ export const userTagsFeature: FeatureModule = {
     const map = new Map(
       ctx.settings.tags.map((t) => [t.username.toLowerCase(), t]),
     );
-    if (!map.size) return;
 
+    // Reconcile every link each pass (not just unprocessed ones) so edited
+    // labels/colors and deleted tags show up without a reload.
     document.querySelectorAll('a[href*="/user/"]').forEach((a) => {
-      if (isProcessed(a, "userTags")) return;
       const href = a.getAttribute("href") || "";
       const m = href.match(/\/user\/([^/?#]+)/i);
-      if (!m) return;
-      const tag = map.get(m[1].toLowerCase());
-      if (!tag) return;
-      const badge = document.createElement("span");
-      badge.className = "readit-user-tag";
-      badge.textContent = tag.label;
-      badge.title = tag.note || tag.label;
-      badge.style.cssText = `margin-left:4px;padding:0 5px;border-radius:3px;font-size:11px;background:${tag.color};color:#fff;vertical-align:middle;`;
-      a.after(badge);
-      markProcessed(a, "userTags");
+      const tag = m ? map.get(m[1].toLowerCase()) : undefined;
+      const next = a.nextElementSibling;
+      let badge =
+        next instanceof HTMLElement && next.classList.contains("readit-user-tag")
+          ? next
+          : null;
+      if (!tag) {
+        badge?.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "readit-user-tag";
+        badge.style.cssText =
+          "margin-left:4px;padding:0 5px;border-radius:3px;font-size:11px;color:#fff;vertical-align:middle;";
+        a.after(badge);
+      }
+      // Only write on change: every write is a DOM mutation.
+      const title = tag.note || tag.label;
+      if (badge.textContent !== tag.label) badge.textContent = tag.label;
+      if (badge.title !== title) badge.title = title;
+      if (badge.dataset.color !== tag.color) {
+        badge.dataset.color = tag.color;
+        badge.style.background = tag.color;
+      }
     });
   },
   teardown() {
     document.querySelectorAll(".readit-user-tag").forEach((el) => el.remove());
-    clearMarks("userTags");
   },
 };
 
@@ -218,14 +262,15 @@ export const keyboardNavFeature: FeatureModule = {
       e.preventDefault();
       const posts = Array.from(
         document.querySelectorAll<HTMLElement>("shreddit-post"),
-      ).filter((p) => p.offsetParent !== null);
-      if (!posts.length) return;
-      const y = window.scrollY + 80;
-      let idx = posts.findIndex((p) => p.offsetTop >= y - 20);
-      if (idx < 0) idx = 0;
-      if (e.key.toLowerCase() === "j") idx = Math.min(posts.length - 1, idx + 1);
-      else idx = Math.max(0, idx - 1);
-      posts[idx]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      ).filter((p) => p.getClientRects().length > 0);
+      const tops = posts.map((p) => p.getBoundingClientRect().top);
+      const idx = nextPostIndex(tops, e.key.toLowerCase() === "j" ? "j" : "k");
+      if (idx === null) return;
+      // Land below the sticky header rather than underneath it.
+      window.scrollTo({
+        top: window.scrollY + tops[idx]! - KB_NAV_ANCHOR_PX,
+        behavior: "smooth",
+      });
     };
     window.addEventListener("keydown", handler);
     (window as unknown as { __readitKbHandler?: (e: KeyboardEvent) => void }).__readitKbHandler =

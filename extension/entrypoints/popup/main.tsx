@@ -4,12 +4,38 @@ import type { CSSProperties } from "preact";
 import { resolveProfileIcon, type ReaditSettings } from "@readit/schema";
 import {
   loadSettings,
-  patchSettings,
+  mutateSettings,
   switchProfile,
 } from "../../lib/settings";
 
+const REDDIT_TAB_URLS = ["*://*.reddit.com/*", "*://reddit.com/*"];
+
+/**
+ * The Reddit tab the user means: the active tab when it is Reddit, else the
+ * most recently used Reddit tab in this window (the popup can also be open as
+ * a normal tab, e.g. in smoke runs). Only that one tab gets the studio —
+ * previously every Reddit tab in every window opened it.
+ */
+async function studioTargetTabId(): Promise<number | null> {
+  const [active] = await browser.tabs.query({
+    active: true,
+    currentWindow: true,
+    url: REDDIT_TAB_URLS,
+  });
+  if (active?.id != null) return active.id;
+  const inWindow = await browser.tabs.query({
+    currentWindow: true,
+    url: REDDIT_TAB_URLS,
+  });
+  const recent = inWindow
+    .filter((t) => t.id != null)
+    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
+  return recent?.id ?? null;
+}
+
 function Popup() {
   const [settings, setSettings] = useState<ReaditSettings | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     void loadSettings().then(setSettings);
@@ -87,24 +113,21 @@ function Popup() {
           style={btnStyle}
           onClick={async () => {
             try {
-              const redditTabs = await browser.tabs.query({
-                url: ["*://*.reddit.com/*", "*://reddit.com/*"],
-              });
-              if (!redditTabs.length) return;
-              const results = await Promise.all(
-                redditTabs.map(async (tab) => {
-                  if (!tab.id) return false;
-                  try {
-                    await browser.tabs.sendMessage(tab.id, {
-                      type: "readit:open-studio",
-                    });
-                    return true;
-                  } catch {
-                    return false;
-                  }
-                }),
-              );
-              if (results.some(Boolean)) {
+              const tabId = await studioTargetTabId();
+              if (tabId === null) {
+                setNotice("Open a Reddit tab first.");
+                return;
+              }
+              let opened = false;
+              try {
+                await browser.tabs.sendMessage(tabId, {
+                  type: "readit:open-studio",
+                });
+                opened = true;
+              } catch {
+                setNotice("Reload the Reddit tab, then try again.");
+              }
+              if (opened) {
                 // Toolbar popups are small; skip close when opened as a normal tab (smoke/CDP).
                 if (window.outerWidth <= 420 && window.outerHeight <= 640) {
                   try {
@@ -125,11 +148,16 @@ function Popup() {
           type="button"
           style={btnStyle}
           onClick={async () => {
-            const next = await patchSettings({ paused: !settings.paused });
+            // Toggle the stored value, not the popup's snapshot, which can be
+            // stale if the studio or another device changed it meanwhile.
+            const next = await mutateSettings((current) => ({
+              ...current,
+              paused: !current.paused,
+            }));
             setSettings(next);
             try {
               const redditTabs = await browser.tabs.query({
-                url: ["*://*.reddit.com/*", "*://reddit.com/*"],
+                url: REDDIT_TAB_URLS,
               });
               await Promise.all(
                 redditTabs.map(async (tab) => {
@@ -151,6 +179,11 @@ function Popup() {
           {settings.paused ? "Resume" : "Pause"} extension
         </button>
       </div>
+      {notice && (
+        <p style={{ fontSize: 12, color: "#ffb86b", margin: "10px 0 0" }}>
+          {notice}
+        </p>
+      )}
     </div>
   );
 }
