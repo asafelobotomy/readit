@@ -1389,7 +1389,7 @@ check("feed media: backdrops untouched, images centered, galleries unzoomed", ()
   assert.match(css, /gallery-carousel \{\n  zoom: 0\.8 !important;\n  width: calc\(100% \* 1\.25\)/);
 });
 
-check("content alignment: global, per-column override, body stays start", () => {
+check("content alignment: global, per-column override, body follows, code stays start", () => {
   const base = createDefaultSettings();
   base.flags.layoutSlots = true;
   base.layoutSlots = applyLayoutPreset(base.layoutSlots, "classic");
@@ -1404,7 +1404,10 @@ check("content alignment: global, per-column override, body stays start", () => 
   }
   assert.match(cssAll, /justify-content: center !important/);
   assert.match(cssAll, /:not\(\[class\*="justify-between"\]\)/);
-  assert.match(cssAll, /shreddit-comment \[slot="comment"\]\) \{\n  text-align: start !important/);
+  // Body copy follows the column; only code keeps start alignment.
+  assert.doesNotMatch(cssAll, /\[slot="text-body"\][^{]*\{\n  text-align: start/);
+  assert.match(cssAll, /:is\(pre, code\) \{\n  text-align: start !important/);
+  assert.match(cssAll, /list-style-position: inside !important/);
 
   const one = structuredClone(base);
   one.layoutSlots.contentAlign = "center";

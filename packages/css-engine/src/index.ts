@@ -1027,7 +1027,8 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] :where(div
  * Per-column alignment of text, icons and avatars (edit toolbar "Text").
  * Text aligns via text-align; rows of icon + label / avatar + name / actions
  * via justify-content — except rows Reddit spaces on purpose (justify-between
- * etc., e.g. title … menu). Long-form body copy stays start-aligned.
+ * etc., e.g. title … menu). Post and comment bodies follow the column's
+ * alignment too; only code blocks keep start alignment.
  */
 function contentAlignRules(config: LayoutSlotsConfig): string {
   const out: string[] = [];
@@ -1056,7 +1057,13 @@ ${slot} [class*="justify-between"] > .flex:first-child:not(.flex-col) {
 ${slot} [class*="justify-between"]:has(> :only-child) {
   justify-content: ${justify} !important;
 }
-${slot} :is(p, li, blockquote, pre, [slot="text-body"], shreddit-post-text-body, .md, [id$="-post-rtjson-content"], shreddit-comment [slot="comment"]) {
+/* Body copy aligns with the rest of the column; list bullets move with
+   their text (outside markers would stay stranded at the left edge). Code
+   keeps start alignment so indentation still reads. */
+${slot} :is(ul, ol) {
+  list-style-position: inside !important;
+}
+${slot} :is(pre, code) {
   text-align: start !important;
 }${
       panel === "leftNav" && align === "end"
