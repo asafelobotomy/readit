@@ -165,9 +165,12 @@ export const modHighlightFeature: FeatureModule = {
   description: "Dim actioned items and mark users with notes (CSS).",
   apply(ctx) {
     if (!ctx.settings.flags.modHighlight) return;
-    if (isModRoute(ctx.pathname)) {
-      document.documentElement.classList.add("readit-mod-route");
-    }
+    // Toggle, not add: apply() re-runs on SPA navigation, and an add-only
+    // class stayed on after leaving the mod queue for a normal page.
+    document.documentElement.classList.toggle(
+      "readit-mod-route",
+      isModRoute(ctx.pathname),
+    );
   },
   teardown() {
     document.documentElement.classList.remove("readit-mod-route");

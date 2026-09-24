@@ -11,6 +11,8 @@ import { isMainScriptActive, withSubOverride } from "../lib/overrides";
  */
 export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
+  // New Reddit only: Old Reddit has none of the DOM these scripts target.
+  excludeMatches: ["*://old.reddit.com/*"],
   runAt: "document_start",
   async main() {
     const settings = await loadSettings();

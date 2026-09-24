@@ -20,6 +20,8 @@ import "../studio/studio.css";
 
 export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
+  // New Reddit only: Old Reddit has none of the DOM these scripts target.
+  excludeMatches: ["*://old.reddit.com/*"],
   cssInjectionMode: "ui",
   async main(ctx) {
     const runtime = createFeatureRuntime({

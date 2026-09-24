@@ -28,12 +28,15 @@ import {
 import {
   findNativeModControl,
   matchesNativeModLabel,
+  modHighlightFeature,
 } from "../packages/features/src/mod.ts";
 import { isReaditMutation } from "../packages/features/src/mutations.ts";
 import { nextPostIndex } from "../packages/features/src/reader-creator.ts";
 import {
+  isFormattingToggleLabel,
   MARK_READ_MAX_VISITED,
   mergeVisited,
+  rememberVisited,
 } from "../packages/features/src/ux-extras.ts";
 import {
   applyLightweightSync,
@@ -732,6 +735,56 @@ check("mark-read mode shown matches the mode in effect", () => {
   const next = applyProfile(base, profile.id);
   assert.equal(next.flags.markRead, true);
   assert.equal(next.markReadPrefs.mode, "open");
+});
+
+check("formatting auto-expand only matches whole-word format labels", () => {
+  assert.equal(isFormattingToggleLabel("Show formatting options"), true);
+  assert.equal(isFormattingToggleLabel("Format"), true);
+  assert.equal(isFormattingToggleLabel("More information"), false);
+  assert.equal(isFormattingToggleLabel("Transformation details"), false);
+  assert.equal(isFormattingToggleLabel(null), false);
+});
+
+check("mod-route highlight clears after navigating off a mod route", () => {
+  const classes = new Set<string>();
+  const prevDocument = (globalThis as { document?: unknown }).document;
+  (globalThis as { document?: unknown }).document = {
+    documentElement: {
+      classList: {
+        toggle: (c: string, on: boolean) => (on ? classes.add(c) : classes.delete(c)),
+        remove: (c: string) => classes.delete(c),
+      },
+    },
+  };
+  try {
+    const settings = createDefaultSettings();
+    settings.flags.modHighlight = true;
+    const ctx = (pathname: string) => ({ settings, subreddit: null, pathname });
+    modHighlightFeature.apply(ctx("/r/pics/about/modqueue"));
+    assert.equal(classes.has("readit-mod-route"), true);
+    modHighlightFeature.apply(ctx("/r/pics/"));
+    assert.equal(classes.has("readit-mod-route"), false);
+  } finally {
+    (globalThis as { document?: unknown }).document = prevDocument;
+  }
+});
+
+check("re-remembering the newest visited post does not re-save history", () => {
+  const saves: string[][] = [];
+  const ctx = {
+    settings: createDefaultSettings(),
+    subreddit: null,
+    pathname: "/",
+    visitedPosts: { initial: [], save: (keys: string[]) => saves.push(keys) },
+  };
+  rememberVisited(ctx, "/r/a/comments/1");
+  rememberVisited(ctx, "/r/a/comments/1");
+  rememberVisited(ctx, "/r/a/comments/1");
+  assert.equal(saves.length, 1);
+  rememberVisited(ctx, "/r/a/comments/2");
+  rememberVisited(ctx, "/r/a/comments/1");
+  assert.equal(saves.length, 3);
+  assert.deepEqual(saves.at(-1)?.slice(-2), ["/r/a/comments/2", "/r/a/comments/1"]);
 });
 
 if (failed > 0) {

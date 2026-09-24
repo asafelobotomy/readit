@@ -30,7 +30,8 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(jq -r .version extension/package.json)"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+          # Strict semver-ish: the value becomes a tag and a release title.
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid version: $VERSION"
             exit 1
           fi
@@ -83,12 +84,15 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.ver.outputs.bumped == 'true'
+        # Step outputs go through env, never `${{ }}` inside the script, so
+        # their contents can't be parsed as shell.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.ver.outputs.version }}"
-          TAG="${{ steps.ver.outputs.tag }}"
           ZIP="dist/readit-${VERSION}-chrome.zip"
           test -f "$ZIP"
 
@@ -100,4 +104,4 @@ jobs:
           gh release create "$TAG" "$ZIP" \
             --title "readit ${VERSION}" \
             --generate-notes \
-            --target "${{ github.sha }}"
+            --target "$TARGET_SHA"

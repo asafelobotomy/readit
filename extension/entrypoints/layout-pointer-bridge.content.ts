@@ -5,6 +5,8 @@
  */
 export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
+  // New Reddit only: Old Reddit has none of the DOM these scripts target.
+  excludeMatches: ["*://old.reddit.com/*"],
   world: "MAIN",
   runAt: "document_start",
   main() {
@@ -18,6 +20,12 @@ export default defineContentScript({
     const ATTR = "data-readit-pointer";
 
     const emit = (type: "move" | "up", ev: MouseEvent) => {
+      // Only the layout editor reads this. Without the gate every drag on
+      // every Reddit page (text selection, scrollbars) rewrote <html>'s
+      // attributes twice per mouse move, even with readit paused.
+      if (!document.documentElement.classList.contains("readit-layout-edit")) {
+        return;
+      }
       document.documentElement.setAttribute(
         ATTR,
         `${type}:${Math.round(ev.clientX)}:${Math.round(ev.clientY)}:${ev.buttons}:${Date.now()}`,

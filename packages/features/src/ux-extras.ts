@@ -29,8 +29,12 @@ function visitedSet(ctx: FeatureContext): Set<string> {
   return visited;
 }
 
-function rememberVisited(ctx: FeatureContext, key: string): void {
+export function rememberVisited(ctx: FeatureContext, key: string): void {
   const set = visitedSet(ctx);
+  // Already the newest entry: nothing changes. On a comments page apply()
+  // re-remembers the current post on every DOM-mutation scan, which used to
+  // rewrite the whole history to storage each time.
+  if ([...set].at(-1) === key) return;
   // Re-insert so recently seen posts are evicted last.
   set.delete(key);
   set.add(key);
@@ -191,6 +195,15 @@ export const antiRefreshFeature: FeatureModule = {
   health: () => "ok",
 };
 
+/**
+ * Whole-word "format"/"formatting" only. The old `aria-label*="Format" i`
+ * substring match also hit "Information" (and "Transformation"), so any collapsed
+ * "More information" disclosure on the page got auto-clicked open.
+ */
+export function isFormattingToggleLabel(label: string | null | undefined): boolean {
+  return /\bformat(?:ting)?\b/i.test(String(label ?? ""));
+}
+
 export const commentUxFeature: FeatureModule = {
   id: "commentUx",
   tier: "advanced",
@@ -205,10 +218,16 @@ export const commentUxFeature: FeatureModule = {
     if (prefs.showFormatting) {
       document
         .querySelectorAll(
-          'button[aria-label*="formatting" i], button[aria-label*="Format" i], [data-testid="format-button"]',
+          'button[aria-label*="format" i], [data-testid="format-button"]',
         )
         .forEach((btn) => {
           if (isProcessed(btn, "commentUxFmt")) return;
+          if (
+            btn.getAttribute("data-testid") !== "format-button" &&
+            !isFormattingToggleLabel(btn.getAttribute("aria-label"))
+          ) {
+            return;
+          }
           const expanded = btn.getAttribute("aria-expanded");
           if (expanded === "false") {
             try {

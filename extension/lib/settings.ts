@@ -85,12 +85,6 @@ export async function mutateSettings(
   return run;
 }
 
-export async function patchSettings(
-  patch: Partial<ReaditSettings>,
-): Promise<ReaditSettings> {
-  return mutateSettings((current) => ({ ...current, ...patch }));
-}
-
 export async function switchProfile(profileId: string): Promise<ReaditSettings> {
   return mutateSettings((current) => applyProfile(current, profileId));
 }

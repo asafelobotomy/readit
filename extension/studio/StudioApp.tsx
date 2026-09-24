@@ -57,7 +57,6 @@ import {
   settingsFromImport,
   loadSettings,
   mutateSettings,
-  patchSettings,
   switchProfile,
   validateImport,
 } from "../lib/settings";
@@ -578,9 +577,12 @@ export function StudioApp({ api }: { api: StudioApi }) {
                 }}
                 onCommit={commit}
                 onPause={async () => {
-                  const next = await patchSettings({
-                    paused: !settings.paused,
-                  });
+                  // Toggle the stored value: this component's snapshot can be
+                  // stale if the popup or another device paused meanwhile.
+                  const next = await mutateSettings((current) => ({
+                    ...current,
+                    paused: !current.paused,
+                  }));
                   setSettings(next);
                 }}
                 onExport={async () => {
@@ -593,7 +595,9 @@ export function StudioApp({ api }: { api: StudioApi }) {
                   a.href = url;
                   a.download = `readit-export-${Date.now()}.json`;
                   a.click();
-                  URL.revokeObjectURL(url);
+                  // Revoking in the same tick can cancel the download before
+                  // the browser has read the blob.
+                  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
                   flash("Exported settings");
                 }}
                 onImportClick={() => fileRef.current?.click()}

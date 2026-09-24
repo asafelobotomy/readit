@@ -21,4 +21,4 @@ Do not run both full mod UI stacks on the same actions. Pick Toolbox **or** Mod 
 
 ## Old Reddit Redirect / RES
 
-readit targets New Reddit only. If you redirect to `old.reddit.com`, readit content scripts will not apply (host match is `*.reddit.com`, but Old Reddit DOM selectors are unsupported and features will report degraded health).
+readit targets New Reddit only. Its content scripts exclude `old.reddit.com`, so if you redirect there readit stays out of the page entirely (the studio can't open on Old Reddit tabs).

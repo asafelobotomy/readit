@@ -5,6 +5,8 @@
  */
 export default defineContentScript({
   matches: ["*://*.reddit.com/*"],
+  // New Reddit only: Old Reddit has none of the DOM these scripts target.
+  excludeMatches: ["*://old.reddit.com/*"],
   world: "MAIN",
   runAt: "document_start",
   main() {
