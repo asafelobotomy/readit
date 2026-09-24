@@ -17,10 +17,12 @@ import {
   setSlotZone,
   syncSidebarsHide,
   toReddIt,
+  onReadit,
 } from "@readit/features";
 import {
   budgetColumnOrder,
   CHROME_HEIGHT_LIMITS,
+  clampPanelWidth,
   createId,
   formatProfileLayoutBlurb,
   isStackedPair,
@@ -56,6 +58,7 @@ import {
 } from "../lib/settings";
 import type { StudioApi } from "./mount";
 import { STUDIO_LOCALES, t } from "./i18n";
+import { buildSelector, isStudioEvent } from "./picker";
 import { EditToolbox, KOFI_URL, REPO_URL } from "./EditToolbox";
 
 type Tab =
@@ -120,9 +123,8 @@ export function StudioApp({ api }: { api: StudioApi }) {
 
   useEffect(() => {
     void refresh();
-    const onOpen = () => setOpen(true);
-    const onUpdated = async (ev: Event) => {
-      const detail = (ev as CustomEvent<ReaditSettings>).detail;
+    const offOpen = onReadit("open-studio", () => setOpen(true));
+    const offUpdated = onReadit("settings-updated", async (detail) => {
       const toolbox =
         document.documentElement.dataset.readitToolbox === "1";
       if (detail) {
@@ -131,9 +133,7 @@ export function StudioApp({ api }: { api: StudioApi }) {
       }
       const next = await loadSettings();
       setSettings({ ...next, toolboxDetected: toolbox });
-    };
-    window.addEventListener("readit:open-studio", onOpen);
-    window.addEventListener("readit:settings-updated", onUpdated);
+    });
     const unwatch = watchSettings((next) => {
       setSettings({
         ...next,
@@ -142,8 +142,8 @@ export function StudioApp({ api }: { api: StudioApi }) {
       });
     });
     return () => {
-      window.removeEventListener("readit:open-studio", onOpen);
-      window.removeEventListener("readit:settings-updated", onUpdated);
+      offOpen();
+      offUpdated();
       unwatch();
     };
   }, []);
@@ -192,11 +192,15 @@ export function StudioApp({ api }: { api: StudioApi }) {
       }
     };
     const onClick = async (e: MouseEvent) => {
+      // Clicks inside the studio (FAB, banner, drawer) are retargeted to the
+      // <readit-studio> host here; let them through instead of turning the
+      // studio itself into a hide rule.
+      if (isStudioEvent(e)) return;
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
       const target = e.target as Element | null;
-      if (!target || target.closest("#readit-root")) return;
+      if (!target) return;
       const selector = buildSelector(target);
       if (!selector) {
         flash("Could not build selector");
@@ -2951,6 +2955,8 @@ function SubOverrideForm({
       <input
         class="readit-input"
         type="number"
+        min={LAYOUT_WIDTH_LIMITS.main.min}
+        max={LAYOUT_WIDTH_LIMITS.main.max}
         value={width}
         onInput={(e) => setWidth(Number(e.currentTarget.value))}
       />
@@ -2959,8 +2965,9 @@ function SubOverrideForm({
         type="button"
         class="readit-btn"
         onClick={() => {
-          if (!sub.trim()) return;
-          onAdd(sub.trim().replace(/^r\//, ""), width);
+          if (!sub.trim() || !Number.isFinite(width)) return;
+          // Schema bounds (480–1600); an out-of-range value would fail validation.
+          onAdd(sub.trim().replace(/^r\//, ""), clampPanelWidth("main", width));
           setSub("");
         }}
       >
@@ -2983,32 +2990,3 @@ function ensureNsfwFilter(filters: FilterRule[]): FilterRule[] {
   ];
 }
 
-function buildSelector(el: Element): string | null {
-  if (el.id && /^[a-zA-Z][\w-]*$/.test(el.id)) return `#${el.id}`;
-  const parts: string[] = [];
-  let node: Element | null = el;
-  let depth = 0;
-  while (node && depth < 4) {
-    let part = node.tagName.toLowerCase();
-    const testId = node.getAttribute("data-testid");
-    if (testId) {
-      part += `[data-testid="${CSS.escape(testId)}"]`;
-      parts.unshift(part);
-      break;
-    }
-    const parent: Element | null = node.parentElement;
-    if (parent) {
-      const tag = node.tagName;
-      const siblings = Array.from(parent.children).filter(
-        (c): c is Element => c.tagName === tag,
-      );
-      if (siblings.length > 1) {
-        part += `:nth-of-type(${siblings.indexOf(node) + 1})`;
-      }
-    }
-    parts.unshift(part);
-    node = parent;
-    depth += 1;
-  }
-  return parts.length ? parts.join(" > ") : null;
-}

@@ -35,6 +35,7 @@ import {
   type FitLayoutMode,
   type LayoutWidthBudget,
 } from "@readit/schema";
+import { emitReadit } from "./bus.js";
 import type { FeatureModule } from "./utils.js";
 import {
   mountNavRail,
@@ -818,11 +819,7 @@ export function getEditSelection(): string[] {
 }
 
 function emitEditSelection(): void {
-  window.dispatchEvent(
-    new CustomEvent("readit:edit-selection", {
-      detail: { selected: getEditSelection() },
-    }),
-  );
+  emitReadit("edit-selection", { selected: getEditSelection() });
 }
 
 function toggleEditSelection(id: string, on: boolean): void {
@@ -833,11 +830,7 @@ function toggleEditSelection(id: string, on: boolean): void {
 
 
 function dispatchWidthLocksPersist(widthLocks: Record<string, boolean>): void {
-  window.dispatchEvent(
-    new CustomEvent("readit:layout-width-locks", {
-      detail: { widthLocks },
-    }),
-  );
+  emitReadit("layout-width-locks", { widthLocks });
 }
 
 function lockKeyForFrame(kind: FrameKind, id: string): string {
@@ -1274,11 +1267,7 @@ export function removeLayoutSeparator(
 }
 
 function dispatchSeparatorsPersist(separators: LayoutSeparator[]): void {
-  window.dispatchEvent(
-    new CustomEvent("readit:layout-separators", {
-      detail: { separators },
-    }),
-  );
+  emitReadit("layout-separators", { separators });
 }
 
 function placeColResizeHandle(
@@ -2153,11 +2142,7 @@ function bindColumnEditListeners(): void {
         layoutSlots: applyColumnOrder(layoutSettings.layoutSlots, nextOrder),
       };
       refreshChromeAfterOrder(nextSettings);
-      window.dispatchEvent(
-        new CustomEvent("readit:layout-order", {
-          detail: { columnOrder: nextOrder } satisfies LayoutOrderPersistDetail,
-        }),
-      );
+      emitReadit("layout-order", { columnOrder: nextOrder });
       return;
     }
 
@@ -2180,14 +2165,10 @@ function bindColumnEditListeners(): void {
     }
 
     if (liveWidths && session.pendingPadTarget) {
-      window.dispatchEvent(
-        new CustomEvent("readit:layout-pads", {
-          detail: {
-            pagePadLeftPx: liveWidths.pagePadRightPx,
-            pagePadRightPx: liveWidths.pagePadLeftPx,
-          } satisfies LayoutPadsPersistDetail,
-        }),
-      );
+      emitReadit("layout-pads", {
+        pagePadLeftPx: liveWidths.pagePadRightPx,
+        pagePadRightPx: liveWidths.pagePadLeftPx,
+      });
     }
   };
 
@@ -2205,17 +2186,12 @@ function bindColumnEditListeners(): void {
       dispatchSeparatorsPersist(layoutSettings.layoutSlots.separators || []);
       // Left-edge resize also trades width with the neighbor panel.
       if (session.edge === "left" && liveWidths) {
-        window.dispatchEvent(
-          new CustomEvent("readit:layout-widths", {
-            detail: { ...liveWidths } satisfies LayoutWidthsPersistDetail,
-          }),
-        );
+        emitReadit("layout-widths", { ...liveWidths });
       }
       return;
     }
     if (!liveWidths) return;
-    const detail: LayoutWidthsPersistDetail = { ...liveWidths };
-    window.dispatchEvent(new CustomEvent("readit:layout-widths", { detail }));
+    emitReadit("layout-widths", { ...liveWidths });
   };
 
   const onPointerDown = (ev: PointerEvent | MouseEvent) => {

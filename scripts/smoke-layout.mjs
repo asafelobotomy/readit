@@ -128,6 +128,39 @@ async function reloadReaditExtension(browser, extensionId) {
   }
 }
 
+/**
+ * Run `fn` in the extension's own popup page (chrome.* APIs available).
+ * The content script only accepts settings writes from extension code, so the
+ * harness can no longer poke it with page-world `readit:*` events.
+ */
+async function extensionEval(fn, arg) {
+  if (!extensionId) throw new Error("readit extension id unknown");
+  const host = puppeteerBrowser || playwrightContext;
+  const extPage = await host.newPage();
+  try {
+    await extPage.goto(`chrome-extension://${extensionId}/popup.html`, {
+      waitUntil: "domcontentloaded",
+    });
+    return await extPage.evaluate(fn, arg);
+  } finally {
+    await extPage.close().catch(() => {});
+    await page?.bringToFront?.().catch?.(() => {});
+  }
+}
+
+/** Persist page pads through extension storage; the content script re-applies. */
+async function setPagePads(left, right) {
+  await extensionEval(
+    async ({ left, right }) => {
+      const { readitSettings } = await chrome.storage.local.get("readitSettings");
+      readitSettings.layoutSlots.widths.pagePadLeftPx = left;
+      readitSettings.layoutSlots.widths.pagePadRightPx = right;
+      await chrome.storage.local.set({ readitSettings });
+    },
+    { left, right },
+  );
+}
+
 async function studioEval(page, fn, ...args) {
   return page.evaluate(fn, ...args);
 }
@@ -242,28 +275,11 @@ async function clickLayoutPreset(page, labelOrId) {
     if (btn instanceof HTMLElement) {
       btn.scrollIntoView({ block: "nearest" });
       btn.click();
-    } else {
-      // Harness fallback — content script applies + persists the preset.
-      window.dispatchEvent(
-        new CustomEvent("readit:layout-preset", {
-          detail: { preset: presetId },
-        }),
-      );
     }
 
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 100));
       if (document.documentElement.dataset.readitLayout === presetId) break;
-    }
-
-    // Last resort if UI click didn't stick
-    if (document.documentElement.dataset.readitLayout !== presetId) {
-      window.dispatchEvent(
-        new CustomEvent("readit:layout-preset", {
-          detail: { preset: presetId },
-        }),
-      );
-      await new Promise((r) => setTimeout(r, 1000));
     }
 
     const css = document.getElementById("readit-css-engine")?.textContent || "";
@@ -274,7 +290,7 @@ async function clickLayoutPreset(page, labelOrId) {
       columns: document.documentElement.dataset.readitColumns || "",
       css,
       clickedPreset: presetId,
-      via: btn ? "chip" : "event",
+      via: btn ? "chip" : "missing",
     };
   }, labelOrId);
 }
@@ -983,14 +999,10 @@ try {
   await studioEval(page, async () => {
     const root = document.querySelector("readit-studio")?.shadowRoot;
     root?.querySelector('[data-action="center"]')?.click();
-    // Studio Layout tab Center chip may be absent — equalize via event + overflow paint.
-    window.dispatchEvent(
-      new CustomEvent("readit:layout-pads", {
-        detail: { pagePadLeftPx: 48, pagePadRightPx: 48 },
-      }),
-    );
-    await new Promise((r) => setTimeout(r, 700));
   });
+  // Studio Layout tab Center chip may be absent — equalize via storage.
+  await setPagePads(48, 48);
+  await sleep(700);
   await setRangeByLabel(page, "Nav (", 200);
   await setRangeByLabel(page, "Feed (", 640);
   await setRangeByLabel(page, "Rail (", 260);
@@ -1153,15 +1165,9 @@ try {
     }
   });
   await setRangeByLabel(page, "Feed (", 560);
-  await studioEval(page, async () => {
-    // Unequal pads with both sides large enough for edit frames.
-    window.dispatchEvent(
-      new CustomEvent("readit:layout-pads", {
-        detail: { pagePadLeftPx: 120, pagePadRightPx: 48 },
-      }),
-    );
-    await new Promise((r) => setTimeout(r, 900));
-  });
+  // Unequal pads with both sides large enough for edit frames.
+  await setPagePads(120, 48);
+  await sleep(900);
   await closeStudio(page, { pressEscape: false });
   await sleep(500);
 
@@ -1246,13 +1252,9 @@ try {
       input.click();
       await new Promise((r) => setTimeout(r, 500));
     }
-    window.dispatchEvent(
-      new CustomEvent("readit:layout-pads", {
-        detail: { pagePadLeftPx: 64, pagePadRightPx: 64 },
-      }),
-    );
-    await new Promise((r) => setTimeout(r, 600));
   });
+  await setPagePads(64, 64);
+  await sleep(600);
   await setRangeByLabel(page, "Feed (", 640);
   await closeStudio(page, { pressEscape: false });
   await sleep(500);

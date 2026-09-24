@@ -1598,7 +1598,7 @@ html.readit-active.readit-layout-slots.readit-gutter-inset [data-readit-layout-s
   }
 
   for (const rule of settings.elementRules) {
-    if (!rule.enabled) continue;
+    if (!rule.enabled || !isSafeElementRuleSelector(rule.selector)) continue;
     if (rule.action === "hide") {
       parts.push(`${rule.selector} { display: none !important; }`);
     } else {
@@ -1607,6 +1607,21 @@ html.readit-active.readit-layout-slots.readit-gutter-inset [data-readit-layout-s
   }
 
   return parts.join("\n\n");
+}
+
+/**
+ * Element rules are interpolated into the stylesheet as selectors, so they
+ * must stay a plain selector list (no braces / comment openers that would
+ * swallow or inject rules) and must never target readit's own UI or the page
+ * roots. Older pickers could save a rule hiding `<readit-studio>` itself,
+ * which made the studio unreachable; skipping it here recovers those users.
+ */
+export function isSafeElementRuleSelector(selector: string): boolean {
+  const s = selector.trim();
+  if (!s || /[{}]|\/\*/.test(s)) return false;
+  if (/readit-studio|#readit-root/i.test(s)) return false;
+  if (/^(?:html|head|body|:root)$/i.test(s)) return false;
+  return true;
 }
 
 export function applyStylesheet(settings: ReaditSettings): void {

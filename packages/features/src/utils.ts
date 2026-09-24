@@ -15,6 +15,16 @@ export type FeatureContext = {
    * Reddit page's DOM (this package has no access to the WebExtension APIs
    * that provide it — the host injects the resolver). */
   mascotUrl?: (icon: ProfileIconId) => string;
+  /** Host-provided persistence for mark-read history. Kept in extension
+   * storage — never the page's localStorage, which reddit.com scripts can read. */
+  visitedPosts?: VisitedPostsStore;
+};
+
+export type VisitedPostsStore = {
+  /** History loaded before the runtime starts (oldest first). */
+  initial: readonly string[];
+  /** Persist the full, already-capped history (oldest first). */
+  save: (keys: string[]) => void;
 };
 
 export type FeatureModule = {

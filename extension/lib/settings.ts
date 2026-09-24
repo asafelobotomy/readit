@@ -1,13 +1,14 @@
 import {
   applyProfile,
   createDefaultSettings,
-  ExportBundleSchema,
   migrateSettings,
   previewImport,
+  ReaditSettingsSchema,
   SETTINGS_VERSION,
   type ExportBundle,
   type ImportPreview,
   type ReaditSettings,
+  unwrapImport,
 } from "@readit/schema";
 import { storage } from "wxt/utils/storage";
 import { pushLightweightSync } from "./sync";
@@ -41,18 +42,25 @@ export async function loadSettings(): Promise<ReaditSettings> {
       ? (raw as { version: number }).version
       : 0;
 
-  if (rawVersion !== migrated.version) {
+  // Also heal storage when validation had to drop invalid values, so the
+  // repaired copy is what later reads (and exports) see.
+  if (
+    rawVersion !== migrated.version ||
+    !ReaditSettingsSchema.safeParse(raw).success
+  ) {
     await settingsItem.setValue(migrated);
   }
   return migrated;
 }
 
+/** Every write is re-validated field-by-field; invalid values never reach storage. */
 export async function saveSettings(
   settings: ReaditSettings,
 ): Promise<ReaditSettings> {
-  await settingsItem.setValue(settings);
-  await pushLightweightSync(settings);
-  return settings;
+  const clean = migrateSettings(settings);
+  await settingsItem.setValue(clean);
+  await pushLightweightSync(clean);
+  return clean;
 }
 
 /**
@@ -106,11 +114,7 @@ export async function importSettings(raw: unknown): Promise<ReaditSettings> {
   if (!preview.ok) {
     throw new Error(preview.errors.join("; ") || "Invalid import");
   }
-  const parsed = ExportBundleSchema.safeParse(raw);
-  if (parsed.success) {
-    return saveSettings(migrateSettings(parsed.data.settings));
-  }
-  return saveSettings(migrateSettings(raw));
+  return saveSettings(migrateSettings(unwrapImport(raw)));
 }
 
 export function watchSettings(
