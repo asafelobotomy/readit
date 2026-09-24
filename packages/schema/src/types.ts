@@ -6,6 +6,34 @@ export const SETTINGS_VERSION = 9 as const;
  * anything else risks CSS injection (rule breakout via imported settings). */
 const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
+/**
+ * Only http(s) URLs may be stored for links the studio renders — a
+ * `javascript:` URL in an imported pack would run in reddit.com when clicked.
+ */
+export function isSafeHttpUrl(raw: string): boolean {
+  try {
+    const { protocol } = new URL(raw);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Element rules are interpolated into readit's stylesheet as selectors, so
+ * they must stay a plain selector list (no braces / comment openers that would
+ * inject or swallow rules) and must never target readit's own UI or the page
+ * roots. Older pickers could save a rule hiding `<readit-studio>` itself,
+ * which made the studio unreachable.
+ */
+export function isSafeElementRuleSelector(selector: string): boolean {
+  const s = selector.trim();
+  if (!s || /[{}]|\/\*/.test(s)) return false;
+  if (/readit-studio|#readit-root/i.test(s)) return false;
+  if (/^(?:html|head|body|:root)$/i.test(s)) return false;
+  return true;
+}
+
 export const AudienceSchema = z.enum(["reader", "creator", "moderator"]);
 export type Audience = z.infer<typeof AudienceSchema>;
 
@@ -94,7 +122,7 @@ export type UserTag = z.infer<typeof UserTagSchema>;
 
 export const SavedItemSchema = z.object({
   id: z.string(),
-  url: z.string(),
+  url: z.string().refine(isSafeHttpUrl, "Only http(s) URLs"),
   title: z.string(),
   folderId: z.string().default("inbox"),
   addedAt: z.number(),
@@ -129,7 +157,7 @@ export const UserNoteSchema = z.object({
   username: z.string(),
   type: z.enum(["good", "spam", "ban", "misc"]),
   text: z.string(),
-  link: z.string().optional(),
+  link: z.string().refine(isSafeHttpUrl, "Only http(s) URLs").optional(),
   subreddit: z.string().optional(),
   createdAt: z.number(),
 });
@@ -137,7 +165,7 @@ export type UserNote = z.infer<typeof UserNoteSchema>;
 
 export const ElementRuleSchema = z.object({
   id: z.string(),
-  selector: z.string(),
+  selector: z.string().refine(isSafeElementRuleSelector, "Unsafe selector"),
   action: z.enum(["hide", "dim"]),
   label: z.string().default(""),
   enabled: z.boolean().default(true),
@@ -1424,6 +1452,12 @@ export const CqsPrefsSchema = z.object({
   warnPromo: z.boolean().default(true),
   burstWindowMs: z.number().min(60_000).max(3_600_000).default(600_000),
   burstLimit: z.number().min(3).max(40).default(8),
+  /**
+   * Your Reddit username (no u/). When set, removal markers and
+   * r/WhatIsMyCQS tiers only count on your own content; when empty,
+   * removal markers are ignored (they can't be attributed to you).
+   */
+  username: z.string().max(40).default(""),
 });
 export type CqsPrefs = z.infer<typeof CqsPrefsSchema>;
 

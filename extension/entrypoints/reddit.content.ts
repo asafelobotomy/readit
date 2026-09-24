@@ -4,6 +4,7 @@ import {
   createFeatureRuntime,
   currentSubreddit,
   emitReadit,
+  isReaditMutation,
   onReadit,
 } from "@readit/features";
 import type { ReaditSettings } from "@readit/schema";
@@ -33,35 +34,6 @@ function withSubOverride(settings: ReaditSettings): ReaditSettings {
       mediaMode: override.mediaMode ?? settings.knobs.mediaMode,
     },
   };
-}
-
-function isReaditMutation(mutations: MutationRecord[]): boolean {
-  const isOurs = (node: Node | null): boolean => {
-    if (!node) return false;
-    if (node instanceof Element) {
-      if (node.id === "readit-css-engine" || node.id === "readit-root") return true;
-      if (node.id === "readit-cqs-banner") return true;
-      if (node.id === "readit-col-resize-host") return true;
-      if (node.tagName?.toLowerCase() === "readit-studio") return true;
-      if (node.classList?.contains("readit-mod-bar")) return true;
-      if (node.classList?.contains("readit-user-tag")) return true;
-      if (node.classList?.contains("readit-abs-time")) return true;
-      if (node.classList?.contains("readit-cqs-banner")) return true;
-      if (node.classList?.contains("readit-col-resize")) return true;
-      if (node.classList?.contains("readit-pad-resize")) return true;
-      if (node.classList?.contains("readit-layout-frame")) return true;
-      if (node.classList?.contains("readit-frame-label")) return true;
-      if (node.classList?.contains("readit-drop-line")) return true;
-      if (node.getAttributeNames?.().some((n) => n.startsWith("data-readit-"))) {
-        return true;
-      }
-      return Boolean(
-        node.closest?.("readit-studio, #readit-root, #readit-cqs-banner"),
-      );
-    }
-    return isOurs(node.parentElement);
-  };
-  return mutations.every((m) => isOurs(m.target));
 }
 
 export default defineContentScript({

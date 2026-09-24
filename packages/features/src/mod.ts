@@ -11,6 +11,51 @@ function softDisableIfToolbox(ctx: { settings: { toolboxDetected: boolean; flags
   return ctx.settings.toolboxDetected;
 }
 
+export type ModQuickAction = "Approve" | "Remove" | "Spam" | "Lock";
+
+/**
+ * Accessible names readit accepts for each native mod control. Whole-label
+ * matches only: the old `aria-label*="Lock"` substring match also hit
+ * "Block …" and "Unlock", and "Remove" hit unrelated "Remove …" buttons.
+ */
+const NATIVE_MOD_LABELS: Record<ModQuickAction, RegExp> = {
+  Approve: /^approve(?: (?:post|comment|content))?$/i,
+  Remove: /^remove(?: (?:post|comment|content))?$/i,
+  Spam: /^(?:(?:mark|remove) as )?spam$/i,
+  Lock: /^lock(?: (?:post|comment|comments|thread))?$/i,
+};
+
+export function matchesNativeModLabel(
+  action: ModQuickAction,
+  ariaLabel: string | null | undefined,
+): boolean {
+  return NATIVE_MOD_LABELS[action].test(
+    String(ariaLabel ?? "").replace(/\s+/g, " ").trim(),
+  );
+}
+
+type QueryRoot = {
+  querySelectorAll: (selector: string) => ArrayLike<Element> & Iterable<Element>;
+};
+
+/** Native control for `action` inside the post (light DOM or open shadow root). */
+export function findNativeModControl(
+  post: Element,
+  action: ModQuickAction,
+): HTMLElement | null {
+  const roots: QueryRoot[] = [post];
+  if (post.shadowRoot) roots.push(post.shadowRoot);
+  for (const root of roots) {
+    for (const el of root.querySelectorAll("[aria-label]")) {
+      if (el.closest(".readit-mod-bar")) continue;
+      if (matchesNativeModLabel(action, el.getAttribute("aria-label"))) {
+        return el as HTMLElement;
+      }
+    }
+  }
+  return null;
+}
+
 export const modQuickActionsFeature: FeatureModule = {
   id: "modQuickActions",
   tier: "advanced",
@@ -28,7 +73,7 @@ export const modQuickActionsFeature: FeatureModule = {
       bar.className = "readit-mod-bar";
       bar.style.cssText =
         "display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;font-size:12px;";
-      for (const label of ["Approve", "Remove", "Spam", "Lock"]) {
+      for (const label of ["Approve", "Remove", "Spam", "Lock"] as const) {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.textContent = label;
@@ -37,13 +82,23 @@ export const modQuickActionsFeature: FeatureModule = {
         btn.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
+          // readit has no mod API of its own — it can only press Reddit's
+          // control. Never report success (or dim the post) when there is
+          // nothing to press.
+          const native = findNativeModControl(post, label);
+          if (!native) {
+            btn.textContent = `${label}: not available here`;
+            btn.title =
+              "Reddit's own control for this action isn't on this post — use the post's mod menu.";
+            window.setTimeout(() => {
+              btn.textContent = label;
+            }, 2500);
+            return;
+          }
+          native.click();
           post.setAttribute("data-readit-actioned", "true");
           btn.textContent = `${label} ✓`;
-          // Prefer native overflow menu click when present
-          const native = post.querySelector<HTMLElement>(
-            `button[aria-label*="${label}" i], [aria-label*="${label}" i]`,
-          );
-          native?.click();
+          btn.title = "Pressed Reddit's control — confirm in Reddit's dialog if one opens.";
         });
         bar.append(btn);
       }

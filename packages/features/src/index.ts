@@ -256,6 +256,11 @@ export type { FeatureContext, FeatureModule };
 export type { VisitedPostsStore } from "./utils.js";
 export { MARK_READ_MAX_VISITED, mergeVisited } from "./ux-extras.js";
 export { emitReadit, onReadit } from "./bus.js";
+export {
+  isReaditMutation,
+  isReaditNode,
+  READIT_OWNED_SELECTOR,
+} from "./mutations.js";
 export type { CqsPersistDetail, ReaditBusEvent, ReaditBusEvents } from "./bus.js";
 export {
   cleanRedditUrl,

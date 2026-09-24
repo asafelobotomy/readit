@@ -25,6 +25,7 @@ import {
   clampPanelWidth,
   createId,
   formatProfileLayoutBlurb,
+  isSafeHttpUrl,
   isStackedPair,
   LAYOUT_WIDTH_LIMITS,
   mirrorStackedWidths,
@@ -2641,7 +2642,10 @@ function LibraryTab({
               .map((item) => (
                 <div class="readit-list-item" key={item.id}>
                   <div class="readit-row">
-                    <a href={item.url} style={{ color: "#7db7ff" }}>
+                    <a
+                      href={isSafeHttpUrl(item.url) ? item.url : undefined}
+                      style={{ color: "#7db7ff" }}
+                    >
                       {item.title}
                     </a>
                     <button
@@ -2822,6 +2826,26 @@ function CqsTab({
             Warn on promo / link-heavy drafts
           </label>
         </div>
+        <label class="readit-muted" style={{ display: "block", marginTop: 8 }}>
+          Your username (optional)
+          <input
+            class="readit-input"
+            placeholder="u/yourname"
+            value={settings.cqsPrefs.username}
+            onChange={(e) => {
+              const username = e.currentTarget.value
+                .trim()
+                .replace(/^\/?u\//i, "")
+                .slice(0, 40);
+              void onCommit("CQS username", (s) => ({
+                ...s,
+                cqsPrefs: { ...s.cqsPrefs, username },
+              }));
+            }}
+          />
+          Lets readit count removals and r/WhatIsMyCQS tiers only on your own
+          posts. Without it, removal markers are ignored.
+        </label>
         <p class="readit-muted" style={{ marginTop: 8 }}>
           Official tip: verify your email in Reddit prefs — Help lists account
           security as a CQS signal. Avoid removals, bans, and spam-like bursts.

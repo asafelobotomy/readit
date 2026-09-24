@@ -493,6 +493,7 @@ export function createDefaultSettings(): ReaditSettings {
       warnPromo: true,
       burstWindowMs: 600_000,
       burstLimit: 8,
+      username: "",
     },
     layoutSlots: structuredClone(
       active.layoutSlots ??

@@ -157,6 +157,7 @@ function applyV2CqsDefaults(settings: ReaditSettings): ReaditSettings {
       warnPromo: true,
       burstWindowMs: 600_000,
       burstLimit: 8,
+      username: "",
     },
   };
 }
