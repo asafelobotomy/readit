@@ -34,4 +34,9 @@ Productivity / Social & Communication
 
 ## Privacy policy summary
 
-readit stores preferences locally via `chrome.storage.local`. Optional future lightweight sync uses `chrome.storage.sync` for small preference flags only. No remote servers. No sale of data.
+readit stores its settings (profiles, filters, tags, usernotes, macros, saved items) and mark-read history in the extension's own `chrome.storage.local`, which Reddit's pages cannot read. Optional lightweight sync (off by default) copies only the active profile, simple/advanced mode and paused state to `chrome.storage.sync`. No remote servers. No analytics. No sale of data.
+
+## Permissions
+
+- `storage` — the local settings above, and optional lightweight sync.
+- Host access to `*.reddit.com` — to customize New Reddit pages, and so the popup can reach the Reddit tab it opens the studio in.

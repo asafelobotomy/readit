@@ -3,9 +3,9 @@
 readit targets New Reddit (shreddit) only.
 Coexists with Moderator Toolbox. Not a replacement for Old Reddit Redirect.
 
-Do NOT load:  GitHub/readit/extension
-DO load:      GitHub/readit/dist/chrome-mv3
+Do NOT load:  <your clone>/extension
+DO load:      <your clone>/dist/chrome-mv3
 
-Rebuild first if this directory is missing:
+Rebuild first if this directory is missing (from the repo root):
 
-  cd ~/GitHub/readit && npm run build
+  npm run build

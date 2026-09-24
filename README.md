@@ -26,13 +26,13 @@ npm run build
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. **Load unpacked**
-4. Select this folder (must contain `manifest.json`):
+4. Select the build folder inside your clone (it must contain `manifest.json`):
 
 ```text
-~/GitHub/readit/dist/chrome-mv3
+<your clone>/dist/chrome-mv3
 ```
 
-Do **not** load `~/GitHub/readit/extension` — that is WXT source and has no `manifest.json`.
+Do **not** load `<your clone>/extension` — that is WXT source and has no `manifest.json`.
 
 For HMR during development:
 
@@ -40,7 +40,17 @@ For HMR during development:
 npm run dev
 ```
 
-Then load `~/GitHub/readit/dist/chrome-mv3-dev` instead (path is also printed by WXT).
+Then load `<your clone>/dist/chrome-mv3-dev` instead (path is also printed by WXT).
+
+## Test
+
+```bash
+npm test                 # unit checks: layout + settings hardening (run in CI)
+npm run check:versions   # workspace + lockfile versions agree (run in CI)
+npm run smoke            # end-to-end against live New Reddit (local only)
+```
+
+Smoke runs save screenshots and `results.json` to the git-ignored `.smoke-evidence/`. To refresh the committed snapshot under `docs/smoke-evidence/`, run with `READIT_EVIDENCE_DIR=docs/smoke-evidence`.
 
 ## Profiles
 
@@ -71,7 +81,13 @@ No analytics. No remote servers. Optional sync of lightweight prefs can be enabl
 
 Version source of truth: `extension/package.json` (WXT writes it into the Chrome manifest).
 
-1. Bump `version` in `extension/package.json` (and keep workspace `packages/*/package.json` in sync).
+1. Bump every workspace (root, `extension/`, `packages/*`) and `package-lock.json` together:
+
+   ```bash
+   npm run version:set -- 0.2.3
+   ```
+
+   CI fails (`npm run check:versions`) if these drift apart.
 2. Merge to `main` (or `master`).
 3. GitHub Actions [`.github/workflows/release.yml`](.github/workflows/release.yml) builds `readit-<version>-chrome.zip` and publishes a GitHub Release tagged `v<version>`.
 
@@ -81,6 +97,10 @@ Local zip without releasing:
 npm run zip
 # → dist/readit-<version>-chrome.zip
 ```
+
+## Assets
+
+`icons/` holds the full-size logo and mascot source art. The toolbar icons in `extension/public/icon/` and the in-page mascots in `extension/public/mascots/` are downscaled from it.
 
 ## License
 

@@ -13,6 +13,8 @@
     "compile": "npm run compile -w @readit/extension",
     "zip": "npm run zip -w @readit/extension",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "check:versions": "node scripts/check-versions.mjs",
+    "version:set": "npm version --workspaces --include-workspace-root --no-git-tag-version",
     "test": "npm run test:layout && npm run test:hardening",
     "test:layout": "node --experimental-strip-types --import ./scripts/register-ts-resolve.mjs scripts/test-layout-slots.mts",
     "test:hardening": "node --experimental-strip-types --import ./scripts/register-ts-resolve.mjs scripts/test-hardening.mts",
