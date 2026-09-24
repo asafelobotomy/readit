@@ -162,6 +162,24 @@ function draftTextFromComposer(): string {
     .trim();
 }
 
+const SUBMIT_LABEL_RE = /^(?:comment|reply|post|save|submit)$/;
+const COMPOSER_SELECTOR =
+  "form, shreddit-composer, comment-composer-host, faceplate-form, shreddit-post-composer";
+
+/**
+ * A button that submits a comment/post: an exact submit label, and either a
+ * submit button or one inside a composer. The old "label contains post /
+ * comment / reply" test also counted "Hide post", "Share post" and a feed's
+ * "Save" as submits, inflating the burst warning.
+ */
+export function isSubmitButton(btn: Element): boolean {
+  const label = (btn.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!SUBMIT_LABEL_RE.test(label)) return false;
+  return (
+    btn.getAttribute("type") === "submit" || Boolean(btn.closest(COMPOSER_SELECTOR))
+  );
+}
+
 function looksPromotional(text: string): boolean {
   if (!text) return false;
   const lower = text.toLowerCase();
@@ -368,10 +386,7 @@ function attachSubmitGuards(settings: ReaditSettings): void {
     if (!(target instanceof Element)) return;
     const btn = target.closest("button, [role='button']");
     if (!btn) return;
-    const label = (btn.textContent || "").trim().toLowerCase();
-    if (!/^(comment|reply|post|save)$/.test(label) && !/\b(comment|post|reply)\b/.test(label)) {
-      return;
-    }
+    if (!isSubmitButton(btn)) return;
     if (btn.closest("readit-studio, #readit-root, #readit-cqs-banner")) return;
 
     const prefs = live.cqsPrefs;

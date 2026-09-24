@@ -1573,6 +1573,16 @@ html.readit-active.readit-layout-slots [data-readit-slot] {
   return parts.join("\n\n");
 }
 
+/**
+ * An element rule never matches the studio host or anything containing it.
+ * Validation only rejects rules that name the studio; a broad imported rule
+ * (`*`, `body > *`, `html > body`) would otherwise hide the studio along
+ * with the page and leave no in-page way to remove it.
+ */
+export function studioSafeSelector(selector: string): string {
+  return `:is(${selector.trim()}):not(readit-studio, :has(readit-studio))`;
+}
+
 export function buildStylesheet(settings: ReaditSettings): string {
   if (settings.paused) {
     return `/* readit paused */`;
@@ -1631,10 +1641,11 @@ html.readit-active.readit-layout-slots.readit-gutter-inset [data-readit-layout-s
 
   for (const rule of settings.elementRules) {
     if (!rule.enabled || !isSafeElementRuleSelector(rule.selector)) continue;
+    const selector = studioSafeSelector(rule.selector);
     if (rule.action === "hide") {
-      parts.push(`${rule.selector} { display: none !important; }`);
+      parts.push(`${selector} { display: none !important; }`);
     } else {
-      parts.push(`${rule.selector} { opacity: 0.35 !important; }`);
+      parts.push(`${selector} { opacity: 0.35 !important; }`);
     }
   }
 

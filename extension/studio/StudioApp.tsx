@@ -2606,7 +2606,23 @@ function ModTab({
         <div class="readit-list" style={{ marginTop: 8 }}>
           {settings.usernotes.map((n) => (
             <div class="readit-list-item" key={n.id}>
-              u/{n.username}: {n.text}
+              <div class="readit-row">
+                <span>
+                  u/{n.username}: {n.text}
+                </span>
+                <button
+                  type="button"
+                  class="readit-btn"
+                  onClick={() =>
+                    void onCommit("Delete usernote", (s) => ({
+                      ...s,
+                      usernotes: s.usernotes.filter((x) => x.id !== n.id),
+                    }))
+                  }
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>

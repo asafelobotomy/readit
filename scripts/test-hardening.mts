@@ -15,6 +15,7 @@ import {
 } from "../packages/css-engine/src/index.ts";
 import { emitReadit, onReadit } from "../packages/features/src/bus.ts";
 import {
+  isSubmitButton,
   isInsideUserContent,
   isOwnRemovalMarker,
   normalizeUsername,
@@ -55,6 +56,7 @@ import {
   type ReaditSettings,
 } from "../packages/schema/src/index.ts";
 import { buildSelector, isStudioEvent } from "../extension/studio/picker.ts";
+import { isFeedTabCandidate } from "../packages/features/src/feed-philosophy.ts";
 
 let failed = 0;
 function check(name: string, fn: () => void) {
@@ -375,6 +377,12 @@ check("stylesheet skips unsafe element-rule selectors", () => {
     ":root",
     "a{} body{background:url(https://evil.example/x)} b",
     "div /* swallow",
+    "a:not(",
+    '[title="x',
+    "a[href",
+    "a)",
+    "a\\",
+    "@media screen",
     "  ",
   ]) {
     assert.equal(isSafeElementRuleSelector(bad), false, bad);
@@ -383,6 +391,9 @@ check("stylesheet skips unsafe element-rule selectors", () => {
     "shreddit-post > div:nth-of-type(2)",
     '[data-testid="frontpage-sidebar"]',
     "#right-sidebar-container",
+    'a[title="(x"]',
+    "div:not(.a, .b)",
+    "#a\\:b",
   ]) {
     assert.equal(isSafeElementRuleSelector(good), true, good);
   }
@@ -395,7 +406,11 @@ check("stylesheet skips unsafe element-rule selectors", () => {
   ];
   const css = buildStylesheet(s);
   assert.equal(css.includes("readit-studio { display: none"), false);
-  assert.ok(css.includes("#right-sidebar-container { display: none !important; }"));
+  assert.ok(
+    css.includes(
+      ":is(#right-sidebar-container):not(readit-studio, :has(readit-studio)) { display: none !important; }",
+    ),
+  );
 });
 
 // —— 5. Mod quick actions only report what really happened ——
@@ -515,6 +530,7 @@ type FakePost = {
   attrs: Map<string, string>;
   style: { display: string };
   textContent: string;
+  childElementCount: number;
   getAttribute: (n: string) => string | null;
   setAttribute: (n: string, v: string) => void;
   removeAttribute: (n: string) => void;
@@ -527,6 +543,7 @@ function fakePost(text: string): FakePost {
     attrs,
     style: { display: "" },
     textContent: text,
+    childElementCount: 1,
     getAttribute: (n) => attrs.get(n) ?? null,
     setAttribute: (n, v) => void attrs.set(n, v),
     removeAttribute: (n) => void attrs.delete(n),
@@ -785,6 +802,88 @@ check("re-remembering the newest visited post does not re-save history", () => {
   rememberVisited(ctx, "/r/a/comments/1");
   assert.equal(saves.length, 3);
   assert.deepEqual(saves.at(-1)?.slice(-2), ["/r/a/comments/2", "/r/a/comments/1"]);
+});
+
+check("posts that passed the filters are not re-read until they change", () => {
+  let reads = 0;
+  const post = fakePost("");
+  Object.defineProperty(post, "textContent", {
+    get: () => {
+      reads++;
+      return "cats";
+    },
+  });
+  const prevDocument = (globalThis as { document?: unknown }).document;
+  (globalThis as { document?: unknown }).document = {
+    querySelectorAll: (sel: string) =>
+      sel.includes("[data-readit-feature-filters") ? [] : [post],
+  };
+  try {
+    const settings = createDefaultSettings();
+    settings.flags.filters = true;
+    const rule = { id: "f", kind: "keyword", pattern: "dogs", enabled: true } as FilterRule;
+    const ctx = { settings: { ...settings, filters: [rule] }, subreddit: null, pathname: "/" };
+    filtersFeature.apply(ctx);
+    filtersFeature.apply(ctx);
+    assert.equal(reads, 1);
+    post.childElementCount = 2; // hydrated
+    filtersFeature.apply(ctx);
+    assert.equal(reads, 2);
+    filtersFeature.apply({ ...ctx, settings: { ...ctx.settings, filters: [{ ...rule, pattern: "cat" }] } });
+    assert.equal(reads, 3);
+    assert.equal(post.style.display, "none");
+  } finally {
+    filtersFeature.teardown({} as never);
+    (globalThis as { document?: unknown }).document = prevDocument;
+  }
+});
+
+/** Minimal element double: `ancestors` are the selectors `closest()` matches. */
+function fakeControl(
+  tag: string,
+  opts: { text?: string; attrs?: Record<string, string>; ancestors?: string[] } = {},
+) {
+  const attrs = opts.attrs ?? {};
+  const ancestors = opts.ancestors ?? [];
+  return {
+    tagName: tag.toUpperCase(),
+    textContent: opts.text ?? "",
+    getAttribute: (n: string) => attrs[n] ?? null,
+    closest: (sel: string) =>
+      sel.split(",").some((part) => ancestors.includes(part.trim())) ? {} : null,
+  } as unknown as Element;
+}
+
+check("CQS counts composer submits, not 'Hide post' or a feed Save", () => {
+  assert.equal(isSubmitButton(fakeControl("button", { text: "Comment", ancestors: ["shreddit-composer"] })), true);
+  assert.equal(isSubmitButton(fakeControl("button", { text: " Post ", attrs: { type: "submit" } })), true);
+  assert.equal(isSubmitButton(fakeControl("button", { text: "Hide post", ancestors: ["form"] })), false);
+  assert.equal(isSubmitButton(fakeControl("button", { text: "Save" })), false);
+  assert.equal(isSubmitButton(fakeControl("button", { text: "Share post" })), false);
+});
+
+check("Following feed switch never picks a follow toggle", () => {
+  assert.equal(isFeedTabCandidate(fakeControl("faceplate-tab")), true);
+  assert.equal(isFeedTabCandidate(fakeControl("a", { attrs: { href: "/?feed=following" } })), true);
+  assert.equal(isFeedTabCandidate(fakeControl("button", { ancestors: ["[role='tablist']"] })), true);
+  assert.equal(isFeedTabCandidate(fakeControl("button")), false);
+  assert.equal(
+    isFeedTabCandidate(fakeControl("button", { attrs: { role: "tab" }, ancestors: ["faceplate-hovercard"] })),
+    false,
+  );
+  assert.equal(isFeedTabCandidate(fakeControl("a", { attrs: { href: "/u/x" }, ancestors: ["shreddit-post"] })), false);
+});
+
+check("broad element rules can never hide the studio host", () => {
+  const s = createDefaultSettings();
+  s.flags.elementRules = true;
+  s.elementRules = [
+    { id: "a", selector: "body > *", action: "hide", label: "", enabled: true },
+    { id: "b", selector: "html > body", action: "dim", label: "", enabled: true },
+  ];
+  const css = buildStylesheet(s);
+  assert.ok(css.includes(":is(body > *):not(readit-studio, :has(readit-studio)) { display: none !important; }"));
+  assert.ok(css.includes(":is(html > body):not(readit-studio, :has(readit-studio)) { opacity: 0.35 !important; }"));
 });
 
 if (failed > 0) {

@@ -4,13 +4,36 @@ function isHomePath(pathname: string): boolean {
   return pathname === "/" || pathname === "";
 }
 
+/** Places a "Following" control is a follow toggle or a profile link, not the feed tab. */
+const NOT_FEED_TAB_SELECTOR =
+  "shreddit-post, shreddit-comment, faceplate-hovercard, [role='dialog'], #right-sidebar-container, aside";
+const TAB_CONTAINER_SELECTOR =
+  "[role='tablist'], faceplate-tabgroup, faceplate-tab-group, nav";
+
+type TabCandidate = Pick<Element, "tagName" | "getAttribute" | "closest">;
+
+/**
+ * Whether a control can be the Home feed tab. A plain `<button>` labelled
+ * "Following" is usually a follow toggle (clicking it unfollows), so buttons
+ * only count inside a tab list; links and real tabs count anywhere outside
+ * posts, comments, hovercards, dialogs and the sidebar.
+ */
+export function isFeedTabCandidate(el: TabCandidate): boolean {
+  if (el.closest(NOT_FEED_TAB_SELECTOR)) return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "faceplate-tab" || el.getAttribute("role") === "tab") return true;
+  if (tag === "a") return el.getAttribute("href") !== null;
+  if (tag === "button") return Boolean(el.closest(TAB_CONTAINER_SELECTOR));
+  return false;
+}
+
 function findFeedTab(label: RegExp): HTMLElement | null {
   const candidates = document.querySelectorAll<HTMLElement>(
     'button, a, [role="tab"], faceplate-tab',
   );
   for (const el of candidates) {
     const text = (el.textContent || "").trim();
-    if (label.test(text)) return el;
+    if (label.test(text) && isFeedTabCandidate(el)) return el;
   }
   return null;
 }

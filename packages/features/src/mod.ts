@@ -140,12 +140,17 @@ export const modUsernotesFeature: FeatureModule = {
       const key = n.username.toLowerCase();
       byUser.set(key, (byUser.get(key) || 0) + 1);
     }
+    // Reconcile both ways so deleting a user's last note clears the marker.
     document.querySelectorAll('a[href*="/user/"]').forEach((a) => {
       const href = a.getAttribute("href") || "";
       const user = href.match(/\/user\/([^/?#]+)/i)?.[1];
-      if (!user) return;
-      if (byUser.has(user.toLowerCase())) {
-        a.setAttribute("data-readit-has-note", "true");
+      const hasNote = Boolean(user && byUser.has(user.toLowerCase()));
+      if (hasNote) {
+        if (a.getAttribute("data-readit-has-note") !== "true") {
+          a.setAttribute("data-readit-has-note", "true");
+        }
+      } else if (a.hasAttribute("data-readit-has-note")) {
+        a.removeAttribute("data-readit-has-note");
       }
     });
   },

@@ -660,7 +660,6 @@ check("nav rail model fingerprint stable", () => {
         kind: "chrome",
         href: "/",
         label: "Home",
-        iconSvg: "<svg></svg>",
       },
     ],
     sections: [

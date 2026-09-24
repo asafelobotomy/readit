@@ -128,11 +128,20 @@ function readPost(post: Element): FilterablePost {
 /** Rule set the currently hidden posts were evaluated against. */
 let appliedRulesKey: string | null = null;
 
+/**
+ * Posts that passed the current rules, with their child count at the time.
+ * Every DOM-mutation scan used to re-read the full text of every visible
+ * post; now a post is re-checked only when its children change (late
+ * hydration) or the rules do.
+ */
+let passedPosts = new WeakMap<Element, number>();
+
 function unhideFiltered(): void {
   document.querySelectorAll("[data-readit-feature-filters]").forEach((el) => {
     (el as HTMLElement).style.display = "";
   });
   clearMarks("filters");
+  passedPosts = new WeakMap();
 }
 
 export const filtersFeature: FeatureModule = {
@@ -157,10 +166,14 @@ export const filtersFeature: FeatureModule = {
     const posts = document.querySelectorAll("shreddit-post, article, [data-testid='post-container']");
     posts.forEach((post) => {
       if (isProcessed(post, "filters")) return;
+      const passedAt = passedPosts.get(post);
+      if (passedAt !== undefined && passedAt === post.childElementCount) return;
       const data = readPost(post);
       if (rules.some((rule) => postMatchesRule(data, rule))) {
         (post as HTMLElement).style.display = "none";
         markProcessed(post, "filters");
+      } else {
+        passedPosts.set(post, post.childElementCount);
       }
     });
   },

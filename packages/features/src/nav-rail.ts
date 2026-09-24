@@ -26,7 +26,8 @@ export type NavItem = {
   /** Subreddit name without r/ for community rows. */
   name?: string;
   iconSrc?: string;
-  iconSvg?: string;
+  /** Detached, scrubbed copy of Reddit's own icon; cloned again per render. */
+  iconSvg?: SVGElement;
   sectionId?: NavSectionId;
 };
 
@@ -137,14 +138,31 @@ function avatarSrcFrom(el: Element): string | undefined {
   return src || undefined;
 }
 
-function iconSvgFrom(el: Element): string | undefined {
+/**
+ * Copy the nav icon as a node, never through outerHTML → innerHTML (a
+ * serialize/re-parse round trip can change what markup means), and drop
+ * anything in it that can run script or pull in foreign content.
+ */
+function iconSvgFrom(el: Element): SVGElement | undefined {
   const svg = el.querySelector("svg");
   if (!(svg instanceof SVGElement)) return undefined;
   const clone = svg.cloneNode(true) as SVGElement;
   clone.removeAttribute("class");
   clone.setAttribute("aria-hidden", "true");
   clone.setAttribute("focusable", "false");
-  return clone.outerHTML;
+  for (const bad of clone.querySelectorAll("script, foreignObject, iframe")) {
+    bad.remove();
+  }
+  for (const node of [clone, ...clone.querySelectorAll("*")]) {
+    for (const attr of [...node.attributes]) {
+      const name = attr.name.toLowerCase();
+      const isScriptUrl =
+        (name === "href" || name.endsWith(":href")) &&
+        /^\s*javascript:/i.test(attr.value);
+      if (name.startsWith("on") || isScriptUrl) node.removeAttribute(attr.name);
+    }
+  }
+  return clone;
 }
 
 function normalizeHref(href: string): string {
@@ -661,7 +679,7 @@ function renderIcon(item: NavItem): HTMLElement {
       class: "readit-nav-rail-icon readit-nav-rail-icon-svg",
       "aria-hidden": "true",
     });
-    wrap.innerHTML = item.iconSvg;
+    wrap.append(item.iconSvg.cloneNode(true));
     return wrap;
   }
   if (item.kind === "action" || item.sectionId) {

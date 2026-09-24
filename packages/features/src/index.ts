@@ -159,6 +159,20 @@ export function createFeatureRuntime(
   let toolboxDetected = false;
   const health: Record<string, FeatureHealth> = {};
 
+  /**
+   * apply() may be async; its rejection escapes the callers' try/catch, so
+   * mark the feature broken when it lands instead of leaving health "ok".
+   */
+  const runApply = (feature: FeatureModule, ctx: FeatureContext): void => {
+    const result = feature.apply(ctx);
+    if (result instanceof Promise) {
+      result.catch((err: unknown) => {
+        health[feature.id] = "broken";
+        console.warn(`[readit] ${feature.id} failed`, err);
+      });
+    }
+  };
+
   const ctxFrom = (settings: ReaditSettings): FeatureContext => ({
     settings: { ...settings, toolboxDetected },
     subreddit: currentSubreddit(location.pathname),
@@ -187,14 +201,14 @@ export function createFeatureRuntime(
             // partially attaching listeners/observers, a later disable must
             // still reach teardown() instead of retrying apply() forever.
             lastEnabled.set(feature.id, true);
-            void feature.apply(ctx);
+            runApply(feature, ctx);
           } else if (SCAN_FEATURE_IDS.has(feature.id)) {
-            void feature.apply(ctx);
+            runApply(feature, ctx);
             lastEnabled.set(feature.id, true);
           } else if (feature.id === "keyboardNav" || feature.id === "followingFeed") {
             feature.teardown(ctx);
             lastEnabled.set(feature.id, true);
-            void feature.apply(ctx);
+            runApply(feature, ctx);
           } else {
             lastEnabled.set(feature.id, true);
           }
@@ -217,7 +231,7 @@ export function createFeatureRuntime(
         if (!SCAN_FEATURE_IDS.has(feature.id)) continue;
         if (!isFlagEnabled(next, feature.id)) continue;
         try {
-          void feature.apply(ctxFrom(next));
+          runApply(feature, ctxFrom(next));
           lastEnabled.set(feature.id, true);
           health[feature.id] = feature.health?.() ?? "ok";
         } catch {

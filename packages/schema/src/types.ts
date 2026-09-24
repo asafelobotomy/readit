@@ -28,13 +28,42 @@ export function isSafeHttpUrl(raw: string): boolean {
  */
 export function isSafeElementRuleSelector(selector: string): boolean {
   const s = selector.trim();
-  if (!s || /[{}]|\/\*/.test(s)) return false;
+  if (!s || /[{}]|\/\*/.test(s) || s.startsWith("@")) return false;
+  if (!hasBalancedSelectorSyntax(s)) return false;
   if (/readit-studio|#readit-root/i.test(s)) return false;
   if (/^(?:html|head|body|:root)$/i.test(s)) return false;
   return true;
 }
 
-export const AudienceSchema = z.enum(["reader", "creator", "moderator"]);
+/**
+ * Brackets, parens and quotes must close. An unclosed `(`, `[` or string
+ * doesn't break out of the rule, but it swallows every rule emitted after
+ * it (the tokenizer keeps reading until the matching close).
+ */
+function hasBalancedSelectorSyntax(s: string): boolean {
+  const closers: string[] = [];
+  let quote: string | null = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]!;
+    if (c === "\\") {
+      if (i === s.length - 1) return false;
+      i++;
+      continue;
+    }
+    if (quote) {
+      if (c === quote) quote = null;
+      else if (c === "\n") return false;
+      continue;
+    }
+    if (c === '"' || c === "'") quote = c;
+    else if (c === "(") closers.push(")");
+    else if (c === "[") closers.push("]");
+    else if ((c === ")" || c === "]") && closers.pop() !== c) return false;
+  }
+  return quote === null && closers.length === 0;
+}
+
+export const AudienceSchema =z.enum(["reader", "creator", "moderator"]);
 export type Audience = z.infer<typeof AudienceSchema>;
 
 export const FeatureTierSchema = z.enum(["simple", "advanced"]);
