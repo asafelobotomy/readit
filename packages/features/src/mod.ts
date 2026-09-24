@@ -142,9 +142,9 @@ export const modUsernotesFeature: FeatureModule = {
     }
     document.querySelectorAll('a[href*="/user/"]').forEach((a) => {
       const href = a.getAttribute("href") || "";
-      const m = href.match(/\/user\/([^/?#]+)/i);
-      if (!m) return;
-      if (byUser.has(m[1].toLowerCase())) {
+      const user = href.match(/\/user\/([^/?#]+)/i)?.[1];
+      if (!user) return;
+      if (byUser.has(user.toLowerCase())) {
         a.setAttribute("data-readit-has-note", "true");
       }
     });

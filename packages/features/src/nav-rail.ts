@@ -68,8 +68,13 @@ function cleanLabel(raw: string): string {
 }
 
 function subredditFromHref(href: string): string | null {
-  const m = href.match(/\/r\/([^/?#]+)/i);
-  return m ? decodeURIComponent(m[1]) : null;
+  const name = href.match(/\/r\/([^/?#]+)/i)?.[1];
+  if (!name) return null;
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name; // malformed %-escape in a scraped href
+  }
 }
 
 export function classifyNavSection(text: string): NavSectionId {

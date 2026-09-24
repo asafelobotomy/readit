@@ -56,8 +56,7 @@ export function clearMarks(featureId: string): void {
 }
 
 export function currentSubreddit(pathname: string): string | null {
-  const m = pathname.match(/^\/r\/([^/]+)/i);
-  return m ? m[1] : null;
+  return pathname.match(/^\/r\/([^/]+)/i)?.[1] ?? null;
 }
 
 export function isModRoute(pathname: string): boolean {
