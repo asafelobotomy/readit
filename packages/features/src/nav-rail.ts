@@ -538,6 +538,23 @@ export function scrapeNavModel(doc: Document = document): NavModel {
     const label = cleanLabel(anchor.textContent || "");
     if (isSkippableNavLink(label, hrefRaw)) continue;
 
+    // readit's own “All · Global” link (classic-habits.ts) is page chrome,
+    // not the r/popular community its href would otherwise classify as.
+    if (anchor.classList.contains("readit-all-link")) {
+      const item: NavItem = {
+        kind: "chrome",
+        href,
+        label: label || "All · Global",
+        iconSvg: iconSvgFrom(anchor),
+      };
+      const key = itemKey(item);
+      if (!seen.has(key)) {
+        seen.add(key);
+        chrome.push(item);
+      }
+      continue;
+    }
+
     const details = anchor.closest("details");
     const summary = details?.querySelector("summary");
     const summaryLabel = summary

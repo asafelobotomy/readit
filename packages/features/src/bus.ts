@@ -1,4 +1,5 @@
 import type {
+  CommentSort,
   CqsRiskEvent,
   CqsSnapshot,
   LayoutSeparator,
@@ -24,6 +25,8 @@ export type ReaditBusEvents = {
   "layout-width-locks": { widthLocks: Record<string, boolean> };
   "edit-selection": { selected: string[] };
   "cqs-persist": CqsPersistDetail;
+  /** A sort picked in Reddit's comment sort menu (remember mode). */
+  "comment-sort-picked": { subreddit: string; sort: CommentSort };
   "open-studio": undefined;
   /** Carries fresh settings when known; `undefined` means "reload from storage". */
   "settings-updated": ReaditSettings | undefined;

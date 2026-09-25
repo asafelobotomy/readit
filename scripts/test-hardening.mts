@@ -32,7 +32,24 @@ import {
   matchesNativeModLabel,
   modHighlightFeature,
 } from "../packages/features/src/mod.ts";
-import { isReaditMutation } from "../packages/features/src/mutations.ts";
+import {
+  isReaditMutation,
+  READIT_OWNED_SELECTOR,
+} from "../packages/features/src/mutations.ts";
+import {
+  allFeedUrl,
+  commentSortFromMenuValue,
+  directLoadCommentSortUrl,
+  isAllFeedPage,
+  isAllHref,
+  originalAttr,
+  rememberCommentSort,
+  resolveCommentSort,
+  restoreAttr,
+  stampAttr,
+  withCommentSort,
+} from "../packages/features/src/link-stamp.ts";
+import { popoutHrefFromPath } from "../packages/features/src/post-popout.ts";
 import { nextPostIndex } from "../packages/features/src/reader-creator.ts";
 import {
   isFormattingToggleLabel,
@@ -925,6 +942,216 @@ check("broad element rules can never hide the studio host", () => {
   const css = buildStylesheet(s);
   assert.ok(css.includes(":is(body > *):not(readit-studio, :has(readit-studio)) { display: none !important; }"));
   assert.ok(css.includes(":is(html > body):not(readit-studio, :has(readit-studio)) { opacity: 0.35 !important; }"));
+});
+
+// —— Classic habits (0.3.0): comment sort, new tab, All · Global ——
+
+check("withCommentSort adds ?sort= to thread links only", () => {
+  const thread = "/r/AskReddit/comments/1wpfkk1/whats_up/";
+  assert.equal(withCommentSort(thread, "top"), `${thread}?sort=top`);
+  assert.equal(
+    withCommentSort(`https://www.reddit.com${thread}?utm_source=x#c`, "new"),
+    `https://www.reddit.com${thread}?utm_source=x&sort=new#c`,
+  );
+  // No slug, no trailing slash.
+  assert.equal(
+    withCommentSort("/r/pics/comments/abc123", "old"),
+    "/r/pics/comments/abc123?sort=old",
+  );
+  // Already sorted, single-comment permalink, feeds, other sites: untouched.
+  assert.equal(withCommentSort(`${thread}?sort=new`, "top"), null);
+  assert.equal(withCommentSort("/r/pics/comments/abc123/comment/def456/", "top"), null);
+  assert.equal(withCommentSort("/r/pics/", "top"), null);
+  assert.equal(withCommentSort("https://example.com/r/x/comments/abc/", "top"), null);
+  // Idempotent: a stamped link needs no second change.
+  assert.equal(withCommentSort(withCommentSort(thread, "qa")!, "qa"), null);
+});
+
+check("comment sort resolves override, then remembered, then default", () => {
+  const s = createDefaultSettings();
+  s.commentSortPrefs.sort = "top";
+  s.commentSortPrefs.remembered = { askreddit: "new" };
+  assert.equal(resolveCommentSort(s, "AskReddit"), "top"); // fixed mode ignores memory
+  s.commentSortPrefs.mode = "remember";
+  assert.equal(resolveCommentSort(s, "AskReddit"), "new");
+  assert.equal(resolveCommentSort(s, "pics"), "top");
+  assert.equal(resolveCommentSort(s, null), "top");
+  s.subredditOverrides = [{ subreddit: "r/AskReddit", commentSort: "qa" }];
+  assert.equal(resolveCommentSort(s, "askreddit"), "qa");
+});
+
+check("Reddit's comment sort menu values map to URL sorts", () => {
+  assert.equal(commentSortFromMenuValue("CONFIDENCE"), "confidence");
+  assert.equal(commentSortFromMenuValue("QA"), "qa");
+  assert.equal(commentSortFromMenuValue("LIVE"), null);
+  assert.equal(commentSortFromMenuValue(null), null);
+});
+
+check("remembered sorts move to newest and stay capped", () => {
+  const start = { a_sub: "top", b_sub: "new" } as const;
+  const same = rememberCommentSort({ ...start }, "b_sub", "new", 3);
+  assert.deepEqual(same, start);
+  const moved = rememberCommentSort({ ...start }, "A_Sub", "old", 3);
+  assert.deepEqual(Object.entries(moved), [["b_sub", "new"], ["a_sub", "old"]]);
+  const capped = rememberCommentSort({ a1: "top", a2: "top", a3: "top" }, "a4", "new", 3);
+  assert.deepEqual(Object.keys(capped), ["a2", "a3", "a4"]);
+  const unchanged = { x_sub: "top" } as const;
+  assert.equal(rememberCommentSort(unchanged, "not a sub!", "new", 3), unchanged);
+});
+
+check("direct-load sort redirect follows the flag and its setting", () => {
+  const s = createDefaultSettings();
+  const url = "https://www.reddit.com/r/pics/comments/abc123/title/";
+  s.flags.commentSort = false;
+  assert.equal(directLoadCommentSortUrl(s, url), null);
+  s.flags.commentSort = true;
+  s.commentSortPrefs.applyOnDirectLoad = false;
+  assert.equal(directLoadCommentSortUrl(s, url), null);
+  s.commentSortPrefs.applyOnDirectLoad = true;
+  assert.equal(directLoadCommentSortUrl(s, url), `${url}?sort=top`);
+  assert.equal(directLoadCommentSortUrl(s, `${url}?sort=new`), null); // no loop
+  s.paused = true;
+  assert.equal(directLoadCommentSortUrl(s, url), null);
+});
+
+check("All · Global targets global Popular and recognises r/all links", () => {
+  assert.equal(allFeedUrl("hot"), "/r/popular/hot/?geo_filter=global");
+  assert.ok(isAllHref("/r/all/"));
+  assert.ok(isAllHref("https://www.reddit.com/r/all/top/?t=day"));
+  assert.ok(!isAllHref("/r/allthingsdogs/"));
+  assert.ok(!isAllHref("https://example.com/r/all/"));
+  assert.ok(isAllFeedPage("https://www.reddit.com/r/popular/hot/?geo_filter=GLOBAL"));
+  assert.ok(!isAllFeedPage("https://www.reddit.com/r/popular/"));
+});
+
+/** Minimal attribute store standing in for a DOM element. */
+function attrEl(init: Record<string, string> = {}) {
+  const attrs = new Map(Object.entries(init));
+  return {
+    getAttribute: (n: string) => attrs.get(n) ?? null,
+    setAttribute: (n: string, v: string) => void attrs.set(n, v),
+    hasAttribute: (n: string) => attrs.has(n),
+    removeAttribute: (n: string) => void attrs.delete(n),
+  } as unknown as Element;
+}
+
+check("link stamps restore exactly what readit changed", () => {
+  const a = attrEl({ href: "/r/pics/comments/abc/" });
+  stampAttr(a, "href", "/r/pics/comments/abc/?sort=top");
+  stampAttr(a, "href", "/r/pics/comments/abc/?sort=new"); // re-stamp keeps the first original
+  assert.equal(originalAttr(a, "href"), "/r/pics/comments/abc/");
+  restoreAttr(a, "href");
+  assert.equal(a.getAttribute("href"), "/r/pics/comments/abc/");
+  assert.equal(a.getAttribute("data-readit-orig-href"), null);
+
+  const post = attrEl();
+  stampAttr(post, "target", "_blank");
+  restoreAttr(post, "target");
+  assert.equal(post.hasAttribute("target"), false); // was absent → removed again
+});
+
+check("a link Reddit rewrote after stamping is never rolled back", () => {
+  const a = attrEl({ href: "/r/pics/comments/old1/" });
+  stampAttr(a, "href", "/r/pics/comments/old1/?sort=top");
+  // Reddit reuses the element for another post.
+  a.setAttribute("href", "/r/pics/comments/new2/");
+  assert.equal(originalAttr(a, "href"), "/r/pics/comments/new2/");
+  stampAttr(a, "href", "/r/pics/comments/new2/?sort=top");
+  restoreAttr(a, "href");
+  assert.equal(a.getAttribute("href"), "/r/pics/comments/new2/");
+  // Rewritten, then disabled: leave Reddit's value alone.
+  stampAttr(a, "href", "/r/pics/comments/new2/?sort=top");
+  a.setAttribute("href", "/r/pics/comments/third/");
+  restoreAttr(a, "href");
+  assert.equal(a.getAttribute("href"), "/r/pics/comments/third/");
+});
+
+check("classic-habit defaults, profiles and repair of older settings", () => {
+  const d = createDefaultSettings();
+  assert.equal(d.flags.commentSort, true); // Focus Reader
+  assert.equal(d.flags.allFeed, true);
+  assert.equal(d.flags.openInNewTab, false);
+  assert.deepEqual(d.commentSortPrefs, {
+    mode: "fixed",
+    sort: "top",
+    applyOnDirectLoad: true,
+    remembered: {},
+  });
+  const dense = applyProfile(d, "dense-power");
+  assert.equal(dense.flags.openInNewTab, true);
+  const minimal = applyProfile(d, "minimal-media");
+  assert.equal(minimal.flags.commentSort, false);
+
+  // Settings saved by 0.2.3 have none of the new keys.
+  const old = stored();
+  delete old.commentSortPrefs;
+  delete old.linkPrefs;
+  delete old.allFeedPrefs;
+  for (const k of ["commentSort", "openInNewTab", "allFeed"]) delete old.flags[k];
+  old.subredditOverrides = [{ subreddit: "pics", commentSort: "bogus" }];
+  const repaired = repairSettings(old)!.settings;
+  assert.equal(repaired.flags.commentSort, false);
+  assert.equal(repaired.allFeedPrefs.sort, "hot");
+  assert.equal(repaired.linkPrefs.posts, true);
+  assert.equal(repaired.subredditOverrides[0]?.commentSort, undefined);
+});
+
+check("the All · Global nav link counts as readit's own node", () => {
+  assert.ok(READIT_OWNED_SELECTOR.split(", ").includes(".readit-all-link-wrap"));
+});
+
+/** Composed-path stand-in: selector matching by tag / attribute only. */
+function pathEl(
+  localName: string,
+  attrs: Record<string, string> = {},
+  children: Record<string, ReturnType<typeof pathEl>> = {},
+) {
+  return {
+    localName,
+    getAttribute: (n: string) => attrs[n] ?? null,
+    querySelector: (sel: string) => children[sel] ?? null,
+    matches: (sel: string) =>
+      sel.split(",").some((part) => {
+        const p = part.trim();
+        if (p === localName) return true;
+        const m = p.match(/^\[(\w[\w-]*)="([^"]+)"\]$/);
+        return !!m && attrs[m[1]!] === m[2];
+      }),
+  };
+}
+
+check("pop-out opens thread clicks and leaves every other control to Reddit", () => {
+  const thread = "/r/pics/comments/abc123/title/?sort=top";
+  const post = pathEl("shreddit-post", { permalink: "/r/pics/comments/abc123/title/" }, {
+    'a[slot="full-post-link"]': pathEl("a", { href: thread }),
+  });
+  // Card body, title link, shadow-DOM comments link → the post.
+  assert.equal(popoutHrefFromPath([pathEl("div"), post]), thread);
+  assert.equal(popoutHrefFromPath([pathEl("span"), pathEl("a", { href: thread, slot: "title" }), post]), thread);
+  assert.equal(
+    popoutHrefFromPath([pathEl("a", { href: "/r/pics/comments/abc123/title/", name: "comments-action-button" }), post]),
+    "/r/pics/comments/abc123/title/",
+  );
+  // Votes, menus, community / user / outside links, video, new-tab links → Reddit.
+  assert.equal(popoutHrefFromPath([pathEl("svg"), pathEl("button"), post]), null);
+  assert.equal(popoutHrefFromPath([pathEl("div", { role: "button" }), post]), null);
+  assert.equal(popoutHrefFromPath([pathEl("a", { href: "/r/pics/" }), post]), null);
+  assert.equal(popoutHrefFromPath([pathEl("a", { href: "https://example.com/story" }), post]), null);
+  assert.equal(popoutHrefFromPath([pathEl("shreddit-player"), post]), null);
+  assert.equal(popoutHrefFromPath([pathEl("a", { href: thread, target: "_blank" }), post]), null);
+  // Outside any post card: never.
+  assert.equal(popoutHrefFromPath([pathEl("div"), pathEl("main")]), null);
+  // Falls back to the card's permalink when the overlay link is missing.
+  const bare = pathEl("shreddit-post", { permalink: "/r/pics/comments/abc123/title/" });
+  assert.equal(popoutHrefFromPath([bare]), "/r/pics/comments/abc123/title/");
+});
+
+check("posts open in a tab unless the pop-out is chosen", () => {
+  assert.equal(createDefaultSettings().linkPrefs.postsOpenIn, "tab");
+  const old = stored();
+  delete old.linkPrefs.postsOpenIn;
+  assert.equal(repairSettings(old)!.settings.linkPrefs.postsOpenIn, "tab");
+  assert.ok(READIT_OWNED_SELECTOR.split(", ").includes("#readit-popout-host"));
 });
 
 if (failed > 0) {
