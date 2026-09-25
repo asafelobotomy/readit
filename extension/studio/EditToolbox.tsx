@@ -51,6 +51,13 @@ const FONT_FAMILIES: { id: FontFamily; label: string }[] = [
   { id: "mono", label: "Mono" },
 ];
 
+const FONT_WEIGHTS: { id: FontWeight; label: string }[] = [
+  { id: 400, label: "Regular" },
+  { id: 500, label: "Medium" },
+  { id: 600, label: "Semibold" },
+  { id: 700, label: "Bold" },
+];
+
 const GUTTER_THEMES: { id: GutterTheme; label: string }[] = [
   { id: "plain", label: "Plain" },
   { id: "line", label: "Line" },
@@ -288,27 +295,62 @@ export function EditToolbox({ settings, commit }: Props) {
             </option>
           ))}
         </select>
-        <select
-          class="readit-edit-select"
-          value={String(tokens.fontWeight || 400)}
-          onChange={(e) => {
-            const fontWeight = Number(
-              (e.currentTarget as HTMLSelectElement).value,
-            ) as FontWeight;
-            void commit("Font weight", (s) => ({
-              ...s,
-              knobs: {
-                ...s.knobs,
-                tokens: { ...s.knobs.tokens, fontWeight },
-              },
-            }));
-          }}
+        <label
+          class="readit-edit-zoom"
+          title="Titles, names, buttons and sidebars"
         >
-          <option value="400">Regular</option>
-          <option value="500">Medium</option>
-          <option value="600">Semibold</option>
-          <option value="700">Bold</option>
-        </select>
+          UI
+          <select
+            class="readit-edit-select"
+            value={String(tokens.fontWeight || 400)}
+            onChange={(e) => {
+              const fontWeight = Number(
+                (e.currentTarget as HTMLSelectElement).value,
+              ) as FontWeight;
+              void commit("UI weight", (s) => ({
+                ...s,
+                knobs: {
+                  ...s.knobs,
+                  tokens: { ...s.knobs.tokens, fontWeight },
+                },
+              }));
+            }}
+          >
+            {FONT_WEIGHTS.map((w) => (
+              <option key={w.id} value={String(w.id)}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label
+          class="readit-edit-zoom"
+          title="Post and comment text; bold and headings stay bold"
+        >
+          Body
+          <select
+            class="readit-edit-select"
+            value={String(tokens.bodyFontWeight || 400)}
+            onChange={(e) => {
+              const bodyFontWeight = Number(
+                (e.currentTarget as HTMLSelectElement).value,
+              ) as FontWeight;
+              void commit("Body weight", (s) => ({
+                ...s,
+                knobs: {
+                  ...s.knobs,
+                  tokens: { ...s.knobs.tokens, bodyFontWeight },
+                },
+              }));
+            }}
+          >
+            {FONT_WEIGHTS.map((w) => (
+              <option key={w.id} value={String(w.id)}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label class="readit-edit-zoom">
           Size
           <input

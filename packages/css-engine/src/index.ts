@@ -125,6 +125,30 @@ const REDDIT_LEADING_UNITLESS: readonly [string, string][] = [
   ["\\[0\\]", "0"],
 ];
 
+/**
+ * Heading scale inside markdown bodies: [tag, size px, line-height px].
+ * Reddit renders md h1 and h2 identically (20/20, regular) and h5 like body text.
+ */
+const MD_HEADINGS: readonly [string, number, number][] = [
+  ["h1", 20, 26],
+  ["h2", 18, 24],
+  ["h3", 16, 22],
+  ["h4", 14, 20],
+  ["h5", 14, 20],
+  ["h6", 12, 16],
+];
+
+/** Reddit's body line-height (14/20), which some markdown blocks miss (14/21). */
+const MD_LINE_HEIGHT = Math.round((20 / 14) * 10000) / 10000;
+
+/** `.md.md` outranks Reddit's heading size utilities and our scaled overrides. */
+function mdHeadingRules(scope: string, scale: number): string {
+  return MD_HEADINGS.map(
+    ([tag, px, lh]) =>
+      `${scope} .md.md ${tag} { font-size: ${rem((px / 16) * scale)}; line-height: ${rem((lh / 16) * scale)}; }`,
+  ).join("\n");
+}
+
 /** Reddit's `xs:` breakpoint, where titles and the subreddit name step up. */
 const REDDIT_XS_MIN_WIDTH_PX = 768;
 
@@ -171,6 +195,24 @@ function typographyRules(tokens: CssTokens): string {
   const weight = tokens.fontWeight ?? 400;
   const scale = tokens.fontScale;
   const parts: string[] = [];
+
+  // Reddit's own inconsistencies, fixed whatever the settings. Body copy has
+  // its own weight so the UI weight never thickens it, and markdown keeps its
+  // emphasis (feed previews render <strong> at 400).
+  const bodyWeight = tokens.bodyFontWeight ?? 400;
+  parts.push(`html.readit-active .md {
+  font-weight: ${bodyWeight};
+  line-height: ${MD_LINE_HEIGHT};
+}
+html.readit-active .md .font-normal { font-weight: ${bodyWeight}; }
+html.readit-active .md .font-medium { font-weight: ${weightFor(500, bodyWeight)}; }
+html.readit-active .md :is(strong, b),
+html.readit-active .md.md :is(h1, h2, h3, h4, h5, h6) { font-weight: 700; }
+${mdHeadingRules("html.readit-active", 1)}
+/* Section headers: one tracking (Reddit mixes 0 and 0.1em). */
+html.readit-active :is(h2.uppercase, h2 > .uppercase, .uppercase.tracking-widest) {
+  letter-spacing: 0.05em;
+}`);
 
   if (family || weight !== 400) {
     const utilities = (
@@ -227,7 +269,8 @@ ${text.join("\n")}
 @media (min-width: ${REDDIT_XS_MIN_WIDTH_PX}px) {
 ${textXs.join("\n")}
 }
-${leading.join("\n")}`);
+${leading.join("\n")}
+${mdHeadingRules(TEXT_SCALE_SCOPE, scale)}`);
   }
 
   return parts.join("\n\n");

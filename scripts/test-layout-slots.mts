@@ -1238,6 +1238,20 @@ check("CSS typography goes through Reddit's tokens and utilities", () => {
   assert.match(css, /html\.readit-active \[class\*="theme-"\] \{\n  font-family: ui-serif[^\n]*\n  --font-sans: ui-serif/);
   assert.doesNotMatch(css, /calc\(1rem \* var\(--readit-font-scale\)\)/);
 
+  // Body copy stays regular under a bold setting; emphasis and headings stay bold.
+  assert.match(css, /html\.readit-active \.md \{\n  font-weight: 400;\n  line-height: 1\.4286;/);
+  assert.match(css, /\.md :is\(strong, b\),\nhtml\.readit-active \.md\.md :is\(h1, h2, h3, h4, h5, h6\) \{ font-weight: 700; \}/);
+  // Markdown headings get a real hierarchy, scaled inside content.
+  assert.match(css, /html\.readit-active \.md\.md h1 \{ font-size: 1\.25rem; line-height: 1\.625rem; \}/);
+  assert.match(css, /shreddit-comment-tree\) \.md\.md h2 \{ font-size: 1\.35rem; line-height: 1\.8rem; \}/);
+
+  // Body weight is its own setting.
+  settings.knobs.tokens.bodyFontWeight = 500;
+  const bodyMedium = buildStylesheet(settings);
+  assert.match(bodyMedium, /html\.readit-active \.md \{\n  font-weight: 500;/);
+  assert.match(bodyMedium, /\.md :is\(strong, b\)/);
+  assert.equal(createDefaultSettings().knobs.tokens.bodyFontWeight, 400);
+
   settings.knobs.tokens.fontWeight = 500;
   const medium = buildStylesheet(settings);
   assert.match(medium, /--font-body-1-weight: 500;/);

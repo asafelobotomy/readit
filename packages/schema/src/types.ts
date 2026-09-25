@@ -95,7 +95,10 @@ export const CssTokensSchema = z.object({
   density: z.number().min(0).max(1).default(0.45),
   fontScale: z.number().min(0.85).max(1.4).default(1),
   fontFamily: FontFamilySchema.default("system"),
+  /** UI text: titles, names, meta, buttons, sidebars. */
   fontWeight: FontWeightSchema.default(400),
+  /** Post and comment bodies (markdown); bold and headings stay bold. */
+  bodyFontWeight: FontWeightSchema.default(400),
   radiusPx: z.number().min(0).max(24).default(8),
   accent: z.string().regex(HEX_COLOR_RE).catch("#ff4500"),
   themeMode: ThemeModeSchema.default("system"),
