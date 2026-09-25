@@ -147,9 +147,11 @@ export const absoluteTimestampsFeature: FeatureModule = {
       if (Number.isNaN(d.getTime())) return;
       const span = document.createElement("span");
       span.className = "readit-abs-time";
-      span.textContent = ` (${d.toLocaleString()})`;
-      // Same size as the relative time; a smaller size added a third size to the byline.
-      span.style.cssText = "opacity:0.75;";
+      span.textContent = `(${d.toLocaleString()})`;
+      // Same size as the relative time; a smaller size added a third size to
+      // the byline. The gap is a margin, not a leading space: where the byline
+      // is flex or grid (the post page header) a leading space is dropped.
+      span.style.cssText = "opacity:0.75;margin-inline-start:0.3em;";
       t.after(span);
       markProcessed(t, "absoluteTimestamps");
     });
@@ -176,28 +178,6 @@ export const opHighlightFeature: FeatureModule = {
     });
   },
   teardown() {},
-};
-
-export const alwaysShowActionsFeature: FeatureModule = {
-  id: "alwaysShowActions",
-  tier: "advanced",
-  audience: ["creator", "moderator"],
-  category: "productivity",
-  label: "Always show actions",
-  description: "Expand overflow menus into the action bar when possible.",
-  apply(ctx) {
-    if (!ctx.settings.flags.alwaysShowActions) return;
-    document
-      .querySelectorAll('shreddit-post [aria-haspopup="menu"], shreddit-comment [aria-haspopup="menu"]')
-      .forEach((btn) => {
-        if (isProcessed(btn, "alwaysShowActions")) return;
-        (btn as HTMLElement).style.outline = "1px dashed var(--readit-accent)";
-        markProcessed(btn, "alwaysShowActions");
-      });
-  },
-  teardown() {
-    clearMarks("alwaysShowActions");
-  },
 };
 
 export const cleanLinksFeature: FeatureModule = {

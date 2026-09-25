@@ -593,6 +593,8 @@ type FakePost = {
   setAttribute: (n: string, v: string) => void;
   removeAttribute: (n: string) => void;
   querySelector: () => null;
+  /** Only understands `[view-context="…"]` — all the filters ask about. */
+  matches: (sel: string) => boolean;
 };
 
 function fakePost(text: string): FakePost {
@@ -606,8 +608,34 @@ function fakePost(text: string): FakePost {
     setAttribute: (n, v) => void attrs.set(n, v),
     removeAttribute: (n) => void attrs.delete(n),
     querySelector: () => null,
+    matches: (sel) => {
+      const want = sel.match(/\[view-context="([^"]+)"\]/)?.[1];
+      return want !== undefined && attrs.get("view-context") === want;
+    },
   };
 }
+
+check("filters never hide the post you opened", () => {
+  const feedPost = fakePost("nsfw feed card");
+  const pagePost = fakePost("nsfw post page");
+  pagePost.setAttribute("view-context", "CommentsPage");
+  const posts = [feedPost, pagePost];
+  const prevDocument = (globalThis as { document?: unknown }).document;
+  (globalThis as { document?: unknown }).document = {
+    querySelectorAll: (sel: string) =>
+      sel.includes("[data-readit-feature-filters") ? [] : posts,
+  };
+  try {
+    const settings = createDefaultSettings();
+    settings.flags.filters = true;
+    const rule = { id: "f", kind: "keyword", pattern: "nsfw", enabled: true } as FilterRule;
+    filtersFeature.apply({ settings: { ...settings, filters: [rule] }, subreddit: null, pathname: "/r/x/comments/1/" });
+    assert.deepEqual(posts.map((p) => p.style.display), ["none", ""]);
+  } finally {
+    filtersFeature.teardown({} as never);
+    (globalThis as { document?: unknown }).document = prevDocument;
+  }
+});
 
 check("editing or removing a filter rule unhides the posts it hid", () => {
   const posts = [fakePost("big spoiler inside"), fakePost("cats")];

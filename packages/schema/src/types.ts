@@ -244,6 +244,8 @@ export const FeatureFlagsSchema = z.object({
   cleanLinks: z.boolean().default(true),
   absoluteTimestamps: z.boolean().default(true),
   opHighlight: z.boolean().default(true),
+  /** Reserved: expanding overflow menus into the action bar isn't built yet,
+   * so nothing reads this. Kept so saved settings and profiles still load. */
   alwaysShowActions: z.boolean().default(false),
   modQuickActions: z.boolean().default(false),
   modMacros: z.boolean().default(false),

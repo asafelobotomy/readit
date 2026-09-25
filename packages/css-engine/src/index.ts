@@ -191,6 +191,46 @@ function typeTokenDecls(
  * the few unclassed nodes (profile comments grew to 19.2px while post-page
  * comments stayed 14px). Apply them through Reddit's own tokens and utilities.
  */
+/**
+ * Reddit layout quirks, fixed whatever the settings (the post page's action
+ * bar gap lives in shadow DOM — see the features package's redditFixes).
+ */
+function redditQuirkRules(): string {
+  return `/* readit-reddit-quirks */
+/* Feed text previews: Reddit inlines the paragraphs so its line clamp
+   works, which runs them together. The clamp counts block lines too. */
+html.readit-active .feed-card-text-preview > p {
+  display: block !important;
+}
+html.readit-active .feed-card-text-preview > p + p {
+  margin-block-start: 0.5em !important;
+}
+/* Poll header: Reddit paints it with a text token (secondary-plain) and
+   inverted text — a white bar in dark theme, a black one in light. */
+html.readit-active shreddit-post-poll .bg-secondary-plain {
+  background-color: var(--color-secondary-background) !important;
+  color: var(--color-neutral-content-strong) !important;
+}
+html.readit-active shreddit-post-poll .bg-secondary-plain [class*="text-inverted"] {
+  color: inherit !important;
+}
+/* Stacked feed cards: with absolute times and wrapped labels the
+   recommendation reason ("Suggested for you") no longer fits Reddit's one
+   truncated line, wraps, and leaves its "•" dangling at the line's end. Give
+   it its own line, without the separator. (The split header places it.) */
+html.readit-active shreddit-post:not([data-readit-split-header]) [slot="credit-bar"] > span.flex-wrap > .created-separator:has(+ div.md) {
+  display: none !important;
+}
+html.readit-active shreddit-post:not([data-readit-split-header]) [slot="credit-bar"] > span.flex-wrap > div.md {
+  flex-basis: 100% !important;
+}
+/* Action-bar pills (the light-DOM ones, e.g. Share): fixed height plus 8px
+   block padding, so scaled labels overflowed. The label is flex-centered. */
+html.readit-active shreddit-post .rpl-cab.h-xl {
+  padding-block: 0 !important;
+}`;
+}
+
 function typographyRules(tokens: CssTokens): string {
   const family = fontStack(tokens.fontFamily);
   const weight = tokens.fontWeight ?? 400;
@@ -1088,9 +1128,11 @@ html.readit-active.readit-layout-slots [data-readit-slot="main"] article {
 }
 /* Labels Reddit truncates in feed cards / comment headers (link URLs,
    subreddit and author names, flair, recommendation reasons) wrap instead.
-   URLs have no break opportunities, hence "anywhere". Body copy never uses
-   these utility classes. */
-html.readit-active.readit-layout-slots [data-readit-slot="main"] :is(shreddit-post, shreddit-comment, .masthead) :is(.truncate, [class*="text-ellipsis"], [class*="whitespace-nowrap"], [class*="line-clamp"]) {
+   Names have no break opportunities, hence "anywhere". Two keep Reddit's
+   truncation: feed text previews (unclamped, their fixed-height box cut the
+   body off mid-line) and link-post URLs (tracking URLs ran to 5+ lines; the
+   full URL is still the link's target). */
+html.readit-active.readit-layout-slots [data-readit-slot="main"] :is(shreddit-post, shreddit-comment, .masthead) :is(.truncate, [class*="text-ellipsis"], [class*="whitespace-nowrap"], [class*="line-clamp"]):not(.feed-card-text-preview, a.post-link, :has(> a.post-link)) {
   white-space: normal !important;
   overflow: visible !important;
   text-overflow: clip !important;
@@ -1329,17 +1371,28 @@ function layoutSlotRecipes(
   --readit-chrome-bottom: 0px;
   --readit-card-border: 1px solid color-mix(in srgb, var(--readit-accent) 18%, transparent);
 }
-/* Page chrome slots — unstick Reddit fixed header into readit-controlled inset */
+/* Page chrome slots — unstick Reddit fixed header into readit-controlled inset.
+   reddit-header-large is an inline custom element that Reddit's position:fixed
+   blockified; sticky doesn't, and inline ignores width/overflow — the header's
+   -5px side margins then scrolled the page sideways. 100vw includes the
+   scrollbar, so cap at 100%. */
 html.readit-active.readit-layout-slots [data-readit-slot="topNav"] {
+  display: block !important;
   box-sizing: border-box !important;
   width: 100% !important;
-  max-width: 100vw !important;
+  max-width: 100% !important;
   height: var(--readit-chrome-top, 56px) !important;
   max-height: var(--readit-chrome-top, 56px) !important;
   min-height: 0 !important;
   z-index: 1000 !important;
   overflow: hidden !important;
   font-family: var(--readit-font-family, inherit) !important;
+}
+/* shreddit-app pads its top (--page-y-padding) for Reddit's fixed header.
+   Sticky, bottom or hidden, readit's header no longer overlays the page, so
+   that padding was an empty band above it. */
+html.readit-active.readit-layout-slots[data-readit-chrome-top] shreddit-app {
+  padding-top: 0 !important;
 }
 html.readit-active.readit-layout-slots[data-readit-chrome-top="top"] [data-readit-slot="topNav"] {
   position: sticky !important;
@@ -2046,10 +2099,15 @@ ${lead} > :not(rpl-hovercard) {
   display: flex !important;
   align-items: center !important;
   max-width: 14rem !important;
-  min-width: 0 !important;
+  /* Hold the name's width (up to 14rem) rather than breaking it mid-word
+     when space is tight — post-header.ts drops the split instead. */
+  min-width: auto !important;
   margin-inline-end: 16px !important;
   font-size: 14px !important;
   font-weight: 600 !important;
+}
+${lead} :is(.truncate, [class*="whitespace-nowrap"]) {
+  overflow-wrap: break-word !important;
 }
 ${lead} faceplate-hovercard .w-lg.h-lg {
   width: 32px !important;
@@ -2078,6 +2136,7 @@ ${meta} > .created-separator:not(:has(+ faceplate-timeago)) {
 }
 ${meta} > faceplate-timeago {
   grid-column: time / extra !important;
+  white-space: nowrap !important;
 }
 ${meta} > shreddit-brand-affiliate-tag {
   display: inline-flex !important;
@@ -2100,6 +2159,11 @@ ${credit} > span.flex:not(.flex-wrap) {
   grid-row: 1 !important;
   justify-self: end !important;
   margin-inline-start: 16px !important;
+}
+/* Reddit pulls the ⋯ menu 7px into the card's padding; the post clips
+   overflow-x, which cut off the button's ring. */
+${credit} > span.flex:not(.flex-wrap) [class*="-me-"] {
+  margin-inline-end: 0 !important;
 }
 ${post}[data-readit-split-header] [slot="title"] {
   margin: 0 !important;
@@ -2180,13 +2244,17 @@ ${nameRow} > * {
   grid-column: extra / trail !important;
   min-width: 0 !important;
 }
+/* Back button and avatar sit beside the name stack (r/sub ends row 1,
+   author starts row 2), not centered on a tall wrapped title. */
 ${lead} > pdp-back-button {
   grid-column: lead-start / avatar !important;
   grid-row: 1 / span 2 !important;
+  align-self: end !important;
 }
 ${lead} > .avatar {
   grid-column: avatar / names !important;
   grid-row: 1 / span 2 !important;
+  align-self: end !important;
   margin-inline-end: 8px !important;
 }
 ${nameRow} > .subreddit-name {
@@ -2217,6 +2285,7 @@ ${nameRow} > :not(.subreddit-name, faceplate-timeago, shreddit-brand-affiliate-t
 }
 ${nameRow} > faceplate-timeago {
   grid-column: time / extra !important;
+  white-space: nowrap !important;
 }
 ${nameRow} > shreddit-brand-affiliate-tag {
   display: inline-flex !important;
@@ -2226,6 +2295,9 @@ ${credit} > span.flex:not(:first-child) {
   grid-row: 1 !important;
   justify-self: end !important;
   margin-inline-start: 16px !important;
+}
+${credit} > span.flex:not(:first-child) [class*="-me-"] {
+  margin-inline-end: 0 !important;
 }
 ${page} > [slot="title"] {
   grid-column: mid-start / mid-end !important;
@@ -2253,6 +2325,7 @@ export function buildStylesheet(settings: ReaditSettings): string {
     `:root {\n${varBlock}\n}`,
     layoutRules(),
     typographyRules(settings.knobs.tokens),
+    redditQuirkRules(),
     ...hideRules(settings.knobs.hide),
     ...mediaRules(settings.knobs.mediaMode),
     ...nsfwFilterRules(settings.knobs.showOnlyNsfw),

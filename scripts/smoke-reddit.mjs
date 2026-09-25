@@ -263,6 +263,13 @@ let playwrightContext = null;
 let page;
 let cdpMode = false;
 let extensionId = "";
+/** CDP mode only: the extension page used to back up and restore settings. */
+let settingsPage = null;
+let settingsBackup = null;
+// Your real settings — always in the git-ignored folder, even when
+// READIT_EVIDENCE_DIR points results at committed docs.
+const settingsBackupFile = path.join(root, ".smoke-evidence", "reddit-settings-backup.json");
+fs.mkdirSync(path.dirname(settingsBackupFile), { recursive: true });
 
 if (cdpEndpoint) {
   console.log(`Connecting over CDP (puppeteer): ${cdpEndpoint}`);
@@ -286,6 +293,16 @@ if (cdpEndpoint) {
     // Pick up latest dist after local package fixes
     const reloaded = await reloadReaditExtension(puppeteerBrowser, extensionId);
     console.log(reloaded ? "Reloaded readit unpacked extension" : "Could not click Reload (continuing)");
+    // This is your own browser: the run adds a sub override, a filter, tags…
+    // through Studio, so keep your settings and put them back afterwards.
+    settingsPage = await puppeteerBrowser.newPage();
+    await settingsPage.goto(`chrome-extension://${extensionId}/popup.html`, {
+      waitUntil: "domcontentloaded",
+    });
+    settingsBackup = await settingsPage.evaluate(
+      async () => (await chrome.storage.local.get("readitSettings")).readitSettings,
+    );
+    if (settingsBackup) fs.writeFileSync(settingsBackupFile, JSON.stringify(settingsBackup));
   } else {
     console.warn("Could not resolve readit extension id — popup probes will skip");
   }
@@ -2129,6 +2146,22 @@ try {
     mode: summary.mode,
   });
   if (cdpMode) {
+    if (settingsPage && settingsBackup) {
+      try {
+        await settingsPage.evaluate(
+          async (v) => chrome.storage.local.set({ readitSettings: v }),
+          settingsBackup,
+        );
+        console.log("Restored your readit settings");
+      } catch (err) {
+        console.error(
+          "Could not restore settings — backup at",
+          repoRelative(root, settingsBackupFile),
+          err,
+        );
+      }
+    }
+    await settingsPage?.close().catch(() => {});
     await page.close().catch(() => {});
     puppeteerBrowser?.disconnect();
   } else {

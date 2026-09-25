@@ -34,6 +34,13 @@ const STYLE_ATTR = "data-readit-post-header";
 /** Below this card width the three columns crowd the title — stay stacked. */
 const MIN_SPLIT_WIDTH_PX = 560;
 
+/**
+ * The split also stays off when it would leave the title narrower than this
+ * (long names, Join plus a recommendation label): a 2–3 words-per-line
+ * title column reads worse than Reddit's stacked header.
+ */
+const MIN_TITLE_WIDTH_PX = 320;
+
 /** Shadow wrappers around the title; the h2 is what gets placed. */
 const TITLE_HEADING = "h2.condensed-post-title-heading";
 
@@ -107,13 +114,31 @@ function ensureShadowStyle(root: ShadowRoot): void {
 
 let resize: ResizeObserver | null = null;
 const observed = new Map<Element, SplitKind>();
+/** Card widths at which the split left the title too narrow. Dropping the
+ * split changes the card's height, which calls setSplit again at the same
+ * width — this keeps it from flipping straight back. */
+let narrowAt = new WeakMap<Element, number>();
+
+function titleOf(post: Element, kind: SplitKind): Element | null {
+  return kind === "card"
+    ? (post.shadowRoot?.querySelector(TITLE_HEADING) ?? null)
+    : post.querySelector('[slot="title"]');
+}
 
 function setSplit(post: Element, width: number): void {
   const kind = observed.get(post);
-  if (kind && width >= MIN_SPLIT_WIDTH_PX) {
-    if (post.getAttribute(SPLIT_ATTR) !== kind) post.setAttribute(SPLIT_ATTR, kind);
-  } else if (post.hasAttribute(SPLIT_ATTR)) {
+  const w = Math.round(width);
+  if (!kind || width < MIN_SPLIT_WIDTH_PX || narrowAt.get(post) === w) {
+    if (post.hasAttribute(SPLIT_ATTR)) post.removeAttribute(SPLIT_ATTR);
+    return;
+  }
+  if (post.getAttribute(SPLIT_ATTR) !== kind) post.setAttribute(SPLIT_ATTR, kind);
+  const title = titleOf(post, kind);
+  if (title && title.getBoundingClientRect().width < MIN_TITLE_WIDTH_PX) {
+    narrowAt.set(post, w);
     post.removeAttribute(SPLIT_ATTR);
+  } else {
+    narrowAt.delete(post);
   }
 }
 
@@ -121,6 +146,7 @@ function clearAll(): void {
   resize?.disconnect();
   resize = null;
   observed.clear();
+  narrowAt = new WeakMap();
   for (const post of document.querySelectorAll(`[${SPLIT_ATTR}]`)) {
     post.removeAttribute(SPLIT_ATTR);
   }

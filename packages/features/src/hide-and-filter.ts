@@ -125,6 +125,8 @@ function readPost(post: Element): FilterablePost {
   };
 }
 
+const POST_PAGE_POST = 'shreddit-post[view-context="CommentsPage"]';
+
 /** Rule set the currently hidden posts were evaluated against. */
 let appliedRulesKey: string | null = null;
 
@@ -166,6 +168,9 @@ export const filtersFeature: FeatureModule = {
     const posts = document.querySelectorAll("shreddit-post, article, [data-testid='post-container']");
     posts.forEach((post) => {
       if (isProcessed(post, "filters")) return;
+      // Filters thin out feeds. The post you opened is never hidden — that
+      // left its page with comments under nothing.
+      if (post.matches(POST_PAGE_POST) || post.querySelector(POST_PAGE_POST)) return;
       const passedAt = passedPosts.get(post);
       if (passedAt !== undefined && passedAt === post.childElementCount) return;
       const data = readPost(post);

@@ -3,7 +3,6 @@ import { applyStylesheet, removeStylesheet } from "@readit/css-engine";
 import type { FeatureFlags, FeatureHealth, ReaditSettings } from "@readit/schema";
 import {
   absoluteTimestampsFeature,
-  alwaysShowActionsFeature,
   cannedRepliesFeature,
   cleanLinksFeature,
   isEditableTarget,
@@ -73,6 +72,7 @@ import {
 } from "./mod.js";
 import { headerMascotFeature } from "./header-mascot.js";
 import { postHeaderFeature } from "./post-header.js";
+import { redditFixesFeature } from "./reddit-fixes.js";
 import {
   allFeedFeature,
   commentSortFeature,
@@ -98,7 +98,6 @@ export const ALL_FEATURES: FeatureModule[] = [
   savedLibraryFeature,
   absoluteTimestampsFeature,
   opHighlightFeature,
-  alwaysShowActionsFeature,
   cleanLinksFeature,
   cannedRepliesFeature,
   keyboardNavFeature,
@@ -115,6 +114,7 @@ export const ALL_FEATURES: FeatureModule[] = [
   headerMascotFeature,
   textWrapFeature,
   postHeaderFeature,
+  redditFixesFeature,
   commentSortFeature,
   openInNewTabFeature,
   allFeedFeature,
@@ -126,7 +126,6 @@ const SCAN_FEATURE_IDS = new Set([
   "userTags",
   "absoluteTimestamps",
   "opHighlight",
-  "alwaysShowActions",
   "modQuickActions",
   "modUsernotes",
   "modHighlight",
@@ -138,6 +137,7 @@ const SCAN_FEATURE_IDS = new Set([
   "headerMascot",
   "textWrap",
   "postHeader",
+  "redditFixes",
   "commentSort",
   "openInNewTab",
   "allFeed",

@@ -177,13 +177,23 @@ export default defineContentScript({
       window.setTimeout(() => runtime.scanDom(withSubOverride(settings)), 1200);
     });
 
+    // Debounced, but never postponed past SCAN_MAX_WAIT_MS: Home's feed
+    // (video players, lazy cards) mutates without pause, and a plain
+    // trailing debounce left new cards unstyled for seconds.
+    const SCAN_DEBOUNCE_MS = 180;
+    const SCAN_MAX_WAIT_MS = 600;
     let timer: number | undefined;
+    let pendingSince = 0;
     const observer = new MutationObserver((mutations) => {
       if (isReaditMutation(mutations)) return;
+      const now = performance.now();
+      if (!pendingSince) pendingSince = now;
       window.clearTimeout(timer);
+      const wait = Math.min(SCAN_DEBOUNCE_MS, Math.max(0, pendingSince + SCAN_MAX_WAIT_MS - now));
       timer = window.setTimeout(() => {
+        pendingSince = 0;
         runtime.scanDom(withSubOverride(settings));
-      }, 180);
+      }, wait);
     });
     observer.observe(document.documentElement, {
       childList: true,

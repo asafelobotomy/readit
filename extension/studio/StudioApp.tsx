@@ -2442,22 +2442,6 @@ function CreateTab({
             Highlight OP
           </label>
         </div>
-        <div class="readit-row">
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.flags.alwaysShowActions}
-              onChange={(e) => {
-                const checked = e.currentTarget.checked;
-                void onCommit("Always show actions", (s) => ({
-                  ...s,
-                  flags: { ...s.flags, alwaysShowActions: checked },
-                }));
-              }}
-            />
-            Always show actions
-          </label>
-        </div>
       </div>
     </>
   );
