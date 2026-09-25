@@ -79,6 +79,14 @@ export const FeatureHealthSchema = z.enum(["ok", "degraded", "broken"]);
 export type FeatureHealth = z.infer<typeof FeatureHealthSchema>;
 
 /** CSS / layout tokens applied via :root custom properties */
+/**
+ * New Reddit's `--font-sans` stack. readit's own UI uses it so it renders in
+ * the same face as Reddit; a `system-ui`-led stack resolves differently on
+ * Linux (Adwaita Sans vs Reddit's Arial substitute). Keep extension/studio/studio.css in sync.
+ */
+export const REDDIT_FONT_STACK = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif`;
+
+/** "system" keeps Reddit's own font (inherits); the rest replace it. */
 export const FontFamilySchema = z.enum(["system", "serif", "sans", "mono"]);
 export type FontFamily = z.infer<typeof FontFamilySchema>;
 

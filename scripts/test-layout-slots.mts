@@ -3,6 +3,7 @@
  * Run: npm run test:layout
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { buildStylesheet, LAYOUT_RECIPE_MARKER } from "../packages/css-engine/src/index.ts";
 import { isEditableTarget } from "../packages/features/src/reader-creator.ts";
 import {
@@ -26,6 +27,7 @@ import {
   applyProfile,
   panelContentAlign,
   fillPadsForAlign,
+  REDDIT_FONT_STACK,
   shellZoomFactor,
   BUILTIN_PROFILES,
   buildLayoutTracks,
@@ -1257,6 +1259,17 @@ check("CSS typography goes through Reddit's tokens and utilities", () => {
   assert.match(medium, /--font-body-1-weight: 500;/);
   assert.match(medium, /--font-label-1-weight: 600;/);
   assert.match(medium, /--font-title-1-weight: 700;/);
+});
+
+check("readit's own UI uses Reddit's font stack", () => {
+  const settings = createDefaultSettings();
+  settings.flags.layoutSlots = true;
+  const css = buildStylesheet(settings);
+  assert.doesNotMatch(css, /system-ui/);
+  assert.ok(css.includes(`font: 600 12px/1.25 ${REDDIT_FONT_STACK};`));
+  const studioCss = readFileSync(new URL("../extension/studio/studio.css", import.meta.url), "utf8");
+  assert.doesNotMatch(studioCss, /system-ui/);
+  assert.equal(studioCss.split(`font-family: ${REDDIT_FONT_STACK};`).length - 1, 2, "studio.css :host and html");
 });
 
 check("builtin profiles own layout recipes", () => {

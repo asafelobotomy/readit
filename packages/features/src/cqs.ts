@@ -5,7 +5,7 @@ import type {
   CqsTier,
   ReaditSettings,
 } from "@readit/schema";
-import { createId } from "@readit/schema";
+import { REDDIT_FONT_STACK, createId } from "@readit/schema";
 import { emitReadit, type CqsPersistDetail } from "./bus.js";
 import type { FeatureModule } from "./utils.js";
 import { clearMarks, isProcessed, markProcessed } from "./utils.js";
@@ -128,7 +128,7 @@ function showPageBanner(message: string, severity: "info" | "warn" = "warn"): vo
     "z-index:2147483645",
     "padding:12px 14px",
     "border-radius:10px",
-    "font:13px/1.4 system-ui,sans-serif",
+    `font:13px/1.4 ${REDDIT_FONT_STACK}`,
     "display:flex",
     "gap:12px",
     "align-items:flex-start",

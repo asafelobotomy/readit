@@ -1,3 +1,4 @@
+import { REDDIT_FONT_STACK } from "@readit/schema";
 import { isThreadHref } from "./link-stamp.js";
 
 /**
@@ -190,7 +191,7 @@ const DIALOG_CSS = `
   position: fixed; inset: 0; z-index: 2147483000;
   display: grid; place-items: center;
   background: rgb(0 0 0 / 0.62);
-  font: 14px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif;
+  font: 14px/1.4 ${REDDIT_FONT_STACK};
   animation: fade 120ms ease-out;
 }
 .panel {

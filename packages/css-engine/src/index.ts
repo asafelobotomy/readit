@@ -9,6 +9,7 @@ import type {
   ThemeMode,
 } from "@readit/schema";
 import {
+  REDDIT_FONT_STACK,
   isSafeElementRuleSelector,
   budgetColumnOrder,
   clampChromeHeight,
@@ -1454,7 +1455,7 @@ html.readit-layout-edit .readit-drop-moving {
   max-width: 220px;
   padding: 4px 10px;
   border-radius: 6px;
-  font: 600 12px/1.25 ui-sans-serif, system-ui, sans-serif;
+  font: 600 12px/1.25 ${REDDIT_FONT_STACK};
   letter-spacing: 0.01em;
   color: #fff;
   background: color-mix(in srgb, var(--readit-accent) 92%, #000);
@@ -1485,7 +1486,7 @@ html.readit-layout-edit .readit-frame-label {
   border: 0;
   border-radius: 4px;
   padding: 2px 8px;
-  font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+  font: 600 11px/1.2 ${REDDIT_FONT_STACK};
   letter-spacing: 0.02em;
   color: #fff;
   background: color-mix(in srgb, var(--readit-accent) 92%, #000);
@@ -1525,7 +1526,7 @@ html.readit-layout-edit .readit-frame-lock {
   padding: 0;
   border: 0;
   border-radius: 4px;
-  font: 700 12px/22px ui-sans-serif, system-ui, sans-serif;
+  font: 700 12px/22px ${REDDIT_FONT_STACK};
   color: color-mix(in srgb, CanvasText 70%, var(--readit-accent));
   background: color-mix(in srgb, Canvas 82%, var(--readit-accent));
   cursor: pointer;
@@ -1552,7 +1553,7 @@ html.readit-layout-edit .readit-frame-remove {
   padding: 0;
   border: 0;
   border-radius: 4px;
-  font: 700 16px/1 ui-sans-serif, system-ui, sans-serif;
+  font: 700 16px/1 ${REDDIT_FONT_STACK};
   color: #fff;
   background: color-mix(in srgb, #b91c1c 88%, #000);
   cursor: pointer;

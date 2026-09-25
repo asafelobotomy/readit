@@ -1,7 +1,11 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { CSSProperties } from "preact";
-import { resolveProfileIcon, type ReaditSettings } from "@readit/schema";
+import {
+  REDDIT_FONT_STACK,
+  resolveProfileIcon,
+  type ReaditSettings,
+} from "@readit/schema";
 import {
   loadSettings,
   mutateSettings,
@@ -43,7 +47,7 @@ function Popup() {
 
   if (!settings) {
     return (
-      <div style={{ padding: 12, width: 280, fontFamily: "system-ui" }}>
+      <div style={{ padding: 12, width: 280, fontFamily: REDDIT_FONT_STACK }}>
         Loading…
       </div>
     );
@@ -54,7 +58,7 @@ function Popup() {
       style={{
         padding: 12,
         width: 300,
-        fontFamily: "system-ui, sans-serif",
+        fontFamily: REDDIT_FONT_STACK,
         color: "#eee",
         background: "#121213",
       }}

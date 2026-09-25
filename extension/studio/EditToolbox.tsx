@@ -45,7 +45,7 @@ const LAYOUT_PRESETS: { id: LayoutPreset; label: string }[] = [
 ];
 
 const FONT_FAMILIES: { id: FontFamily; label: string }[] = [
-  { id: "system", label: "System" },
+  { id: "system", label: "Reddit" },
   { id: "sans", label: "Sans" },
   { id: "serif", label: "Serif" },
   { id: "mono", label: "Mono" },

@@ -1,13 +1,14 @@
 :host {
   all: initial;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  /* Reddit's font stack: REDDIT_FONT_STACK in @readit/schema. */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
   color-scheme: light dark;
 }
 
 /* WXT's shadow wrapper sets `:host { all: initial !important }`, which beats
    the family above, so set it on the shadow root's own html element too. */
 html {
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
 /* Form controls don't inherit font; without this they render in the UA's
