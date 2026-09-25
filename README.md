@@ -48,7 +48,10 @@ Then load `<your clone>/dist/chrome-mv3-dev` instead (path is also printed by WX
 npm test                 # unit checks: layout + settings hardening (run in CI)
 npm run check:versions   # workspace + lockfile versions agree (run in CI)
 npm run smoke            # end-to-end against live New Reddit (local only)
+npm run smoke:habits     # classic habits against your own browser (see below)
 ```
+
+The `READIT_CDP` smoke variants connect to a browser you already run. `READIT_CDP=chrome` reads `DevToolsActivePort`, which Chrome writes when remote debugging is switched on in `chrome://inspect` (that mode has no `/json/version` endpoint). A `ws://…` endpoint or `http://127.0.0.1:<port>` also works. `smoke:habits` backs up readit's settings before it runs and restores them afterwards, opens and closes only its own tabs, and never votes, joins or changes your Reddit account.
 
 Smoke runs save screenshots and `results.json` to the git-ignored `.smoke-evidence/`. To refresh the committed `results.json` files under `docs/smoke-evidence/`, run with `READIT_EVIDENCE_DIR=docs/smoke-evidence`; screenshots are never committed (they were purged from history to keep clones small).
 

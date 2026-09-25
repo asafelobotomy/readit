@@ -39,12 +39,16 @@ import {
   resolveProfileIcon,
   shellZoomFactor,
   widthLockSet,
+  type AllFeedSort,
+  type CommentSort,
+  type CommentSortMode,
   type CqsTier,
   type ElementRule,
   type FilterRule,
   type LayoutPreset,
   type LayoutSlotId,
   type LayoutZone,
+  type PostsOpenIn,
   type MarkReadMode,
   type ProfileIconId,
   type ReaditSettings,
@@ -1716,6 +1720,7 @@ function SimpleTab({
             Quiet NSFW
           </label>
         </div>
+        <ClassicHabits settings={settings} onCommit={onCommit} />
       </div>
 
       <div class="readit-section">
@@ -1983,24 +1988,30 @@ function AdvancedTab({
       <div class="readit-section">
         <h2>Per-subreddit override</h2>
         <SubOverrideForm
-          onAdd={(sub, width) =>
-            void onCommit("Sub override", (s) => ({
-              ...s,
-              subredditOverrides: capList([
-                ...s.subredditOverrides.filter(
-                  (o) => o.subreddit.toLowerCase() !== sub.toLowerCase(),
-                ),
-                {
-                  subreddit: sub,
-                  tokens: { feedWidthPx: width },
-                },
-              ]),
-            }))
+          onAdd={(sub, width, commentSort) =>
+            void onCommit("Sub override", (s) => {
+              const existing = s.subredditOverrides.find(
+                (o) => o.subreddit.toLowerCase() === sub.toLowerCase(),
+              );
+              return {
+                ...s,
+                subredditOverrides: capList([
+                  ...s.subredditOverrides.filter((o) => o !== existing),
+                  {
+                    ...existing,
+                    subreddit: sub,
+                    tokens: { ...existing?.tokens, feedWidthPx: width },
+                    commentSort,
+                  },
+                ]),
+              };
+            })
           }
         />
         {settings.subredditOverrides.map((o) => (
           <div class="readit-list-item" key={o.subreddit}>
             r/{o.subreddit} · width {o.tokens?.feedWidthPx ?? "—"}
+            {o.commentSort ? ` · sort ${COMMENT_SORT_LABELS[o.commentSort]}` : ""}
           </div>
         ))}
       </div>
@@ -3162,13 +3173,268 @@ function ReadingOverlay({ onClose }: { onClose: () => void }) {
   );
 }
 
+const COMMENT_SORT_LABELS: Record<CommentSort, string> = {
+  confidence: "Best",
+  top: "Top",
+  new: "New",
+  old: "Old",
+  controversial: "Controversial",
+  qa: "Q&A",
+};
+
+const ALL_FEED_SORT_LABELS: Record<AllFeedSort, string> = {
+  best: "Best",
+  hot: "Hot",
+  new: "New",
+  top: "Top",
+  rising: "Rising",
+};
+
+/** Simple tab: old-Reddit habits (sticky comment sort, new tab, All · Global). */
+function ClassicHabits({
+  settings,
+  onCommit,
+}: {
+  settings: ReaditSettings;
+  onCommit: (
+    label: string,
+    mutator: (s: ReaditSettings) => ReaditSettings,
+  ) => Promise<void>;
+}) {
+  const loc = settings.studioLocale;
+  const sortPrefs = settings.commentSortPrefs;
+  const linkPrefs = settings.linkPrefs;
+  const allPrefs = settings.allFeedPrefs;
+  const remembered = Object.keys(sortPrefs.remembered).length;
+
+  const flag = (
+    key: "commentSort" | "openInNewTab" | "allFeed",
+    labelKey: "commentSort" | "openInNewTab" | "allFeed",
+  ) => (
+    <div class="readit-row">
+      <label>
+        <input
+          type="checkbox"
+          checked={settings.flags[key]}
+          onChange={(e) => {
+            const checked = e.currentTarget.checked;
+            void onCommit(t(loc, labelKey), (s) => ({
+              ...s,
+              flags: { ...s.flags, [key]: checked },
+            }));
+          }}
+        />
+        {t(loc, labelKey)}
+      </label>
+    </div>
+  );
+
+  const linkToggle = (
+    key: "posts" | "communities" | "users" | "inModQueue",
+    labelKey: "newTabPosts" | "newTabCommunities" | "newTabUsers" | "newTabModQueue",
+  ) => (
+    <div class="readit-row" style={{ paddingLeft: 22 }}>
+      <label>
+        <input
+          type="checkbox"
+          checked={linkPrefs[key]}
+          onChange={(e) => {
+            const checked = e.currentTarget.checked;
+            void onCommit(t(loc, labelKey), (s) => ({
+              ...s,
+              linkPrefs: { ...s.linkPrefs, [key]: checked },
+            }));
+          }}
+        />
+        {t(loc, labelKey)}
+      </label>
+    </div>
+  );
+
+  const allToggle = (
+    key: "navLink" | "rewriteLinks",
+    labelKey: "allFeedNavLink" | "allFeedRewrite",
+  ) => (
+    <div class="readit-row" style={{ paddingLeft: 22 }}>
+      <label>
+        <input
+          type="checkbox"
+          checked={allPrefs[key]}
+          onChange={(e) => {
+            const checked = e.currentTarget.checked;
+            void onCommit(t(loc, labelKey), (s) => ({
+              ...s,
+              allFeedPrefs: { ...s.allFeedPrefs, [key]: checked },
+            }));
+          }}
+        />
+        {t(loc, labelKey)}
+      </label>
+    </div>
+  );
+
+  return (
+    <>
+      <h2 style={{ marginTop: 14 }}>{t(loc, "classicHabits")}</h2>
+
+      {flag("commentSort", "commentSort")}
+      {settings.flags.commentSort && (
+        <>
+          <div class="readit-row" style={{ paddingLeft: 22 }}>
+            <span>{t(loc, "commentSortMode")}</span>
+            <select
+              class="readit-select"
+              style={{ width: 160 }}
+              value={sortPrefs.mode}
+              onChange={(e) => {
+                const mode = e.currentTarget.value as CommentSortMode;
+                void onCommit(t(loc, "commentSortMode"), (s) => ({
+                  ...s,
+                  commentSortPrefs: { ...s.commentSortPrefs, mode },
+                }));
+              }}
+            >
+              <option value="fixed">{t(loc, "commentSortFixed")}</option>
+              <option value="remember">{t(loc, "commentSortRemember")}</option>
+            </select>
+          </div>
+          <div class="readit-row" style={{ paddingLeft: 22 }}>
+            <span>
+              {sortPrefs.mode === "remember"
+                ? t(loc, "commentSortFallback")
+                : t(loc, "commentSortDefault")}
+            </span>
+            <select
+              class="readit-select"
+              style={{ width: 160 }}
+              value={sortPrefs.sort}
+              onChange={(e) => {
+                const sort = e.currentTarget.value as CommentSort;
+                void onCommit(t(loc, "commentSortDefault"), (s) => ({
+                  ...s,
+                  commentSortPrefs: { ...s.commentSortPrefs, sort },
+                }));
+              }}
+            >
+              {(Object.keys(COMMENT_SORT_LABELS) as CommentSort[]).map((id) => (
+                <option value={id} key={id}>
+                  {COMMENT_SORT_LABELS[id]}
+                </option>
+              ))}
+            </select>
+          </div>
+          {sortPrefs.mode === "remember" && (
+            <div class="readit-row" style={{ paddingLeft: 22 }}>
+              <span class="readit-muted">
+                {t(loc, "commentSortRemembered").replace("{n}", String(remembered))}
+              </span>
+              <button
+                type="button"
+                class="readit-btn"
+                disabled={remembered === 0}
+                onClick={() =>
+                  void onCommit(t(loc, "commentSortForget"), (s) => ({
+                    ...s,
+                    commentSortPrefs: { ...s.commentSortPrefs, remembered: {} },
+                  }))
+                }
+              >
+                {t(loc, "commentSortForget")}
+              </button>
+            </div>
+          )}
+          <div class="readit-row" style={{ paddingLeft: 22 }}>
+            <label>
+              <input
+                type="checkbox"
+                checked={sortPrefs.applyOnDirectLoad}
+                onChange={(e) => {
+                  const checked = e.currentTarget.checked;
+                  void onCommit(t(loc, "commentSortDirect"), (s) => ({
+                    ...s,
+                    commentSortPrefs: {
+                      ...s.commentSortPrefs,
+                      applyOnDirectLoad: checked,
+                    },
+                  }));
+                }}
+              />
+              {t(loc, "commentSortDirect")}
+            </label>
+          </div>
+        </>
+      )}
+
+      {flag("openInNewTab", "openInNewTab")}
+      {settings.flags.openInNewTab && (
+        <>
+          {linkToggle("posts", "newTabPosts")}
+          {linkPrefs.posts && (
+            <div class="readit-row" style={{ paddingLeft: 44 }}>
+              <span>{t(loc, "postsOpenIn")}</span>
+              <select
+                class="readit-select"
+                style={{ width: 160 }}
+                value={linkPrefs.postsOpenIn}
+                onChange={(e) => {
+                  const postsOpenIn = e.currentTarget.value as PostsOpenIn;
+                  void onCommit(t(loc, "postsOpenIn"), (s) => ({
+                    ...s,
+                    linkPrefs: { ...s.linkPrefs, postsOpenIn },
+                  }));
+                }}
+              >
+                <option value="tab">{t(loc, "postsOpenInTab")}</option>
+                <option value="popout">{t(loc, "postsOpenInPopout")}</option>
+              </select>
+            </div>
+          )}
+          {linkToggle("communities", "newTabCommunities")}
+          {linkToggle("users", "newTabUsers")}
+          {linkToggle("inModQueue", "newTabModQueue")}
+        </>
+      )}
+
+      {flag("allFeed", "allFeed")}
+      {settings.flags.allFeed && (
+        <>
+          <div class="readit-row" style={{ paddingLeft: 22 }}>
+            <span>{t(loc, "allFeedSort")}</span>
+            <select
+              class="readit-select"
+              style={{ width: 160 }}
+              value={allPrefs.sort}
+              onChange={(e) => {
+                const sort = e.currentTarget.value as AllFeedSort;
+                void onCommit(t(loc, "allFeedSort"), (s) => ({
+                  ...s,
+                  allFeedPrefs: { ...s.allFeedPrefs, sort },
+                }));
+              }}
+            >
+              {(Object.keys(ALL_FEED_SORT_LABELS) as AllFeedSort[]).map((id) => (
+                <option value={id} key={id}>
+                  {ALL_FEED_SORT_LABELS[id]}
+                </option>
+              ))}
+            </select>
+          </div>
+          {allToggle("navLink", "allFeedNavLink")}
+          {allToggle("rewriteLinks", "allFeedRewrite")}
+        </>
+      )}
+    </>
+  );
+}
+
 function SubOverrideForm({
   onAdd,
 }: {
-  onAdd: (sub: string, width: number) => void;
+  onAdd: (sub: string, width: number, commentSort?: CommentSort) => void;
 }) {
   const [sub, setSub] = useState("");
   const [width, setWidth] = useState(1000);
+  const [sort, setSort] = useState<CommentSort | "">("");
   return (
     <div>
       <input
@@ -3187,14 +3453,33 @@ function SubOverrideForm({
         onInput={(e) => setWidth(Number(e.currentTarget.value))}
       />
       <div style={{ height: 8 }} />
+      <select
+        class="readit-select"
+        aria-label="Comment sort for this subreddit"
+        value={sort}
+        onChange={(e) => setSort(e.currentTarget.value as CommentSort | "")}
+      >
+        <option value="">Comment sort: default</option>
+        {(Object.keys(COMMENT_SORT_LABELS) as CommentSort[]).map((id) => (
+          <option value={id} key={id}>
+            Comment sort: {COMMENT_SORT_LABELS[id]}
+          </option>
+        ))}
+      </select>
+      <div style={{ height: 8 }} />
       <button
         type="button"
         class="readit-btn"
         onClick={() => {
           if (!sub.trim() || !Number.isFinite(width)) return;
           // Schema bounds (480–1600); an out-of-range value would fail validation.
-          onAdd(sub.trim().replace(/^r\//, ""), clampPanelWidth("main", width));
+          onAdd(
+            sub.trim().replace(/^r\//, ""),
+            clampPanelWidth("main", width),
+            sort || undefined,
+          );
           setSub("");
+          setSort("");
         }}
       >
         Add override

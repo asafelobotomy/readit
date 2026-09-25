@@ -201,11 +201,23 @@ export const ElementRuleSchema = z.object({
 });
 export type ElementRule = z.infer<typeof ElementRuleSchema>;
 
+/** Values Reddit's comment page accepts for `?sort=` (`confidence` = Best). */
+export const CommentSortSchema = z.enum([
+  "confidence",
+  "top",
+  "new",
+  "old",
+  "controversial",
+  "qa",
+]);
+export type CommentSort = z.infer<typeof CommentSortSchema>;
+
 export const SubredditOverrideSchema = z.object({
   subreddit: z.string(),
   tokens: CssTokensSchema.partial().optional(),
   hide: HideNoiseSchema.partial().optional(),
   mediaMode: MediaModeSchema.optional(),
+  commentSort: CommentSortSchema.optional(),
 });
 export type SubredditOverride = z.infer<typeof SubredditOverrideSchema>;
 
@@ -243,6 +255,12 @@ export const FeatureFlagsSchema = z.object({
   lurkerMode: z.boolean().default(false),
   /** Show the active profile's mascot next to Reddit's own header logo */
   headerMascot: z.boolean().default(true),
+  /** Open comment threads in a chosen sort (adds ?sort= to post links) */
+  commentSort: z.boolean().default(false),
+  /** Open posts (and optionally communities / users) in a new tab */
+  openInNewTab: z.boolean().default(false),
+  /** “All · Global” nav link + /r/all links rewritten to global Popular */
+  allFeed: z.boolean().default(false),
 });
 export type FeatureFlags = z.infer<typeof FeatureFlagsSchema>;
 
@@ -271,6 +289,54 @@ export const CommentUxPrefsSchema = z.object({
   showFormatting: z.boolean().default(true),
 });
 export type CommentUxPrefs = z.infer<typeof CommentUxPrefsSchema>;
+
+/** Remembered per-subreddit comment sorts kept at most (oldest dropped). */
+export const COMMENT_SORT_MEMORY_MAX = 200;
+
+export const CommentSortModeSchema = z.enum(["fixed", "remember"]);
+export type CommentSortMode = z.infer<typeof CommentSortModeSchema>;
+
+export const CommentSortPrefsSchema = z.object({
+  /** fixed = always `sort`; remember = the last sort picked in each subreddit */
+  mode: CommentSortModeSchema.default("fixed"),
+  sort: CommentSortSchema.default("top"),
+  /**
+   * Also redirect comment pages opened directly (bookmarks, other sites).
+   * Measured live: the unsorted page never paints; costs ~0.4s per load.
+   */
+  applyOnDirectLoad: z.boolean().default(true),
+  /** Subreddit (normalized) → last sort picked there; insertion order = age */
+  remembered: z.record(CommentSortSchema).default({}),
+});
+export type CommentSortPrefs = z.infer<typeof CommentSortPrefsSchema>;
+
+/** Where a post opens from a feed: a browser tab, or a pop-out in this tab. */
+export const PostsOpenInSchema = z.enum(["tab", "popout"]);
+export type PostsOpenIn = z.infer<typeof PostsOpenInSchema>;
+
+export const LinkPrefsSchema = z.object({
+  /** Post cards, titles and comment links */
+  posts: z.boolean().default(true),
+  postsOpenIn: PostsOpenInSchema.default("tab"),
+  communities: z.boolean().default(false),
+  users: z.boolean().default(false),
+  /** Also on mod queue routes */
+  inModQueue: z.boolean().default(false),
+});
+export type LinkPrefs = z.infer<typeof LinkPrefsSchema>;
+
+/** Sorts Reddit offers on /r/popular (see its feed sort menu). */
+export const AllFeedSortSchema = z.enum(["best", "hot", "new", "top", "rising"]);
+export type AllFeedSort = z.infer<typeof AllFeedSortSchema>;
+
+export const AllFeedPrefsSchema = z.object({
+  sort: AllFeedSortSchema.default("hot"),
+  /** Add an “All · Global” link to the left nav (and nav rail) */
+  navLink: z.boolean().default(true),
+  /** Point in-page /r/all links at global Popular (Reddit redirects /r/all home) */
+  rewriteLinks: z.boolean().default(true),
+});
+export type AllFeedPrefs = z.infer<typeof AllFeedPrefsSchema>;
 
 export const FeedDensitySchema = z.enum(["comfortable", "compact"]);
 export type FeedDensity = z.infer<typeof FeedDensitySchema>;
@@ -1761,6 +1827,9 @@ export const ReaditSettingsSchema = z.object({
   commentUxPrefs: CommentUxPrefsSchema.default({}),
   feedPrefs: FeedPrefsSchema.default({}),
   keyboardNavPrefs: KeyboardNavPrefsSchema.default({}),
+  commentSortPrefs: CommentSortPrefsSchema.default({}),
+  linkPrefs: LinkPrefsSchema.default({}),
+  allFeedPrefs: AllFeedPrefsSchema.default({}),
   studioLocale: StudioLocaleSchema.default("en"),
   featureHealth: z.record(FeatureHealthSchema).default({}),
   toolboxDetected: z.boolean().default(false),

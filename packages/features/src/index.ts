@@ -73,6 +73,11 @@ import {
 } from "./mod.js";
 import { headerMascotFeature } from "./header-mascot.js";
 import { postHeaderFeature } from "./post-header.js";
+import {
+  allFeedFeature,
+  commentSortFeature,
+  openInNewTabFeature,
+} from "./classic-habits.js";
 import type { FeatureContext, FeatureModule } from "./utils.js";
 import {
   cleanRedditUrl,
@@ -110,6 +115,9 @@ export const ALL_FEATURES: FeatureModule[] = [
   headerMascotFeature,
   textWrapFeature,
   postHeaderFeature,
+  commentSortFeature,
+  openInNewTabFeature,
+  allFeedFeature,
 ];
 
 /** Features safe to re-run on DOM mutations (idempotent via marks). */
@@ -130,6 +138,9 @@ const SCAN_FEATURE_IDS = new Set([
   "headerMascot",
   "textWrap",
   "postHeader",
+  "commentSort",
+  "openInNewTab",
+  "allFeed",
 ]);
 
 export type FeatureRuntime = {
@@ -363,3 +374,25 @@ export {
   switchHomeToFollowing,
 } from "./feed-philosophy.js";
 export { isEditableTarget };
+export {
+  allFeedFeature,
+  commentSortFeature,
+  openInNewTabFeature,
+} from "./classic-habits.js";
+export {
+  closePostPopout,
+  isPopoutOpen,
+  openPostPopout,
+  POPOUT_NAV_KEYS_KEY,
+  POPOUT_PUSHING_KEY,
+  POPSTATE_EARLY_KEY,
+  POPSTATE_GUARD_KEY,
+} from "./post-popout.js";
+export {
+  allFeedUrl,
+  directLoadCommentSortUrl,
+  isAllHref,
+  rememberCommentSort,
+  resolveCommentSort,
+  withCommentSort,
+} from "./link-stamp.js";

@@ -6,6 +6,7 @@
  */
 import { chromium } from "playwright";
 import puppeteer from "puppeteer-core";
+import { connectCdp } from "./smoke-cdp.mjs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -266,15 +267,13 @@ let extensionId = "";
 if (cdpEndpoint) {
   console.log(`Connecting over CDP (puppeteer): ${cdpEndpoint}`);
   try {
-    puppeteerBrowser = await puppeteer.connect({
-      browserURL: cdpEndpoint.replace(/\/$/, ""),
-      defaultViewport: null,
-    });
+    puppeteerBrowser = await connectCdp(puppeteer, cdpEndpoint);
   } catch (err) {
     console.error(
-      "CDP connect failed. Fully quit Brave Origin, then start it with:\n" +
-        "  /opt/brave-origin-bin/brave-origin --remote-debugging-port=9222 '--remote-allow-origins=*'\n" +
-        "Verify with: curl -s http://127.0.0.1:9222/json/version\n" +
+      "CDP connect failed. Either enable remote debugging in chrome://inspect and\n" +
+        "run with READIT_CDP=chrome, or start the browser with\n" +
+        "  --remote-debugging-port=9222 '--remote-allow-origins=*'\n" +
+        "and verify with: curl -s http://127.0.0.1:9222/json/version\n" +
         `Detail: ${err instanceof Error ? err.message : err}`,
     );
     process.exit(1);

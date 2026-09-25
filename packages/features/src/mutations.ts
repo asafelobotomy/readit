@@ -11,6 +11,8 @@ export const READIT_OWNED_SELECTOR = [
   "#readit-nav-rail",
   "#readit-header-mascot",
   "#readit-bottom-chrome-host",
+  ".readit-all-link-wrap",
+  "#readit-popout-host",
   "[data-readit-separator]",
   "[data-readit-resize-host]",
   ".readit-mod-bar",

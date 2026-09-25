@@ -114,6 +114,9 @@ const focusReader: ProfilePack = {
     followingFeed: true,
     lurkerMode: false,
     headerMascot: true,
+    commentSort: true,
+    openInNewTab: false,
+    allFeed: true,
   },
   layoutSlots: profileLayoutRecipe("singleColumn", {
     leftNavPx: 272,
@@ -194,6 +197,9 @@ const densePower: ProfilePack = {
     followingFeed: true,
     lurkerMode: false,
     headerMascot: true,
+    commentSort: true,
+    openInNewTab: true,
+    allFeed: true,
   },
   layoutSlots: profileLayoutRecipe("classic", {
     leftNavPx: 240,
@@ -270,6 +276,9 @@ const creatorDesk: ProfilePack = {
     followingFeed: false,
     lurkerMode: false,
     headerMascot: true,
+    commentSort: true,
+    openInNewTab: false,
+    allFeed: false,
   },
   layoutSlots: profileLayoutRecipe("classic", {
     leftNavPx: 272,
@@ -347,6 +356,9 @@ const minimalMedia: ProfilePack = {
     followingFeed: true,
     lurkerMode: false,
     headerMascot: true,
+    commentSort: false,
+    openInNewTab: false,
+    allFeed: true,
   },
   layoutSlots: profileLayoutRecipe("classic", {
     leftNavPx: 260,
@@ -423,6 +435,9 @@ const modDesk: ProfilePack = {
     followingFeed: false,
     lurkerMode: false,
     headerMascot: true,
+    commentSort: true,
+    openInNewTab: true,
+    allFeed: false,
   },
   layoutSlots: profileLayoutRecipe("navRight", {
     leftNavPx: 240,
@@ -525,6 +540,24 @@ export function createDefaultSettings(): ReaditSettings {
     },
     keyboardNavPrefs: {
       mode: "defer",
+    },
+    commentSortPrefs: {
+      mode: "fixed",
+      sort: "top",
+      applyOnDirectLoad: true,
+      remembered: {},
+    },
+    linkPrefs: {
+      posts: true,
+      postsOpenIn: "tab",
+      communities: false,
+      users: false,
+      inModQueue: false,
+    },
+    allFeedPrefs: {
+      sort: "hot",
+      navLink: true,
+      rewriteLinks: true,
     },
     studioLocale: "en",
     featureHealth: {},

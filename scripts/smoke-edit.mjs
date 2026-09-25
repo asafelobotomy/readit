@@ -9,6 +9,7 @@
  */
 import { chromium } from "playwright";
 import puppeteer from "puppeteer-core";
+import { connectCdp } from "./smoke-cdp.mjs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -261,10 +262,7 @@ let extensionId = "";
 
 if (cdpEndpoint) {
   console.log(`Connecting over CDP (puppeteer): ${cdpEndpoint}`);
-  puppeteerBrowser = await puppeteer.connect({
-    browserURL: cdpEndpoint.replace(/\/$/, ""),
-    defaultViewport: null,
-  });
+  puppeteerBrowser = await connectCdp(puppeteer, cdpEndpoint);
   page = await puppeteerBrowser.newPage();
   cdpMode = true;
   extensionId = await resolveReaditExtensionId(puppeteerBrowser);

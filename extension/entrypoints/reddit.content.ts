@@ -5,9 +5,11 @@ import {
   emitReadit,
   isReaditMutation,
   onReadit,
+  rememberCommentSort,
 } from "@readit/features";
 import type { ReaditSettings } from "@readit/schema";
 import {
+  COMMENT_SORT_MEMORY_MAX,
   normalizeColumnOrder,
   placementsFromColumnOrder,
 } from "@readit/schema";
@@ -125,6 +127,30 @@ export default defineContentScript({
           layoutSlots: {
             ...current.layoutSlots,
             widthLocks: detail.widthLocks,
+          },
+        }));
+      }),
+
+      onReadit("comment-sort-picked", (detail) => {
+        const prefs = settings.commentSortPrefs;
+        if (prefs.mode !== "remember") return;
+        const remembered = rememberCommentSort(
+          prefs.remembered,
+          detail.subreddit,
+          detail.sort,
+          COMMENT_SORT_MEMORY_MAX,
+        );
+        if (remembered === prefs.remembered) return;
+        void mutateSettings((current) => ({
+          ...current,
+          commentSortPrefs: {
+            ...current.commentSortPrefs,
+            remembered: rememberCommentSort(
+              current.commentSortPrefs.remembered,
+              detail.subreddit,
+              detail.sort,
+              COMMENT_SORT_MEMORY_MAX,
+            ),
           },
         }));
       }),
