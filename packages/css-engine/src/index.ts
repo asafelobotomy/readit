@@ -32,17 +32,21 @@ export { isSafeElementRuleSelector };
 
 const STYLE_ID = "readit-css-engine";
 
+/** The font stack for a family choice, or null to keep Reddit's own. */
+function fontStack(family: CssTokens["fontFamily"]): string | null {
+  return family === "serif"
+    ? "ui-serif, Georgia, Cambria, Times New Roman, Times, serif"
+    : family === "mono"
+      ? "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+      : family === "sans"
+        ? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        : null;
+}
+
 export function tokensToCssVars(tokens: CssTokens): Record<string, string> {
   const gap = 8 + Math.round((1 - tokens.density) * 16);
   const pad = 6 + Math.round((1 - tokens.density) * 10);
-  const family =
-    tokens.fontFamily === "serif"
-      ? "ui-serif, Georgia, Cambria, Times New Roman, Times, serif"
-      : tokens.fontFamily === "mono"
-        ? "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-        : tokens.fontFamily === "sans"
-          ? "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-          : "inherit";
+  const family = fontStack(tokens.fontFamily) ?? "inherit";
   return {
     "--readit-feed-width": `${tokens.feedWidthPx}px`,
     "--readit-gap": `${gap}px`,
@@ -53,6 +57,180 @@ export function tokensToCssVars(tokens: CssTokens): Record<string, string> {
     "--readit-radius": `${tokens.radiusPx}px`,
     "--readit-accent": tokens.accent,
   };
+}
+
+/**
+ * Reddit's named type tokens as New Reddit defines them on :root:
+ * [name, size rem, line-height rem, weight]. Reddit sets the tokens as
+ * resolved shorthands (`600 0.875rem/1.25rem <stack>`), and shadow-root
+ * components read them — including buttons, via `--button-font` — so
+ * redeclaring them is the only way family, weight and scale reach that text.
+ */
+const REDDIT_TYPE_TOKENS: readonly [string, number, number, number][] = [
+  ["display", 3, 3, 700],
+  ["title-1", 2, 2.25, 700],
+  ["title-2", 1.5, 1.75, 700],
+  ["title-3", 1.125, 1.5, 700],
+  ["body-1", 1, 1.25, 400],
+  ["body-2", 0.875, 1.25, 400],
+  ["caption-1", 0.75, 1, 400],
+  ["caption-2", 0.625, 1, 400],
+  ["label-1", 0.875, 1.25, 600],
+  ["label-2", 0.75, 1, 600],
+  ["button-xs", 0.75, 0.875, 700],
+  ["button-sm", 0.75, 1, 600],
+  ["button-md", 0.875, 1.25, 600],
+  ["button-lg", 0.875, 1.25, 600],
+  ["16-20-regular", 1, 1.25, 400],
+  ["14-20-regular", 0.875, 1.25, 400],
+  ["12-16-semibold", 0.75, 1, 600],
+];
+
+/** Reddit's light-DOM size utilities `.text-N`: [N px, line-height rem]. */
+const REDDIT_TEXT_UTILITIES: readonly [number, number][] = [
+  [10, 1],
+  [11, 1],
+  [12, 1],
+  [13, 1],
+  [14, 1.25],
+  [15, 1.25],
+  [16, 1.25],
+  [18, 1.5],
+  [20, 1.25],
+  [24, 1.75],
+  [32, 2.25],
+  [48, 3],
+  [64, 4],
+];
+
+/** `.leading-N` utilities in rem; they must keep beating `.text-N`. */
+const REDDIT_LEADING_REM: readonly [number, number][] = [
+  [3, 0.75],
+  [4, 1],
+  [5, 1.25],
+  [6, 1.5],
+  [7, 1.75],
+  [8, 2],
+  [9, 2.25],
+];
+
+const REDDIT_LEADING_UNITLESS: readonly [string, string][] = [
+  ["none", "1"],
+  ["tight", "1.25"],
+  ["snug", "1.375"],
+  ["normal", "1.5"],
+  ["relaxed", "1.625"],
+  ["loose", "2"],
+  ["inherit", "inherit"],
+  ["\\[0\\]", "0"],
+];
+
+/** Reddit's `xs:` breakpoint, where titles and the subreddit name step up. */
+const REDDIT_XS_MIN_WIDTH_PX = 768;
+
+/** Content the font-size setting scales (not header, left nav or right rail). */
+const TEXT_SCALE_SCOPE = `html.readit-active :is([data-readit-slot="main"], shreddit-feed, shreddit-post, shreddit-comment-tree)`;
+
+function rem(value: number): string {
+  return `${Math.round(value * 10000) / 10000}rem`;
+}
+
+/**
+ * Regular text takes the chosen weight; heavier text never drops below its
+ * own, so semibold labels can't end up lighter than body text.
+ */
+function weightFor(base: number, weight: number): number {
+  return Math.max(base, weight);
+}
+
+function typeTokenDecls(
+  scale: number,
+  weight: number,
+  family: string | null,
+): string {
+  const stack = family ?? "var(--font-sans)";
+  return REDDIT_TYPE_TOKENS.map(([name, size, lh, base]) => {
+    const w = weightFor(base, weight);
+    return [
+      `  --font-${name}: ${w} ${rem(size * scale)}/${rem(lh * scale)} ${stack};`,
+      `  --font-${name}-size: ${rem(size * scale)};`,
+      `  --font-${name}-line-height: ${rem(lh * scale)};`,
+      `  --font-${name}-weight: ${w};`,
+    ].join("\n");
+  }).join("\n");
+}
+
+/**
+ * Font family, weight and size. Reddit sets an explicit size, weight or font
+ * shorthand on nearly every text node, so values that only inherit reach just
+ * the few unclassed nodes (profile comments grew to 19.2px while post-page
+ * comments stayed 14px). Apply them through Reddit's own tokens and utilities.
+ */
+function typographyRules(tokens: CssTokens): string {
+  const family = fontStack(tokens.fontFamily);
+  const weight = tokens.fontWeight ?? 400;
+  const scale = tokens.fontScale;
+  const parts: string[] = [];
+
+  if (family || weight !== 400) {
+    const utilities = (
+      [
+        ["normal", 400],
+        ["medium", 500],
+        ["semibold", 600],
+        ["bold", 700],
+      ] as const
+    )
+      .map(
+        ([name, base]) =>
+          `html.readit-active .font-${name} { font-weight: ${weightFor(base, weight)}; }`,
+      )
+      .join("\n");
+    // Reddit redeclares its tokens on theme containers (.grid-container.theme-rpl),
+    // so declaring them on html alone stops at the first theme element.
+    parts.push(`html.readit-active,
+html.readit-active [class*="theme-"] {
+${family ? `  font-family: ${family};\n  --font-sans: ${family};\n` : ""}${typeTokenDecls(1, weight, family)}
+}
+html.readit-active body,
+html.readit-active [data-readit-slot] {
+  font-weight: ${weight};
+}
+${weight !== 400 ? utilities : ""}`);
+  }
+
+  if (scale !== 1) {
+    const text = REDDIT_TEXT_UTILITIES.map(
+      ([px, lh]) =>
+        `${TEXT_SCALE_SCOPE} :is(.text-${px}, .text-${px}-scalable) { font-size: ${rem((px / 16) * scale)}; line-height: ${rem(lh * scale)}; }`,
+    );
+    const textXs = REDDIT_TEXT_UTILITIES.map(
+      ([px, lh]) =>
+        `  ${TEXT_SCALE_SCOPE} :is(.xs\\:text-${px}, .xs\\:text-${px}-scalable) { font-size: ${rem((px / 16) * scale)}; line-height: ${rem(lh * scale)}; }`,
+    );
+    const leading = [
+      ...REDDIT_LEADING_REM.map(
+        ([n, lh]) => `${TEXT_SCALE_SCOPE} .leading-${n} { line-height: ${rem(lh * scale)}; }`,
+      ),
+      ...REDDIT_LEADING_UNITLESS.map(
+        ([n, lh]) => `${TEXT_SCALE_SCOPE} .leading-${n} { line-height: ${lh}; }`,
+      ),
+    ];
+    parts.push(`${TEXT_SCALE_SCOPE} {
+  font-size: ${rem(0.875 * scale)};
+}
+${TEXT_SCALE_SCOPE},
+${TEXT_SCALE_SCOPE} [class*="theme-"] {
+${typeTokenDecls(scale, weight, family)}
+}
+${text.join("\n")}
+@media (min-width: ${REDDIT_XS_MIN_WIDTH_PX}px) {
+${textXs.join("\n")}
+}
+${leading.join("\n")}`);
+  }
+
+  return parts.join("\n\n");
 }
 
 function hideRules(hide: HideNoise): string[] {
@@ -296,12 +474,6 @@ html.readit-active #subgrid-container .main-container {
   width: 100% !important;
   max-width: none !important;
   justify-content: flex-start !important;
-}
-
-html.readit-active shreddit-feed,
-html.readit-active shreddit-post {
-  font-size: calc(1rem * var(--readit-font-scale));
-  font-family: var(--readit-font-family, inherit);
 }
 
 html.readit-active shreddit-post {
@@ -773,7 +945,9 @@ html.readit-active.readit-layout-slots.readit-nav-compact .readit-nav-rail-glyph
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font: 700 12px/1 ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
   background: color-mix(in srgb, CanvasText 14%, transparent) !important;
   border-radius: 8px !important;
 }
@@ -1745,13 +1919,6 @@ html.readit-active.readit-layout-slots [data-readit-layout-shell]:has(#subgrid-c
 }`);
   }
 
-  parts.push(`html.readit-active {
-  font-family: var(--readit-font-family, inherit);
-}
-html.readit-active.readit-layout-slots [data-readit-slot] {
-  font-weight: var(--readit-font-weight, inherit);
-}`);
-
   return parts.join("\n\n");
 }
 
@@ -1763,6 +1930,269 @@ html.readit-active.readit-layout-slots [data-readit-slot] {
  */
 export function studioSafeSelector(selector: string): string {
   return `:is(${selector.trim()}):not(readit-studio, :has(readit-studio))`;
+}
+
+/**
+ * Split feed-card header (feedPrefs.postHeader = "split"). The postHeader
+ * feature marks eligible cards with data-readit-split-header (only while wide
+ * enough) and, for the shadow-DOM "card" template, unwraps the title inside
+ * the card's shadow root. This turns the card — or, for link posts with a
+ * thumbnail ("grid" template), Reddit's own light-DOM grid — into this grid
+ * and places the credit line's pieces around the title:
+ *
+ *   [ lead ] [ lead spacer | title .............. | trail spacer ] [ thumb ] [ controls ]
+ *   [ lead ] [ lead spacer | emote tags flair • time extra | trail ] [ thumb ] [ label ]
+ *
+ * The spacers follow the main column's text alignment, so the meta line
+ * lines up under the title. Everything else in the card (flair, body, media,
+ * action bar) spans the full width below. The thumb track is only used by
+ * link posts, whose thumbnail stays beside the title as in Reddit's layout.
+ */
+function postHeaderRules(settings: ReaditSettings): string {
+  const align = settings.flags.layoutSlots
+    ? panelContentAlign(settings.layoutSlots, "main")
+    : "start";
+  const flex = "minmax(0, 1fr)";
+  const leadSpacer = align === "start" ? "0px" : flex;
+  const trailSpacer = align === "end" ? "0px" : flex;
+  const post = `html.readit-active shreddit-post`;
+  const card = `${post}[data-readit-split-header="card"]`;
+  const grid = `${post}[data-readit-split-header="grid"] > div.grid`;
+  const container = `:is(${card}, ${grid})`;
+  const credit = `:is(${card}, ${grid} > div) > [slot="credit-bar"]`;
+  const meta = `${credit} > span.flex-wrap`;
+  const lead = `${meta} > span.flex:first-child`;
+  const titleCell = `${grid} > div:has([slot="title"])`;
+  return `/* readit-post-header:split */
+${container} {
+  display: grid !important;
+  grid-template-columns:
+    [lead-start] auto
+    [mid-start] ${leadSpacer}
+    [emote] auto [tags] auto [flair] minmax(0, auto) [sep] auto [time] auto [extra] auto
+    [trail] ${trailSpacer}
+    [mid-end] auto
+    [ctl-start] auto [end] !important;
+  grid-template-rows: auto auto !important;
+  align-items: center !important;
+  gap: 0 !important;
+}
+${card} > :not([slot="credit-bar"]) {
+  grid-column: lead-start / end !important;
+}
+${credit},
+${meta},
+${lead},
+${grid} > div:has(> [slot="credit-bar"]),
+${titleCell} {
+  display: contents !important;
+}
+/* Meta line (row 2) — anything unrecognized lands in the "extra" track
+   instead of being auto-placed into the title's row. */
+${meta} > *,
+${lead} > rpl-hovercard {
+  grid-row: 2 !important;
+  grid-column: extra / trail !important;
+  margin-block-end: 6px !important;
+  min-width: 0 !important;
+}
+${lead} > :not(rpl-hovercard) {
+  grid-column: lead-start / mid-start !important;
+  grid-row: 1 / span 2 !important;
+  display: flex !important;
+  align-items: center !important;
+  max-width: 14rem !important;
+  min-width: 0 !important;
+  margin-inline-end: 16px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+${lead} faceplate-hovercard .w-lg.h-lg {
+  width: 32px !important;
+  height: 32px !important;
+}
+${lead} > rpl-hovercard {
+  grid-column: emote / tags !important;
+  display: inline-flex !important;
+  margin-inline-end: 4px !important;
+}
+${meta} > shreddit-async-loader {
+  grid-column: tags / flair !important;
+  display: inline-flex !important;
+}
+${meta} > author-flair-event-handler {
+  grid-column: flair / sep !important;
+  display: inline-flex !important;
+  overflow: hidden !important;
+}
+${meta} > .created-separator:has(+ faceplate-timeago) {
+  grid-column: sep / time !important;
+  margin-inline: 4px !important;
+}
+${meta} > .created-separator:not(:has(+ faceplate-timeago)) {
+  display: none !important;
+}
+${meta} > faceplate-timeago {
+  grid-column: time / extra !important;
+}
+${meta} > shreddit-brand-affiliate-tag {
+  display: inline-flex !important;
+}
+${meta} > shreddit-brand-affiliate-tag:not(:empty) {
+  margin-inline-start: 4px !important;
+}
+/* Recommendation label ("Suggested", "Popular near you", ...) under the
+   controls; long reasons wrap rather than widening the column. */
+${meta} > div.md {
+  grid-column: ctl-start / end !important;
+  justify-self: end !important;
+  text-align: end !important;
+  max-width: 14rem !important;
+  margin-inline-start: 16px !important;
+  white-space: normal !important;
+}
+${credit} > span.flex:not(.flex-wrap) {
+  grid-column: ctl-start / end !important;
+  grid-row: 1 !important;
+  justify-self: end !important;
+  margin-inline-start: 16px !important;
+}
+${post}[data-readit-split-header] [slot="title"] {
+  margin: 0 !important;
+}
+/* Link posts: the title block's parts become items — the title moves up
+   beside the lead, flair and URL follow the meta line, and the thumbnail
+   spans those rows between them and the controls. */
+${titleCell} > * {
+  grid-column: mid-start / mid-end !important;
+  min-width: 0 !important;
+}
+${titleCell} > :empty {
+  display: none !important;
+}
+${titleCell} > :has(> [slot="title"]) {
+  grid-row: 1 !important;
+  align-self: end !important;
+}
+${titleCell} > :has(> [slot="post-flair"]) {
+  grid-row: 3 !important;
+}
+${titleCell} > :has(.post-link) {
+  grid-row: 4 !important;
+}
+${grid} > div:has([slot="thumbnail"]) {
+  grid-column: mid-end / ctl-start !important;
+  grid-row: 1 / span 4 !important;
+  align-self: start !important;
+  margin-inline-start: 16px !important;
+}
+${postPageRules(leadSpacer, trailSpacer)}`;
+}
+
+/**
+ * Post page header (postHeader "split", template "page"): the credit bar's
+ * avatar and name column move left of the title, the time goes under it.
+ *
+ *   [ back ] [ avatar ] [ r/sub    ] [ spacer | title ......... | spacer ] [ thumb ] [ ⋯ ]
+ *   [ back ] [ avatar ] [ u/author ] [ spacer | • time extra    | spacer ] [ thumb ] [   ]
+ */
+function postPageRules(leadSpacer: string, trailSpacer: string): string {
+  const page = `html.readit-active shreddit-post[data-readit-split-header="page"]`;
+  const credit = `${page} > [slot="credit-bar"]`;
+  const lead = `${credit} > span.flex:first-child`;
+  const names = `${lead} > div.flex-col`;
+  const nameRow = `${names} > span:first-child`;
+  return `/* readit-post-header:page */
+${page} {
+  display: grid !important;
+  grid-template-columns:
+    [lead-start] auto
+    [avatar] auto
+    [names] auto
+    [mid-start] ${leadSpacer}
+    [sep] auto [time] auto [extra] auto
+    [trail] ${trailSpacer}
+    [mid-end] auto
+    [ctl-start] auto [end] !important;
+  grid-template-rows: auto auto !important;
+  align-items: center !important;
+  gap: 0 !important;
+  padding-block-start: 12px !important;
+}
+${page} > :not([slot="credit-bar"]) {
+  grid-column: lead-start / end !important;
+}
+${credit},
+${lead},
+${names},
+${nameRow} {
+  display: contents !important;
+}
+/* Unknown pieces land in the "extra" track of the time line rather than
+   being auto-placed into the title's row. */
+${lead} > *,
+${nameRow} > * {
+  grid-row: 2 !important;
+  grid-column: extra / trail !important;
+  min-width: 0 !important;
+}
+${lead} > pdp-back-button {
+  grid-column: lead-start / avatar !important;
+  grid-row: 1 / span 2 !important;
+}
+${lead} > .avatar {
+  grid-column: avatar / names !important;
+  grid-row: 1 / span 2 !important;
+  margin-inline-end: 8px !important;
+}
+${nameRow} > .subreddit-name {
+  grid-column: names / mid-start !important;
+  grid-row: 1 !important;
+  align-self: end !important;
+  font-size: 14px !important;
+}
+${nameRow} > .subreddit-name a {
+  font-size: inherit !important;
+}
+/* Author line: user flair badges wrap rather than widening the column. */
+${names} > div {
+  grid-column: names / mid-start !important;
+  grid-row: 2 !important;
+  align-self: start !important;
+  flex-wrap: wrap !important;
+  max-width: 14rem !important;
+}
+${nameRow} > .subreddit-name,
+${names} > div {
+  justify-self: start !important;
+  margin-inline-end: 16px !important;
+}
+${nameRow} > :not(.subreddit-name, faceplate-timeago, shreddit-brand-affiliate-tag) {
+  grid-column: sep / time !important;
+  margin-inline-end: 4px !important;
+}
+${nameRow} > faceplate-timeago {
+  grid-column: time / extra !important;
+}
+${nameRow} > shreddit-brand-affiliate-tag {
+  display: inline-flex !important;
+}
+${credit} > span.flex:not(:first-child) {
+  grid-column: ctl-start / end !important;
+  grid-row: 1 !important;
+  justify-self: end !important;
+  margin-inline-start: 16px !important;
+}
+${page} > [slot="title"] {
+  grid-column: mid-start / mid-end !important;
+  grid-row: 1 !important;
+  align-self: end !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+${page} > [slot="post-flair"] {
+  margin-block-start: 8px !important;
+}`;
 }
 
 export function buildStylesheet(settings: ReaditSettings): string {
@@ -1778,10 +2208,15 @@ export function buildStylesheet(settings: ReaditSettings): string {
   const parts = [
     `:root {\n${varBlock}\n}`,
     layoutRules(),
+    typographyRules(settings.knobs.tokens),
     ...hideRules(settings.knobs.hide),
     ...mediaRules(settings.knobs.mediaMode),
     ...nsfwFilterRules(settings.knobs.showOnlyNsfw),
   ];
+
+  if (settings.feedPrefs.postHeader === "split") {
+    parts.push(postHeaderRules(settings));
+  }
 
   if (settings.flags.layoutSlots) {
     parts.push(

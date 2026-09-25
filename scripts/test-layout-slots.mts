@@ -781,6 +781,31 @@ check("CSS waveA compact density class styles", () => {
   assert.match(css, /readit-feed-compact/);
 });
 
+check("CSS split post header only when chosen, spacers follow main alignment", () => {
+  const settings = createDefaultSettings();
+  assert.equal(settings.feedPrefs.postHeader, "stacked");
+  assert.doesNotMatch(buildStylesheet(settings), /readit-post-header:split/);
+
+  settings.feedPrefs.postHeader = "split";
+  assert.match(buildStylesheet(settings), /readit-post-header:page/);
+  const spacers = (css: string) => {
+    const lead = css.match(/\[mid-start\] ([^\n]+)\n/);
+    const trail = css.match(/\[trail\] ([^\n]+)\n/);
+    assert.ok(lead && trail, "split grid template present");
+    return [lead[1], trail[1]];
+  };
+  settings.layoutSlots.contentAlign = "start";
+  assert.deepEqual(spacers(buildStylesheet(settings)), ["0px", "minmax(0, 1fr)"]);
+  settings.layoutSlots.contentAlign = "center";
+  assert.deepEqual(spacers(buildStylesheet(settings)), ["minmax(0, 1fr)", "minmax(0, 1fr)"]);
+  settings.layoutSlots.contentAlignByPanel = { main: "end" };
+  assert.deepEqual(spacers(buildStylesheet(settings)), ["minmax(0, 1fr)", "0px"]);
+
+  // Without layout slots there is no column alignment — start layout.
+  settings.flags.layoutSlots = false;
+  assert.deepEqual(spacers(buildStylesheet(settings)), ["0px", "minmax(0, 1fr)"]);
+});
+
 check("CSS waveA lurker styles", () => {
   const settings = createDefaultSettings();
   const css = buildStylesheet(settings);
@@ -1187,6 +1212,37 @@ check("CSS gutter theme + zoom + font tokens", () => {
   assert.match(css, /zoom:\s*1\.1/);
   assert.match(css, /--readit-font-family/);
   assert.match(css, /--readit-font-weight:\s*600/);
+});
+
+check("CSS typography goes through Reddit's tokens and utilities", () => {
+  const settings = createDefaultSettings();
+  settings.knobs.tokens.fontFamily = "system";
+  settings.knobs.tokens.fontWeight = 400;
+  settings.knobs.tokens.fontScale = 1;
+  assert.doesNotMatch(buildStylesheet(settings), /--font-body-2:/, "neutral settings leave Reddit's type alone");
+
+  settings.knobs.tokens.fontFamily = "serif";
+  settings.knobs.tokens.fontWeight = 700;
+  settings.knobs.tokens.fontScale = 1.2;
+  const css = buildStylesheet(settings);
+  // Weight: regular text takes the setting, heavier text keeps its own floor.
+  assert.match(css, /--font-body-2: 700 0\.875rem\/1\.25rem ui-serif/);
+  assert.match(css, /--font-label-2-weight: 700;/);
+  assert.match(css, /\.font-normal \{ font-weight: 700; \}/);
+  // Scale: tokens and light-DOM utilities scale together, from Reddit's 14px base.
+  assert.match(css, /--font-body-2: 700 1\.05rem\/1\.5rem ui-serif/);
+  assert.match(css, /:is\(\.text-14, \.text-14-scalable\) \{ font-size: 1\.05rem; line-height: 1\.5rem; \}/);
+  assert.match(css, /min-width: 768px[\s\S]*\.xs\\:text-24/);
+  assert.match(css, /shreddit-comment-tree\) \{\n  font-size: 1\.05rem;\n\}/);
+  // Reddit redeclares tokens on theme containers; ours must follow them down.
+  assert.match(css, /html\.readit-active \[class\*="theme-"\] \{\n  font-family: ui-serif[^\n]*\n  --font-sans: ui-serif/);
+  assert.doesNotMatch(css, /calc\(1rem \* var\(--readit-font-scale\)\)/);
+
+  settings.knobs.tokens.fontWeight = 500;
+  const medium = buildStylesheet(settings);
+  assert.match(medium, /--font-body-1-weight: 500;/);
+  assert.match(medium, /--font-label-1-weight: 600;/);
+  assert.match(medium, /--font-title-1-weight: 700;/);
 });
 
 check("builtin profiles own layout recipes", () => {

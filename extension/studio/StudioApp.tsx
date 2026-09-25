@@ -1661,6 +1661,24 @@ function SimpleTab({
           </select>
         </div>
         <div class="readit-row">
+          <span>{t(settings.studioLocale, "postHeader")}</span>
+          <select
+            class="readit-select"
+            style={{ width: 160 }}
+            value={settings.feedPrefs.postHeader}
+            onChange={(e) => {
+              const value = e.currentTarget.value as "stacked" | "split";
+              void onCommit(t(settings.studioLocale, "postHeader"), (s) => ({
+                ...s,
+                feedPrefs: { ...s.feedPrefs, postHeader: value },
+              }));
+            }}
+          >
+            <option value="stacked">Stacked</option>
+            <option value="split">Split</option>
+          </select>
+        </div>
+        <div class="readit-row">
           <span>Media</span>
           <select
             class="readit-select"

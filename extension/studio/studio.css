@@ -4,6 +4,21 @@
   color-scheme: light dark;
 }
 
+/* WXT's shadow wrapper sets `:host { all: initial !important }`, which beats
+   the family above, so set it on the shadow root's own html element too. */
+html {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* Form controls don't inherit font; without this they render in the UA's
+   control font (Arial on Linux). */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 #readit-root {
   position: fixed;
   inset: 0;

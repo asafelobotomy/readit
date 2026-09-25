@@ -72,6 +72,7 @@ import {
   modUsernotesFeature,
 } from "./mod.js";
 import { headerMascotFeature } from "./header-mascot.js";
+import { postHeaderFeature } from "./post-header.js";
 import type { FeatureContext, FeatureModule } from "./utils.js";
 import {
   cleanRedditUrl,
@@ -108,6 +109,7 @@ export const ALL_FEATURES: FeatureModule[] = [
   modHighlightFeature,
   headerMascotFeature,
   textWrapFeature,
+  postHeaderFeature,
 ];
 
 /** Features safe to re-run on DOM mutations (idempotent via marks). */
@@ -127,6 +129,7 @@ const SCAN_FEATURE_IDS = new Set([
   "followingFeed",
   "headerMascot",
   "textWrap",
+  "postHeader",
 ]);
 
 export type FeatureRuntime = {

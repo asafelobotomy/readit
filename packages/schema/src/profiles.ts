@@ -521,6 +521,7 @@ export function createDefaultSettings(): ReaditSettings {
     feedPrefs: {
       followingDefault: true,
       feedDensity: "comfortable",
+      postHeader: "stacked",
     },
     keyboardNavPrefs: {
       mode: "defer",

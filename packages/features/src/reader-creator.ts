@@ -148,7 +148,8 @@ export const absoluteTimestampsFeature: FeatureModule = {
       const span = document.createElement("span");
       span.className = "readit-abs-time";
       span.textContent = ` (${d.toLocaleString()})`;
-      span.style.cssText = "opacity:0.75;font-size:0.9em;";
+      // Same size as the relative time; a smaller size added a third size to the byline.
+      span.style.cssText = "opacity:0.75;";
       t.after(span);
       markProcessed(t, "absoluteTimestamps");
     });

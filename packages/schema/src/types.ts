@@ -275,10 +275,19 @@ export type CommentUxPrefs = z.infer<typeof CommentUxPrefsSchema>;
 export const FeedDensitySchema = z.enum(["comfortable", "compact"]);
 export type FeedDensity = z.infer<typeof FeedDensitySchema>;
 
+/**
+ * Feed card header: Reddit's own stacked credit line above the title, or
+ * split into three columns (subreddit/author | title over time | Join/menu
+ * over the recommendation label).
+ */
+export const PostHeaderLayoutSchema = z.enum(["stacked", "split"]);
+export type PostHeaderLayout = z.infer<typeof PostHeaderLayoutSchema>;
+
 export const FeedPrefsSchema = z.object({
   /** When followingFeed is on, prefer Following tab on Home */
   followingDefault: z.boolean().default(true),
   feedDensity: FeedDensitySchema.default("comfortable"),
+  postHeader: PostHeaderLayoutSchema.default("stacked"),
 });
 export type FeedPrefs = z.infer<typeof FeedPrefsSchema>;
 

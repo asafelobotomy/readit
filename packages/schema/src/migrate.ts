@@ -284,6 +284,7 @@ function applyV5WaveADefaults(settings: ReaditSettings): ReaditSettings {
     feedPrefs: settings.feedPrefs ?? {
       followingDefault: true,
       feedDensity: enableCompact ? "compact" : "comfortable",
+      postHeader: "stacked",
     },
     keyboardNavPrefs: settings.keyboardNavPrefs ?? {
       mode: "defer",
