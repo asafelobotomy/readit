@@ -55,8 +55,13 @@ import {
   isFormattingToggleLabel,
   MARK_READ_MAX_VISITED,
   mergeVisited,
+  pickQuoteComposer,
+  quoteMarkdown,
+  quoteParagraphs,
   rememberVisited,
 } from "../packages/features/src/ux-extras.ts";
+import { cleanRedditUrl } from "../packages/features/src/utils.ts";
+import { mutateAgainstFresh } from "../extension/lib/settings-cas.ts";
 import {
   applyLightweightSync,
   applyProfile,
@@ -1180,6 +1185,91 @@ check("posts open in a tab unless the pop-out is chosen", () => {
   delete old.linkPrefs.postsOpenIn;
   assert.equal(repairSettings(old)!.settings.linkPrefs.postsOpenIn, "tab");
   assert.ok(READIT_OWNED_SELECTOR.split(", ").includes("#readit-popout-host"));
+});
+
+check("quotes keep paragraphs, drop the markup's whitespace lines", () => {
+  const text = "\n  First line.\n    \n\n      Second para\n  continues\n\n  ";
+  assert.equal(quoteMarkdown(text), "> First line.\n>\n> Second para\n> continues");
+  assert.equal(quoteMarkdown("   \n \n"), "");
+  assert.deepEqual(quoteParagraphs(text), [["First line."], ["Second para", "continues"]]);
+});
+
+check("Quote goes to the comment's own reply box, else the post composer", () => {
+  const comment = { id: "c1" };
+  const nested = { id: "c2" };
+  const box = (owner: unknown) => ({ closest: () => owner ?? null });
+  const top = box(null);
+  const ownReply = box(comment);
+  const nestedReply = box(nested);
+  assert.equal(pickQuoteComposer([top, nestedReply, ownReply], comment), ownReply);
+  assert.equal(pickQuoteComposer([nestedReply, top], comment), top);
+  assert.equal(pickQuoteComposer([nestedReply], comment), null);
+});
+
+check("clean share links keep context, drop tracking", () => {
+  const g = globalThis as { location?: unknown };
+  const had = "location" in g;
+  g.location ??= { origin: "https://www.reddit.com" };
+  try {
+    const out = new URL(
+      cleanRedditUrl(
+        "https://www.reddit.com/r/a/comments/x/y/comment/z/?context=3&utm_source=share&share_id=1",
+      ),
+    );
+    assert.equal(out.searchParams.get("context"), "3");
+    assert.equal(out.searchParams.has("utm_source"), false);
+    assert.equal(out.searchParams.has("share_id"), false);
+  } finally {
+    if (!had) delete g.location;
+  }
+});
+
+async function checkAsync(name: string, fn: () => Promise<void>) {
+  try {
+    await fn();
+    console.log(`pass  ${name}`);
+  } catch (err) {
+    failed += 1;
+    console.error(`fail  ${name}`);
+    console.error(err);
+  }
+}
+
+await checkAsync("a write from another context is re-read, not overwritten", async () => {
+  // Stored value; another context bumps `other` while our mutator runs once.
+  let raw: { mine: number; other: number } = { mine: 0, other: 0 };
+  let interfered = false;
+  const saved = await mutateAgainstFresh({
+    readRaw: async () => raw,
+    load: async () => ({ ...raw }),
+    mutator: (current) => {
+      if (!interfered) {
+        interfered = true;
+        raw = { ...raw, other: 1 };
+      }
+      return { ...current, mine: current.mine + 1 };
+    },
+    save: async (next) => (raw = next),
+  });
+  assert.deepEqual(saved, { mine: 1, other: 1 });
+});
+
+await checkAsync("a context that never settles still saves after the last try", async () => {
+  let raw = { n: 0 };
+  let runs = 0;
+  const saved = await mutateAgainstFresh({
+    readRaw: async () => raw,
+    load: async () => ({ ...raw }),
+    mutator: (current) => {
+      runs += 1;
+      raw = { n: raw.n + 100 }; // someone writes every time
+      return { n: current.n + 1 };
+    },
+    save: async (next) => (raw = next),
+    maxAttempts: 3,
+  });
+  assert.equal(runs, 3);
+  assert.equal(saved.n, 201);
 });
 
 if (failed > 0) {

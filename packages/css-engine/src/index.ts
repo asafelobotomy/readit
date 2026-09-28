@@ -2456,7 +2456,10 @@ export function applyStylesheet(settings: ReaditSettings): void {
     el.id = STYLE_ID;
     (document.documentElement || document.head).appendChild(el);
   }
-  el.textContent = buildStylesheet(settings);
+  // Every SPA navigation re-applies; rewriting identical CSS still made the
+  // browser re-parse it and restyle the whole page.
+  const css = buildStylesheet(settings);
+  if (el.textContent !== css) el.textContent = css;
 
   const root = document.documentElement;
   root.classList.toggle("readit-active", !settings.paused);

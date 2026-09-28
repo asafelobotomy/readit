@@ -11,6 +11,7 @@ import {
   unwrapImport,
 } from "@readit/schema";
 import { storage } from "wxt/utils/storage";
+import { mutateAgainstFresh } from "./settings-cas";
 import { pushLightweightSync } from "./sync";
 
 const KEY = "local:readitSettings";
@@ -68,6 +69,9 @@ export async function saveSettings(
  * callers (e.g. two quick Studio edits, or a Studio commit racing a content-script
  * persist handler) queue instead of racing on a stale `loadSettings()` snapshot —
  * a race that previously let the second writer silently clobber the first.
+ * Other contexts (the popup, other tabs) can't join this queue, so each write
+ * also re-checks storage and re-runs the mutator if one of them wrote first.
+ * Mutators may therefore run more than once and must not have side effects.
  */
 let writeQueue: Promise<unknown> = Promise.resolve();
 
@@ -76,11 +80,14 @@ export async function mutateSettings(
     current: ReaditSettings,
   ) => ReaditSettings | Promise<ReaditSettings>,
 ): Promise<ReaditSettings> {
-  const run = writeQueue.catch(() => undefined).then(async () => {
-    const current = await loadSettings();
-    const next = await mutator(current);
-    return saveSettings(next);
-  });
+  const run = writeQueue.catch(() => undefined).then(() =>
+    mutateAgainstFresh({
+      readRaw: () => storage.getItem(KEY),
+      load: loadSettings,
+      mutator,
+      save: saveSettings,
+    }),
+  );
   writeQueue = run.catch(() => undefined);
   return run;
 }

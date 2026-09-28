@@ -204,6 +204,87 @@ export function isFormattingToggleLabel(label: string | null | undefined): boole
   return /\bformat(?:ting)?\b/i.test(String(label ?? ""));
 }
 
+/** Reddit's comment composers: the rich editor, or its plain-text fallback. */
+const QUOTE_COMPOSER_SELECTOR =
+  'shreddit-composer [contenteditable="true"], shreddit-composer textarea';
+
+/**
+ * A comment's text as quote paragraphs (each a list of lines): lines trimmed,
+ * whitespace-only lines treated as paragraph breaks.
+ */
+export function quoteParagraphs(text: string): string[][] {
+  const paras: string[][] = [[]];
+  for (const raw of text.replace(/\r/g, "").split("\n")) {
+    const line = raw.trim();
+    if (line) paras[paras.length - 1]!.push(line);
+    else if (paras[paras.length - 1]!.length) paras.push([]);
+  }
+  return paras.filter((p) => p.length);
+}
+
+/** Markdown blockquote (markdown editor, clipboard fallback). */
+export function quoteMarkdown(text: string): string {
+  return quoteParagraphs(text)
+    .map((p) => p.map((l) => `> ${l}`).join("\n"))
+    .join("\n>\n");
+}
+
+/**
+ * Paste a real blockquote into Reddit's rich-text editor (Lexical). Text
+ * inserted there is taken literally — a `>` posts as a character and line
+ * breaks are dropped — but Lexical turns pasted HTML into quote blocks.
+ * Resolves false when the editor ignored the paste. Lexical applies it on
+ * its next update, so the check waits a frame.
+ */
+async function pasteQuote(
+  editor: HTMLElement,
+  paras: string[][],
+  markdown: string,
+): Promise<boolean> {
+  const html = document.createElement("div");
+  const quote = document.createElement("blockquote");
+  for (const lines of paras) {
+    const p = document.createElement("p");
+    lines.forEach((line, i) => {
+      if (i) p.append(document.createElement("br"));
+      p.append(line);
+    });
+    quote.append(p);
+  }
+  const after = document.createElement("p");
+  after.append(document.createElement("br"));
+  html.append(quote, after);
+  const before = editor.innerHTML;
+  const data = new DataTransfer();
+  data.setData("text/html", html.innerHTML);
+  data.setData("text/plain", `${markdown}\n\n`);
+  editor.focus();
+  editor.dispatchEvent(
+    new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+  );
+  await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+  return editor.innerHTML !== before;
+}
+
+type ComposerLike = { closest: (selector: string) => unknown };
+
+/**
+ * Where a comment's Quote goes: that comment's own open reply box, else the
+ * post's top-level composer. Taking the first composer on the page put the
+ * quote in the post composer even while a reply box was open, and a nested
+ * reply's box belongs to that reply, not to the comment being quoted.
+ */
+export function pickQuoteComposer<T extends ComposerLike>(
+  composers: readonly T[],
+  comment: unknown,
+): T | null {
+  return (
+    composers.find((c) => c.closest("shreddit-comment") === comment) ??
+    composers.find((c) => !c.closest("shreddit-comment")) ??
+    null
+  );
+}
+
 export const commentUxFeature: FeatureModule = {
   id: "commentUx",
   tier: "advanced",
@@ -256,29 +337,27 @@ export const commentUxFeature: FeatureModule = {
       // nowrap / hidden overflow and a fixed height that clips the label.
       btn.style.cssText =
         "margin-left:6px;font-size:11px;line-height:1.3;padding:2px 6px;height:auto;min-height:0;white-space:normal;overflow:visible;text-overflow:clip;border:1px solid #555;border-radius:4px;background:#222;color:#eee;cursor:pointer;";
-      btn.addEventListener("click", (e) => {
+      btn.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const body =
-          comment.querySelector('[id*="-post-rtjson-content"], .md, [slot="comment"]')
-            ?.textContent ||
-          comment.textContent ||
-          "";
-        const quote = body
-          .trim()
-          .split("\n")
-          .map((l) => `> ${l}`)
-          .join("\n");
-        const composer =
-          document.querySelector<HTMLElement>(
-            'div[contenteditable="true"], shreddit-composer textarea, faceplate-textarea-input textarea',
-          ) || null;
+        const bodyEl = comment.querySelector<HTMLElement>(
+          '[id*="-post-rtjson-content"], .md, [slot="comment"]',
+        );
+        // innerText keeps paragraph breaks; textContent ran them together
+        // with the markup's indentation.
+        const text = bodyEl?.innerText || bodyEl?.textContent || "";
+        const quote = quoteMarkdown(text);
+        if (!quote) return;
+        const composer = pickQuoteComposer(
+          [...document.querySelectorAll<HTMLElement>(QUOTE_COMPOSER_SELECTOR)],
+          comment,
+        );
         if (composer) {
           if (composer instanceof HTMLTextAreaElement) {
             composer.value = `${composer.value}${composer.value ? "\n\n" : ""}${quote}\n\n`;
             composer.dispatchEvent(new Event("input", { bubbles: true }));
             composer.focus();
-          } else {
+          } else if (!(await pasteQuote(composer, quoteParagraphs(text), quote))) {
             composer.focus();
             document.execCommand("insertText", false, `${quote}\n\n`);
           }

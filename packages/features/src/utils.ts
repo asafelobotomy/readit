@@ -81,6 +81,10 @@ export function detectToolbox(): boolean {
   );
 }
 
+/**
+ * Drop tracking parameters from a Reddit URL. `context` stays: it sets how
+ * many parent comments a comment link shows, so removing it changes the page.
+ */
 export function cleanRedditUrl(href: string): string {
   try {
     const url = new URL(href, location.origin);
@@ -93,7 +97,6 @@ export function cleanRedditUrl(href: string): string {
       "share_id",
       "ref",
       "ref_source",
-      "context",
     ];
     for (const key of strip) url.searchParams.delete(key);
     return url.toString();
