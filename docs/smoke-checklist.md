@@ -122,7 +122,6 @@ Status marks filled after the run: ✓ pass · ✗ fail · — skip
 | `create.canned_copy` | Copy canned reply → toast Copied reply | A | ✓ |
 | `create.absolute_timestamps` | Flag on → `.readit-abs-time` on post page | A | ✓ |
 | `create.op_highlight` | `html.readit-op-highlight` when flag on | A | ✓ |
-| `create.always_show_actions` | Flag toggle sticks in UI | A | ✓ |
 | `create.feed_ux_controls` | Mark-read / anti-refresh / comment UX / account switcher | A | ✓ |
 
 ## 6b. Feedback tracks (v4) — see full table in [`smoke-checklist-v4-tracks.md`](smoke-checklist-v4-tracks.md)

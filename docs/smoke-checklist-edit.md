@@ -2,7 +2,7 @@
 
 End-to-end coverage of the **FAB action stack**, **bottom edit toolbox island**, column selection, layout presets from the toolbar, font/zoom, separators (max 3), gutter themes, and Done/Esc exit.
 
-**Latest automated run:** 2026-09-04 · **27 pass / 1 fail / 2 skip**
+**Latest automated run:** 2026-09-28 · **28 pass / 0 fail / 2 skip**
 
 **Harness:** `npm run smoke:edit` (Playwright) · `npm run smoke:edit:brave` (CDP `:9222`)
 
@@ -47,7 +47,7 @@ Legend: **A** automated · **U** unit · Status: ✓ pass · ✗ fail · — ski
 | `edit.fab_stack_open` | FAB click opens menu with Edit Mode / Settings / GitHub / Ko-fi | A | `01-fab-stack.png` | ✓ |
 | `edit.fab_stack_toggle` | Second FAB click closes the stack | A | — | ✓ |
 | `edit.fab_settings_drawer` | Settings opens Studio drawer (not edit mode) | A | `11-settings-drawer.png` | ✓ |
-| `edit.open_studio_event` | `readit:open-studio` opens Settings drawer | A | — | ✗ |
+| `edit.open_studio_event` | `readit:open-studio` opens Settings drawer | A | — | ✓ |
 
 ## 2. Edit Mode + toolbox island
 

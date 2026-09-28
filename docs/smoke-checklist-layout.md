@@ -2,7 +2,7 @@
 
 End-to-end coverage of **layout slots**: presets, widths/pads/gaps, edit-mode chrome (labeled frames + resize edges), drag-and-drop reorder, min-width containment, profile recipes, and the Simple “Hide sidebars” bridge.
 
-**Latest automated run:** 2026-09-04 · **45 pass / 0 fail / 0 skip**
+**Latest automated run:** 2026-09-28 · **45 pass / 0 fail / 0 skip**
 
 **Harness:** `npm run smoke:layout` (Playwright) · `npm run smoke:layout:brave` (CDP `:9222`)
 

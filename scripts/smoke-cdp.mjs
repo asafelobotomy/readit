@@ -77,3 +77,36 @@ export async function connectCdp(puppeteer, spec, extra = {}) {
     return puppeteer.connect({ ...opts, browserWSEndpoint: ws });
   }
 }
+
+/**
+ * Back up readit's stored settings in a browser you already run (CDP mode):
+ * the suites switch profiles, presets and widths through the real storage.
+ * Returns a restore function that puts them back, or null when there was
+ * nothing to back up. The copy is also written to `file` in case the run dies.
+ */
+export async function backupReaditSettings(browser, extensionId, file) {
+  const withExtPage = async (fn, arg) => {
+    const extPage = await browser.newPage();
+    try {
+      await extPage.goto(`chrome-extension://${extensionId}/popup.html`, {
+        waitUntil: "domcontentloaded",
+      });
+      return await extPage.evaluate(fn, arg);
+    } finally {
+      await extPage.close().catch(() => {});
+    }
+  };
+  const saved = await withExtPage(
+    async () => (await chrome.storage.local.get("readitSettings")).readitSettings,
+  );
+  if (!saved) return null;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(saved));
+  return async () => {
+    await withExtPage(
+      async (v) => chrome.storage.local.set({ readitSettings: v }),
+      saved,
+    );
+    console.log("Restored your readit settings");
+  };
+}

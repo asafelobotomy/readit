@@ -8,6 +8,7 @@
  * restored at the end.
  *
  * Needs a browser with readit loaded and CDP reachable:
+ *   READIT_CDP=chrome npm run smoke:visual      (chrome://inspect remote debugging)
  *   READIT_CDP=http://127.0.0.1:9222 npm run smoke:visual
  *
  * Evidence → .smoke-evidence/visual/ (READIT_EVIDENCE_DIR overrides)
@@ -33,6 +34,7 @@ import {
   setChromeTopNavZone,
   setSlotZone,
 } from "../packages/features/src/layout-slots.ts";
+import { connectCdp } from "./smoke-cdp.mjs";
 import { evidenceDir } from "./smoke-paths.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,7 +44,7 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const cdp = (process.env.READIT_CDP || "").trim();
 if (!cdp) {
-  console.error("Set READIT_CDP (e.g. http://127.0.0.1:9222)");
+  console.error("Set READIT_CDP (chrome, ws://…, or http://127.0.0.1:9222)");
   process.exit(1);
 }
 const only = (process.env.READIT_VISUAL_ONLY || "").trim();
@@ -70,11 +72,7 @@ const results: Result[] = [];
 
 // ---------------------------------------------------------------- browser
 
-const browser: Browser = await puppeteer.connect({
-  browserURL: cdp.replace(/\/$/, ""),
-  defaultViewport: null,
-  protocolTimeout: 120_000,
-});
+const browser: Browser = await connectCdp(puppeteer, cdp);
 
 /** Unpacked extension id = first 32 hex of sha256(path), mapped 0-f → a-p. */
 function unpackedId(dir: string): string {

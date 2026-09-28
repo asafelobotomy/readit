@@ -303,6 +303,9 @@ if (cdpEndpoint) {
       async () => (await chrome.storage.local.get("readitSettings")).readitSettings,
     );
     if (settingsBackup) fs.writeFileSync(settingsBackupFile, JSON.stringify(settingsBackup));
+    // The settings tab opened in front; key presses (picker Esc) only reach
+    // the focused tab.
+    await page.bringToFront();
   } else {
     console.warn("Could not resolve readit extension id — popup probes will skip");
   }
@@ -1501,11 +1504,9 @@ try {
     };
     const abs = await flip("Absolute timestamps");
     const op = await flip("Highlight OP");
-    const always = await flip("Always show actions");
     return {
       abs,
       op,
-      always,
       opClass: document.documentElement.classList.contains("readit-op-highlight"),
     };
   });
@@ -1513,11 +1514,6 @@ try {
     "create.op_highlight",
     createToggles.opClass || createToggles.op?.ok ? "pass" : "fail",
     JSON.stringify(createToggles),
-  );
-  record(
-    "create.always_show_actions",
-    createToggles.always?.ok ? "pass" : "fail",
-    JSON.stringify(createToggles.always),
   );
 
   // —— CQS ——
@@ -1791,6 +1787,10 @@ try {
   );
 
   // —— Routes ——
+  // Mod Desk (active since the Mod checks) opens posts in a new tab, so the
+  // post click below would leave this page on the feed and strand a tab.
+  await openStudio(page);
+  await switchProfile("Focus Reader");
   await page.goto("https://www.reddit.com/r/AskReddit/", {
     waitUntil: "domcontentloaded",
     timeout: 60_000,

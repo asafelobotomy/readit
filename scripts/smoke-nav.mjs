@@ -9,7 +9,7 @@
  */
 import { chromium } from "playwright";
 import puppeteer from "puppeteer-core";
-import { connectCdp } from "./smoke-cdp.mjs";
+import { backupReaditSettings, connectCdp } from "./smoke-cdp.mjs";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -596,6 +596,8 @@ let playwrightContext = null;
 let page;
 let cdpMode = false;
 let extensionId = "";
+/** CDP mode: puts your own readit settings back when the run ends. */
+let restoreSettings = null;
 
 if (cdpEndpoint) {
   console.log(`Connecting over CDP (puppeteer): ${cdpEndpoint}`);
@@ -606,11 +608,16 @@ if (cdpEndpoint) {
   if (extensionId) {
     const ok = await reloadReaditExtension(puppeteerBrowser, extensionId);
     console.log(ok ? "Reloaded readit" : "Could not click Reload");
+    // Your own browser: the run changes presets, widths and flags through
+    // real storage, so keep your settings and put them back afterwards.
+    restoreSettings = await backupReaditSettings(
+      puppeteerBrowser,
+      extensionId,
+      path.join(root, ".smoke-evidence", "nav-settings-backup.json"),
+    );
   }
-  const pages = await puppeteerBrowser.pages();
-  page =
-    pages.find((p) => /reddit\.com/i.test(p.url())) ||
-    (await puppeteerBrowser.newPage());
+  // A tab of its own: reusing an open Reddit tab navigated the user's tab.
+  page = await puppeteerBrowser.newPage();
 } else {
   console.log("Launching Playwright Chromium with extension");
   playwrightContext = await chromium.launchPersistentContext(userData, {
@@ -945,7 +952,16 @@ try {
     skip: summary.skip,
     evidence: repoRelative(root, outDir),
   });
-  if (cdpMode) puppeteerBrowser?.disconnect();
+  if (cdpMode) {
+    if (restoreSettings) {
+      await restoreSettings().catch((err) =>
+        console.warn(`Could not restore your readit settings: ${err}`),
+      );
+    }
+    // Close only the tab this run opened; the rest of the browser is yours.
+    await page?.close().catch(() => {});
+    puppeteerBrowser?.disconnect();
+  }
   else await playwrightContext?.close().catch(() => {});
   process.exit(summary.fail > 0 ? 1 : 0);
 }
