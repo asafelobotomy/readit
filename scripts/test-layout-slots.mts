@@ -833,6 +833,10 @@ check("CSS page chrome slot rules", () => {
   assert.match(css, /data-readit-slot="topNav"/);
   assert.match(css, /data-readit-chrome-top="bottom"/);
   assert.match(css, /--readit-chrome-bottom/);
+  // Header dropdowns (user drawer) are positioned inside the slot; a clip
+  // makes Reddit's popper flip them off-screen.
+  const topNavRules = css.match(/\[data-readit-slot="topNav"\][^{]*\{[^}]*\}/g) ?? [];
+  for (const rule of topNavRules) assert.doesNotMatch(rule, /overflow/, rule.slice(0, 120));
 });
 
 check("separator tracks interleave after panel", () => {

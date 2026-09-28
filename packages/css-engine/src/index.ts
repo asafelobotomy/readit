@@ -1375,7 +1375,10 @@ function layoutSlotRecipes(
    reddit-header-large is an inline custom element that Reddit's position:fixed
    blockified; sticky doesn't, and inline ignores width/overflow — the header's
    -5px side margins then scrolled the page sideways. 100vw includes the
-   scrollbar, so cap at 100%. */
+   scrollbar, so cap at 100%. No overflow clip: the user drawer and other
+   header dropdowns are absolutely positioned inside it, and Reddit's popper
+   flips them above any clipping ancestor (off-screen, so the profile menu
+   never opened). */
 html.readit-active.readit-layout-slots [data-readit-slot="topNav"] {
   display: block !important;
   box-sizing: border-box !important;
@@ -1385,7 +1388,6 @@ html.readit-active.readit-layout-slots [data-readit-slot="topNav"] {
   max-height: var(--readit-chrome-top, 56px) !important;
   min-height: 0 !important;
   z-index: 1000 !important;
-  overflow: hidden !important;
   font-family: var(--readit-font-family, inherit) !important;
 }
 /* shreddit-app pads its top (--page-y-padding) for Reddit's fixed header.
