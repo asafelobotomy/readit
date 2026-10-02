@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
     "compile": "wxt prepare",
     "postinstall": "wxt prepare",
     "typecheck": "tsc --noEmit",
-    "zip": "wxt zip"
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox"
   },
   "dependencies": {
     "@preact/signals": "^2.0.4",

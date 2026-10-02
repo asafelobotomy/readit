@@ -2747,7 +2747,7 @@ function bindColumnEditListeners(): void {
     if (layoutSettings && !columnDragging) schedulePlaceHandles(layoutSettings);
   };
 
-  // Chrome (this extension's only target) dispatches PointerEvent for every
+  // Chrome and Firefox both dispatch PointerEvent for every
   // mouse interaction — binding the legacy mouse* events too made every drag
   // tick and drag-end fire twice.
   const host = ensureResizeHost();

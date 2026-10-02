@@ -596,17 +596,27 @@ export function StudioApp({ api }: { api: StudioApi }) {
                 }}
                 onExport={async () => {
                   const bundle = await exportSettings();
-                  const blob = new Blob([JSON.stringify(bundle, null, 2)], {
-                    type: "application/json",
-                  });
-                  const url = URL.createObjectURL(blob);
+                  const json = JSON.stringify(bundle, null, 2);
+                  // Firefox: a blob: URL made in a content script carries the
+                  // extension's principal, not reddit.com's, and downloading
+                  // it from the page's anchor can fail. A data: URL has no
+                  // origin to mismatch.
+                  const url = import.meta.env.FIREFOX
+                    ? `data:application/json;charset=utf-8,${encodeURIComponent(json)}`
+                    : URL.createObjectURL(new Blob([json], { type: "application/json" }));
                   const a = document.createElement("a");
                   a.href = url;
                   a.download = `readit-export-${Date.now()}.json`;
+                  // Attached: Firefox has ignored clicks on detached anchors.
+                  a.hidden = true;
+                  document.body.append(a);
                   a.click();
+                  a.remove();
                   // Revoking in the same tick can cancel the download before
                   // the browser has read the blob.
-                  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  if (url.startsWith("blob:")) {
+                    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  }
                   flash("Exported settings");
                 }}
                 onImportClick={() => fileRef.current?.click()}

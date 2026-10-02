@@ -13,6 +13,22 @@ import {
 } from "../../lib/settings";
 
 const REDDIT_TAB_URLS = ["*://*.reddit.com/*", "*://reddit.com/*"];
+/** Must match `host_permissions` in wxt.config.ts. */
+const REDDIT_HOST_PERMISSION = { origins: ["*://*.reddit.com/*"] };
+
+/**
+ * Firefox treats MV3 host permissions as revocable (about:addons →
+ * Permissions), and without them no content script runs on Reddit. Chrome
+ * grants them at install, so this is true there unless the user restricted
+ * site access.
+ */
+async function hasRedditAccess(): Promise<boolean> {
+  try {
+    return await browser.permissions.contains(REDDIT_HOST_PERMISSION);
+  } catch {
+    return true;
+  }
+}
 
 /**
  * The Reddit tab the user means: the active tab when it is Reddit, else the
@@ -40,9 +56,11 @@ async function studioTargetTabId(): Promise<number | null> {
 function Popup() {
   const [settings, setSettings] = useState<ReaditSettings | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [hostAccess, setHostAccess] = useState(true);
 
   useEffect(() => {
     void loadSettings().then(setSettings);
+    void hasRedditAccess().then(setHostAccess);
   }, []);
 
   if (!settings) {
@@ -67,6 +85,30 @@ function Popup() {
       <p style={{ fontSize: 12, color: "#999", margin: "6px 0 12px" }}>
         Profile-first New Reddit workspace
       </p>
+
+      {!hostAccess && (
+        <div style={{ fontSize: 12, color: "#ffb86b", margin: "0 0 12px" }}>
+          readit can't run on Reddit until it is allowed to access reddit.com.
+          <button
+            type="button"
+            style={{ ...btnStyle, display: "block", width: "100%", marginTop: 6 }}
+            onClick={async () => {
+              // Must run straight from the click: permissions.request needs
+              // the user gesture, so nothing is awaited before it.
+              let granted = false;
+              try {
+                granted = await browser.permissions.request(REDDIT_HOST_PERMISSION);
+              } catch {
+                /* the prompt was dismissed or is unavailable */
+              }
+              setHostAccess(granted);
+              if (granted) setNotice("Reload your Reddit tabs to start readit.");
+            }}
+          >
+            Allow access to reddit.com
+          </button>
+        </div>
+      )}
 
       <label style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
         Active profile
@@ -131,15 +173,12 @@ function Popup() {
               } catch {
                 setNotice("Reload the Reddit tab, then try again.");
               }
-              if (opened) {
-                // Toolbar popups are small; skip close when opened as a normal tab (smoke/CDP).
-                if (window.outerWidth <= 420 && window.outerHeight <= 640) {
-                  try {
-                    window.close();
-                  } catch {
-                    /* ignore */
-                  }
-                }
+              // Close the toolbar popup, but not the page when it is open
+              // as a normal tab (smoke/CDP): only then is there a current tab.
+              // (Window size can't tell them apart: Firefox popups report
+              // the browser window's outer size.)
+              if (opened && !(await browser.tabs.getCurrent())) {
+                window.close();
               }
             } catch {
               // tabs.query may fail in restricted hosts

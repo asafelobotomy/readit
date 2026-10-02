@@ -1,0 +1,12 @@
+# Load this folder in Firefox (about:debugging → This Firefox → Load Temporary Add-on)
+
+readit targets New Reddit (shreddit) only. Requires Firefox 140+.
+
+Do NOT load:  <your clone>/extension
+DO load:      <your clone>/dist/firefox-mv3/manifest.json
+
+Rebuild first if this directory is missing (from the repo root):
+
+  npm run build:firefox
+
+Temporary add-ons are removed when Firefox restarts.

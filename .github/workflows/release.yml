@@ -1,5 +1,7 @@
 # Creates a GitHub Release when extension/package.json version changes on main.
-# Artifact: dist/readit-<version>-chrome.zip (Load unpacked or sideload via unzip).
+# Artifacts: dist/readit-<version>-chrome.zip, dist/readit-<version>-firefox.zip
+# and dist/readit-<version>-sources.zip (the source AMO asks for with a
+# bundled Firefox upload).
 
 name: Release
 
@@ -82,6 +84,14 @@ jobs:
         if: steps.ver.outputs.bumped == 'true'
         run: npm run zip
 
+      - name: Build + zip Firefox MV3 (+ sources)
+        if: steps.ver.outputs.bumped == 'true'
+        run: npm run zip:firefox
+
+      - name: Lint Firefox build
+        if: steps.ver.outputs.bumped == 'true'
+        run: npm run lint:firefox
+
       - name: Create GitHub Release
         if: steps.ver.outputs.bumped == 'true'
         # Step outputs go through env, never `${{ }}` inside the script, so
@@ -93,15 +103,19 @@ jobs:
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ZIP="dist/readit-${VERSION}-chrome.zip"
-          test -f "$ZIP"
+          ZIPS=(
+            "dist/readit-${VERSION}-chrome.zip"
+            "dist/readit-${VERSION}-firefox.zip"
+            "dist/readit-${VERSION}-sources.zip"
+          )
+          for z in "${ZIPS[@]}"; do test -f "$z"; done
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release ${TAG} already exists — refusing to overwrite"
             exit 1
           fi
 
-          gh release create "$TAG" "$ZIP" \
+          gh release create "$TAG" "${ZIPS[@]}" \
             --title "readit ${VERSION}" \
             --generate-notes \
             --target "$TARGET_SHA"

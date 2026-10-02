@@ -9,9 +9,13 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @readit/extension",
+    "dev:firefox": "npm run dev:firefox -w @readit/extension",
     "build": "npm run build -w @readit/extension",
+    "build:firefox": "npm run build:firefox -w @readit/extension",
     "compile": "npm run compile -w @readit/extension",
     "zip": "npm run zip -w @readit/extension",
+    "zip:firefox": "npm run zip:firefox -w @readit/extension",
+    "lint:firefox": "npx --yes web-ext@10.7.0 lint --source-dir dist/firefox-mv3",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "check:versions": "node scripts/check-versions.mjs",
     "version:set": "npm version --workspaces --include-workspace-root --no-git-tag-version",

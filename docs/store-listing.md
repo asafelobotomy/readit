@@ -1,4 +1,4 @@
-# Chrome Web Store listing (draft)
+# Store listing (draft) — Chrome Web Store and addons.mozilla.org
 
 ## Name
 
@@ -6,7 +6,7 @@ readit — New Reddit profiles & studio
 
 ## Short description
 
-Customize New Reddit with profiles, live in-page controls, filters, and mod tools. English, Chrome, New Reddit only.
+Customize New Reddit with profiles, live in-page controls, filters, and mod tools. English, Chrome and Firefox, New Reddit only.
 
 ## Detailed description
 
@@ -34,9 +34,15 @@ Productivity / Social & Communication
 
 ## Privacy policy summary
 
-readit stores its settings (profiles, filters, tags, usernotes, macros, saved items) and mark-read history in the extension's own `chrome.storage.local`, which Reddit's pages cannot read. Optional lightweight sync (off by default) copies only the active profile, simple/advanced mode and paused state to `chrome.storage.sync`. No remote servers. No analytics. No sale of data.
+readit stores its settings (profiles, filters, tags, usernotes, macros, saved items) and mark-read history in the extension's own `storage.local`, which Reddit's pages cannot read. Optional lightweight sync (off by default) copies only the active profile, simple/advanced mode and paused state to `storage.sync` (Chrome or Firefox Sync). No remote servers. No analytics. No sale of data.
 
 ## Permissions
 
 - `storage` — the local settings above, and optional lightweight sync.
 - Host access to `*.reddit.com` — to customize New Reddit pages, and so the popup can reach the Reddit tab it opens the studio in.
+
+## AMO (Firefox) specifics
+
+- Data collection: **none** (declared in the manifest as `data_collection_permissions: { required: ["none"] }`).
+- Source code: upload `readit-<version>-sources.zip` from the GitHub Release. Build steps for reviewers: Node 22, `npm ci`, `npm run build:firefox`; output is `dist/firefox-mv3`.
+- Minimum version: Firefox 140 (desktop), 142 (Android).
