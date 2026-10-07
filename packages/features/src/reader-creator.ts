@@ -147,11 +147,9 @@ export const absoluteTimestampsFeature: FeatureModule = {
       if (Number.isNaN(d.getTime())) return;
       const span = document.createElement("span");
       span.className = "readit-abs-time";
-      span.textContent = `(${d.toLocaleString()})`;
-      // Same size as the relative time; a smaller size added a third size to
-      // the byline. The gap is a margin, not a leading space: where the byline
-      // is flex or grid (the post page header) a leading space is dropped.
-      span.style.cssText = "opacity:0.75;margin-inline-start:0.3em;";
+      // Styled with the relative time as a pair of badges (css-engine,
+      // time:has(+ .readit-abs-time)); the badges replace the parentheses.
+      span.textContent = d.toLocaleString();
       t.after(span);
       markProcessed(t, "absoluteTimestamps");
     });

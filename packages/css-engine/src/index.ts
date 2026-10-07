@@ -224,6 +224,34 @@ html.readit-active shreddit-post:not([data-readit-split-header]) [slot="credit-b
 html.readit-active shreddit-post:not([data-readit-split-header]) [slot="credit-bar"] > span.flex-wrap > div.md {
   flex-basis: 100% !important;
 }
+/* Absolute timestamps: the relative time ("21 hr. ago") and the date the
+   feature adds after it are two badges. Each keeps its text on one line and
+   the pair wraps between badges, not mid-phrase, in narrow bylines. The fill
+   and outline derive from the text color so they follow any theme. */
+html.readit-active faceplate-timeago:has(> time + .readit-abs-time) {
+  display: inline-flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 2px 4px !important;
+}
+html.readit-active time:has(+ .readit-abs-time),
+html.readit-active .readit-abs-time {
+  display: inline-block !important;
+  white-space: nowrap !important;
+  padding: 0 6px !important;
+  border-radius: 999px !important;
+  line-height: 18px !important;
+}
+html.readit-active time:has(+ .readit-abs-time) {
+  background-color: color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+/* A bare <time> outside faceplate-timeago stays inline: space the badges. */
+html.readit-active :not(faceplate-timeago) > time + .readit-abs-time {
+  margin-inline-start: 4px !important;
+}
+html.readit-active .readit-abs-time {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent) !important;
+}
 /* Action-bar pills (the light-DOM ones, e.g. Share): fixed height plus 8px
    block padding, so scaled labels overflowed. The label is flex-centered. */
 html.readit-active shreddit-post .rpl-cab.h-xl {
@@ -1264,6 +1292,28 @@ html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] [class*="t
    stacks letter by letter. Media gives up width instead. */
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] * {
   min-width: auto !important;
+}
+/* Rail post headers (Recent Posts) with absolute timestamps: too narrow for
+   "r/sub • 21h ago date" on one line, so stack the subreddit, then each
+   timestamp badge on its own line under the name (past the 24px icon and
+   its 4px gap). The badges never wrap inside, despite the rail's span rule. */
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] div.flex:has(> faceplate-timeago > .readit-abs-time) {
+  flex-wrap: wrap !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] div.flex:has(> faceplate-timeago > .readit-abs-time) > span[aria-hidden="true"] {
+  display: none !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] div.flex:has(> faceplate-timeago > .readit-abs-time) > :is(a, faceplate-timeago) {
+  flex-basis: 100% !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] div.flex > faceplate-timeago:has(> .readit-abs-time) {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  padding-inline-start: 28px !important;
+  margin-block-start: 2px !important;
+}
+html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] faceplate-timeago > :is(time, .readit-abs-time) {
+  white-space: nowrap !important;
 }
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] :is(img, video, picture, faceplate-img, shreddit-player, [class*="thumbnail"]),
 html.readit-active.readit-layout-slots [data-readit-slot="rightRail"] .shrink-0:has(img, video, faceplate-img, shreddit-player) {

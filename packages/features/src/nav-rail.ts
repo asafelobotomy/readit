@@ -942,7 +942,7 @@ export function refreshNavRail(doc: Document = document): NavModel {
     });
   }
   const fp = modelFingerprint(model);
-  if (fp === lastFingerprint && doc.getElementById(NAV_RAIL_ID)) {
+  if (fp === lastFingerprint && railInPlace(doc)) {
     return model;
   }
   lastFingerprint = fp;
@@ -1030,12 +1030,23 @@ export function unmountNavRail(doc: Document = document): void {
   }
 }
 
-/** True when compact rail should be present but is missing from the live DOM. */
+/**
+ * True when the rail is a direct child of its host. Reddit's
+ * flex-left-nav-container re-renders on SPA navigation (post page → subreddit)
+ * and can move the rail into its inner #flex-left-nav-container, which compact
+ * mode hides along with the rest of Reddit's nav.
+ */
+function railInPlace(doc: Document): boolean {
+  const rail = doc.getElementById(NAV_RAIL_ID);
+  return !!rail && rail.parentElement === findRailHost(doc);
+}
+
+/** True when compact rail should be present but is missing or misplaced. */
 export function navRailNeedsRemount(doc: Document = document): boolean {
   if (!mounted) return false;
   const host = findRailHost(doc);
   if (!(host instanceof HTMLElement)) return true;
-  return !doc.getElementById(NAV_RAIL_ID);
+  return !railInPlace(doc);
 }
 
 export function mountNavCompactObserver(): void {
