@@ -71,7 +71,7 @@ export function repairSettings(raw: unknown): RepairResult | null {
 
     const touchedArrays = new Set<unknown[]>();
     for (const issue of parsed.error.issues) {
-      let path: PathKey[] = [...issue.path];
+      let path = [...issue.path] as PathKey[];
       // A missing value (deleted last round, or absent in the input) has no
       // default at this level — drop the enclosing object/element instead.
       while (path.length > 1 && getAt(value, path) === undefined) {
