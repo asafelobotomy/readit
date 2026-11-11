@@ -99,6 +99,14 @@ The Firefox build declares `data_collection_permissions: none` and the add-on ID
 
 No analytics. No remote servers. Optional sync of lightweight prefs can be enabled later (`syncLightweight`); packs and usernotes stay local + JSON export.
 
+## Network access and Reddit's terms
+
+readit works only on the Reddit page you are already viewing, in your own browser: CSS and DOM changes, plus buttons that press Reddit's own controls when you click them. It does not scrape, crawl, use the Reddit API or OAuth, run background requests, or send anything off your machine.
+
+The single request it makes is the Mod tab's **Detect my subreddits** button, which asks reddit.com (same origin, your own session) for the list of subreddits you moderate, at most 3 pages with a pause between them. It runs only when you click, and the result stays in local settings.
+
+readit is not affiliated with Reddit. You remain responsible for following Reddit's [User Agreement](https://www.redditinc.com/policies/user-agreement) and community rules.
+
 ## Docs
 
 - [Coexistence](docs/coexistence.md) — uBlock, Stylus, Moderator Toolbox

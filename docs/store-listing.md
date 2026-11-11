@@ -26,7 +26,7 @@ readit turns New Reddit into a personal workspace for readers, creators, and mod
 
 Privacy: settings stay in your browser. No analytics. No accounts.
 
-Not affiliated with Reddit.
+Not affiliated with, endorsed by, or connected to Reddit, Inc. readit only changes how the page you are viewing looks and behaves in your own browser: it does not scrape Reddit, use the Reddit API, or make background requests. You remain responsible for following Reddit's User Agreement.
 
 ## Category
 
@@ -34,7 +34,7 @@ Productivity / Social & Communication
 
 ## Privacy policy summary
 
-readit stores its settings (profiles, filters, tags, usernotes, macros, saved items) and mark-read history in the extension's own `storage.local`, which Reddit's pages cannot read. Optional lightweight sync (off by default) copies only the active profile, simple/advanced mode and paused state to `storage.sync` (Chrome or Firefox Sync). No remote servers. No analytics. No sale of data.
+readit stores its settings (profiles, filters, tags, usernotes, macros, saved items) and mark-read history in the extension's own `storage.local`, which Reddit's pages cannot read. Optional lightweight sync (off by default) copies only the active profile, simple/advanced mode and paused state to `storage.sync` (Chrome or Firefox Sync). No remote servers. No analytics. No sale of data. The one request readit makes is the optional "Detect my subreddits" button in the Mod tab: a same-origin request to reddit.com, using your own session, that lists the subreddits you moderate (at most 3 pages, only when you click). The result is stored locally.
 
 ## Permissions
 
