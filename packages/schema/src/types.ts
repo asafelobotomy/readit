@@ -223,10 +223,25 @@ export const CommentSortSchema = z.enum([
 ]);
 export type CommentSort = z.infer<typeof CommentSortSchema>;
 
+/**
+ * `.partial()` without the field defaults: zod 4 fills a missing key's
+ * `.default()` even inside `.partial()`, so an override would otherwise set
+ * every token instead of only the ones it names.
+ */
+function partialNoDefaults<S extends z.ZodRawShape>(schema: z.ZodObject<S>) {
+  const shape = Object.fromEntries(
+    Object.entries(schema.shape).map(([key, field]) => [
+      key,
+      z.optional(field instanceof z.ZodDefault ? field.unwrap() : field),
+    ]),
+  );
+  return z.object(shape) as unknown as ReturnType<typeof schema.partial>;
+}
+
 export const SubredditOverrideSchema = z.object({
   subreddit: z.string(),
-  tokens: CssTokensSchema.partial().optional(),
-  hide: HideNoiseSchema.partial().optional(),
+  tokens: partialNoDefaults(CssTokensSchema).optional(),
+  hide: partialNoDefaults(HideNoiseSchema).optional(),
   mediaMode: MediaModeSchema.optional(),
   commentSort: CommentSortSchema.optional(),
 });
@@ -319,7 +334,7 @@ export const CommentSortPrefsSchema = z.object({
    */
   applyOnDirectLoad: z.boolean().default(true),
   /** Subreddit (normalized) → last sort picked there; insertion order = age */
-  remembered: z.record(CommentSortSchema).default({}),
+  remembered: z.record(z.string(), CommentSortSchema).default({}),
 });
 export type CommentSortPrefs = z.infer<typeof CommentSortPrefsSchema>;
 
@@ -1275,10 +1290,10 @@ const LayoutColumnOrderSchema = z
 
 export const LayoutSlotsConfigSchema = z.object({
   preset: LayoutPresetSchema.default("classic"),
-  placements: LayoutPlacementsSchema.default({}),
+  placements: LayoutPlacementsSchema.prefault({}),
   /** Left→right panel permutation; each panel keeps its own width. */
   columnOrder: LayoutColumnOrderSchema,
-  widths: LayoutWidthsSchema.default({}),
+  widths: LayoutWidthsSchema.prefault({} as z.input<typeof LayoutWidthsSchema>),
   /** When false, column chips / page edit moves are locked. */
   editMode: z.boolean().default(false),
   /** Blank resizable tracks between columns (max 3). */
@@ -1298,7 +1313,7 @@ export const LayoutSlotsConfigSchema = z.object({
       main: ContentAlignSchema.optional(),
       rightRail: ContentAlignSchema.optional(),
     })
-    .default({}),
+    .prefault({}),
   /** Global visual zoom (1 = 100%). */
   zoomAll: z.preprocess(
     (v) => (typeof v === "number" ? v : 1),
@@ -1311,7 +1326,7 @@ export const LayoutSlotsConfigSchema = z.object({
       main: z.number().optional(),
       rightRail: z.number().optional(),
     })
-    .default({}),
+    .prefault({}),
   /**
    * Size locks (not position). Keys: `leftNav` | `main` | `rightRail` |
    * `pad:left` | `pad:right` | separator id. Locked widths are skipped when
@@ -1319,7 +1334,7 @@ export const LayoutSlotsConfigSchema = z.object({
    */
   widthLocks: z.record(z.string(), z.boolean()).default({}),
   /** Top/bottom page chrome (header, dock) — moveable / resizable. */
-  chrome: LayoutChromeSchema.default({}),
+  chrome: LayoutChromeSchema.prefault({} as z.input<typeof LayoutChromeSchema>),
 });
 export type LayoutSlotsConfig = z.infer<typeof LayoutSlotsConfigSchema>;
 
@@ -1722,8 +1737,8 @@ export const CqsPrefsSchema = z.object({
 export type CqsPrefs = z.infer<typeof CqsPrefsSchema>;
 
 export const SimpleKnobsSchema = z.object({
-  tokens: CssTokensSchema.default({}),
-  hide: HideNoiseSchema.default({}),
+  tokens: CssTokensSchema.prefault({} as z.input<typeof CssTokensSchema>),
+  hide: HideNoiseSchema.prefault({}),
   mediaMode: MediaModeSchema.default("normal"),
   quietNsfw: z.boolean().default(false),
   showNotes: z.boolean().default(true),
@@ -1754,7 +1769,7 @@ export const ProfilePackSchema = z.object({
   audiences: z.array(AudienceSchema).default(["reader"]),
   builtin: z.boolean().default(false),
   knobs: SimpleKnobsSchema,
-  flags: FeatureFlagsSchema.default({}),
+  flags: FeatureFlagsSchema.prefault({}),
   /** Optional column-layout recipe applied on profile switch. */
   layoutSlots: LayoutSlotsConfigSchema.optional(),
   /** Default mascot icon for this profile's card/badge. */
@@ -1810,8 +1825,8 @@ export const ReaditSettingsSchema = z.object({
   activeProfileId: z.string().default("focus-reader"),
   profiles: z.array(ProfilePackSchema).default([]),
   /** Live knobs — usually a copy of the active profile, editable in studio */
-  knobs: SimpleKnobsSchema.default({}),
-  flags: FeatureFlagsSchema.default({}),
+  knobs: SimpleKnobsSchema.prefault({}),
+  flags: FeatureFlagsSchema.prefault({}),
   filters: z.array(FilterRuleSchema).default([]),
   tags: z.array(UserTagSchema).default([]),
   elementRules: z.array(ElementRuleSchema).default([]),
@@ -1834,21 +1849,21 @@ export const ReaditSettingsSchema = z.object({
     .transform((names) => [...new Set(names)]),
   cqsSnapshots: z.array(CqsSnapshotSchema).default([]),
   cqsRiskEvents: z.array(CqsRiskEventSchema).default([]),
-  cqsPrefs: CqsPrefsSchema.default({}),
-  layoutSlots: LayoutSlotsConfigSchema.default({}),
-  markReadPrefs: MarkReadPrefsSchema.default({}),
-  commentUxPrefs: CommentUxPrefsSchema.default({}),
-  feedPrefs: FeedPrefsSchema.default({}),
-  keyboardNavPrefs: KeyboardNavPrefsSchema.default({}),
-  commentSortPrefs: CommentSortPrefsSchema.default({}),
-  linkPrefs: LinkPrefsSchema.default({}),
-  allFeedPrefs: AllFeedPrefsSchema.default({}),
+  cqsPrefs: CqsPrefsSchema.prefault({}),
+  layoutSlots: LayoutSlotsConfigSchema.prefault({} as z.input<typeof LayoutSlotsConfigSchema>),
+  markReadPrefs: MarkReadPrefsSchema.prefault({}),
+  commentUxPrefs: CommentUxPrefsSchema.prefault({}),
+  feedPrefs: FeedPrefsSchema.prefault({}),
+  keyboardNavPrefs: KeyboardNavPrefsSchema.prefault({}),
+  commentSortPrefs: CommentSortPrefsSchema.prefault({}),
+  linkPrefs: LinkPrefsSchema.prefault({}),
+  allFeedPrefs: AllFeedPrefsSchema.prefault({}),
   studioLocale: StudioLocaleSchema.default("en"),
-  featureHealth: z.record(FeatureHealthSchema).default({}),
+  featureHealth: z.record(z.string(), FeatureHealthSchema).default({}),
   toolboxDetected: z.boolean().default(false),
   syncLightweight: z.boolean().default(false),
   /** Per-profile mascot icon pick, keyed by profile id (must be one of that profile's iconOptions). */
-  profileIconChoice: z.record(ProfileIconIdSchema).default({}),
+  profileIconChoice: z.record(z.string(), ProfileIconIdSchema).default({}),
 });
 export type ReaditSettings = z.infer<typeof ReaditSettingsSchema>;
 
