@@ -604,14 +604,21 @@ export function StudioApp({ api }: { api: StudioApi }) {
                   const url = import.meta.env.FIREFOX
                     ? `data:application/json;charset=utf-8,${encodeURIComponent(json)}`
                     : URL.createObjectURL(new Blob([json], { type: "application/json" }));
+                  // The anchor lives in a throwaway *closed* shadow root: the
+                  // click still bubbles to Reddit's listeners (it's composed),
+                  // but they only see an empty host — composedPath() hides the
+                  // anchor and its href, which carries every setting.
+                  const host = document.createElement("div");
+                  host.hidden = true;
+                  const root = host.attachShadow({ mode: "closed" });
                   const a = document.createElement("a");
                   a.href = url;
                   a.download = `readit-export-${Date.now()}.json`;
+                  root.append(a);
                   // Attached: Firefox has ignored clicks on detached anchors.
-                  a.hidden = true;
-                  document.body.append(a);
+                  document.body.append(host);
                   a.click();
-                  a.remove();
+                  host.remove();
                   // Revoking in the same tick can cancel the download before
                   // the browser has read the blob.
                   if (url.startsWith("blob:")) {

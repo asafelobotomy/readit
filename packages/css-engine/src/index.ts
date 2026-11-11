@@ -33,6 +33,16 @@ export { isSafeElementRuleSelector };
 
 const STYLE_ID = "readit-css-engine";
 
+/**
+ * Escape a value for a double-quoted CSS string (e.g. an attribute selector
+ * value). Works without `CSS.escape`, so the engine still runs under Node.
+ */
+function cssAttrString(value: string): string {
+  return value.replace(/[\\"]/g, "\\$&").replace(/[\n\r\f]/g, (c) =>
+    `\\${c.charCodeAt(0).toString(16)} `,
+  );
+}
+
 /** The font stack for a family choice, or null to keep Reddit's own. */
 function fontStack(family: CssTokens["fontFamily"]): string | null {
   return family === "serif"
@@ -1979,7 +1989,7 @@ html.readit-active.readit-layout-slots.readit-layout-pending #left-sidebar-conta
     if (track.type === "panel") {
       parts.push(panelWidthRules(track.panel, col));
     } else if (track.type === "separator") {
-      parts.push(`html.readit-active.readit-layout-slots [data-readit-separator="${track.id}"] {
+      parts.push(`html.readit-active.readit-layout-slots [data-readit-separator="${cssAttrString(track.id)}"] {
   grid-column: ${col} !important;
   width: ${track.widthPx}px !important;
   max-width: ${track.widthPx}px !important;

@@ -544,7 +544,10 @@ export const ContentAlignSchema = z.enum(["start", "center", "end"]);
 export type ContentAlign = z.infer<typeof ContentAlignSchema>;
 
 export const LayoutSeparatorSchema = z.object({
-  id: z.string(),
+  // Interpolated into CSS selectors and DOM attributes, so it must stay a
+  // plain token (createId emits `sep_<base36>_<base36>`). An imported id with
+  // quotes or braces could otherwise break out of its selector.
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
   after: LayoutColumnPanelSchema,
   widthPx: z.preprocess(
     (v) => (typeof v === "number" ? v : 24),

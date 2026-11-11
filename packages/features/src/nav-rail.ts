@@ -979,8 +979,21 @@ function onPageShow(): void {
 
 /** Mount custom rail + live sync while compact Nav is active. */
 export function mountNavRail(doc: Document = document): void {
-  mounted = true;
   const root = findRedditNavRoot(doc);
+  // Layout recovery calls this on every poll tick (every 80 ms) and DOM scan.
+  // When the rail is already mounted, bound to the current nav root and in
+  // place, the rail's own observers keep it fresh — re-scraping here would
+  // clone every nav icon several times per tick.
+  if (
+    mounted &&
+    root &&
+    root === observedNavRoot &&
+    railObservers.length > 0 &&
+    railInPlace(doc)
+  ) {
+    return;
+  }
+  mounted = true;
   if (root) expandRedditNavSections(root);
   // SPA navigation replaces the left-nav host — always rebind observers.
   if (root && root !== observedNavRoot) {

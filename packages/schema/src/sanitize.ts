@@ -70,14 +70,27 @@ export function repairSettings(raw: unknown): RepairResult | null {
     if (parsed.success) return { settings: parsed.data, resetPaths };
 
     const touchedArrays = new Set<unknown[]>();
+    // Paths already dropped/reset this round. Zod reports every problem in an
+    // element; once the element is gone, its other issues must be skipped —
+    // walking up from them would reset the whole enclosing array instead.
+    const handled = new Set<string>();
+    const coveredByHandled = (p: readonly PathKey[]) => {
+      for (let i = 1; i <= p.length; i++) {
+        if (handled.has(p.slice(0, i).join("\u0000"))) return true;
+      }
+      return false;
+    };
     for (const issue of parsed.error.issues) {
-      let path: PathKey[] = [...issue.path];
+      let path: PathKey[] = [...issue.path] as PathKey[];
+      if (coveredByHandled(path)) continue;
       // A missing value (deleted last round, or absent in the input) has no
       // default at this level — drop the enclosing object/element instead.
       while (path.length > 1 && getAt(value, path) === undefined) {
         path = path.slice(0, -1);
       }
       if (path.length === 0) return null;
+      if (coveredByHandled(path)) continue;
+      handled.add(path.join("\u0000"));
 
       if (path.length === 1) {
         const key = String(path[0]);
