@@ -15,14 +15,27 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { evidenceDir, repoRelative } from "./smoke-paths.mjs";
+import {
+  maybeAttachReplay,
+  refuseReplayOverCdp,
+  replayLaunchArgs,
+  replayProfile,
+} from "./reddit-replay/replay.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const extensionPath = path.resolve(root, "dist/chrome-mv3");
 const outDir = evidenceDir(root, "layout");
 const checklistPath = path.resolve(root, "docs/smoke-checklist-layout.md");
-const userData = path.resolve(root, ".smoke-profile-layout");
+/** Replay runs update a copy in the evidence folder: the committed checklist records live runs. */
+const checklistOut = process.env.READIT_REPLAY
+  ? path.join(outDir, "smoke-checklist-layout.replay.md")
+  : checklistPath;
+const userData = replayProfile(path.resolve(root, ".smoke-profile-layout"));
 const cdpEndpoint = (process.env.READIT_CDP || "").trim();
+refuseReplayOverCdp(cdpEndpoint);
+/** Recorded Reddit instead of the live site (READIT_REPLAY=1); null on live runs. */
+let replay = null;
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -432,7 +445,8 @@ function patchChecklist(resultsList) {
       `$1\n${stamp}\n`,
     );
   }
-  fs.writeFileSync(checklistPath, md);
+  fs.mkdirSync(path.dirname(checklistOut), { recursive: true });
+  fs.writeFileSync(checklistOut, md);
 }
 
 /** @type {import('puppeteer-core').Browser | null} */
@@ -471,11 +485,13 @@ if (cdpEndpoint) {
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
+      ...replayLaunchArgs(),
       "--no-first-run",
       "--disable-default-apps",
     ],
     viewport: { width: 1440, height: 900 },
   });
+  replay = await maybeAttachReplay(playwrightContext);
   page = playwrightContext.pages()[0] || (await playwrightContext.newPage());
   for (let i = 0; i < 30 && !extensionId; i++) {
     const hit = playwrightContext
@@ -1650,5 +1666,6 @@ try {
     puppeteerBrowser?.disconnect();
   }
   else await playwrightContext?.close().catch(() => {});
+  replay?.report();
   process.exit(summary.fail > 0 ? 1 : 0);
 }

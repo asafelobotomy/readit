@@ -12,13 +12,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { evidenceDir, repoRelative } from "./smoke-paths.mjs";
+import {
+  maybeAttachReplay,
+  refuseReplayOverCdp,
+  replayLaunchArgs,
+  replayProfile,
+} from "./reddit-replay/replay.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const extensionPath = path.resolve(root, "dist/chrome-mv3");
 const outDir = evidenceDir(root);
-const userData = path.resolve(root, ".smoke-profile");
+const userData = replayProfile(path.resolve(root, ".smoke-profile"));
 const cdpEndpoint = (process.env.READIT_CDP || "").trim();
+refuseReplayOverCdp(cdpEndpoint);
+/** Recorded Reddit instead of the live site (READIT_REPLAY=1); null on live runs. */
+let replay = null;
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -315,12 +324,14 @@ if (cdpEndpoint) {
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
+      ...replayLaunchArgs(),
       "--no-first-run",
       "--disable-default-apps",
     ],
     viewport: { width: 1400, height: 900 },
     permissions: ["clipboard-read", "clipboard-write"],
   });
+  replay = await maybeAttachReplay(playwrightContext);
   page = playwrightContext.pages()[0] || (await playwrightContext.newPage());
   for (let i = 0; i < 30 && !extensionId; i++) {
     const sw = playwrightContext.serviceWorkers();
@@ -1907,39 +1918,58 @@ try {
     timeout: 60_000,
   });
   await sleep(3000);
-  const soft = await page.evaluate(async () => {
-    const candidates = [
-      ...document.querySelectorAll('a[href*="/r/"]'),
-    ].filter((a) => {
+  // Pick and click in one evaluate, then wait *outside* it: a click that does
+  // a full page load destroys the evaluate's context (which used to abort the
+  // rest of the suite). Prefer the left nav's Popular link so the target is
+  // the same page every run (and is in the Reddit replay recording).
+  const softTarget = await page.evaluate(() => {
+    const candidates = [...document.querySelectorAll('a[href*="/r/"]')].filter((a) => {
       const href = a.getAttribute("href") || "";
       return /\/r\/[A-Za-z0-9_]+\/?(\?|$)/.test(href) && !href.includes("/comments/");
     });
-    const link = candidates[0];
-    if (!link) {
-      // Fallback: soft-nav via history API (still exercises locationchange)
-      history.pushState({}, "", "/r/AskReddit/");
-      window.dispatchEvent(new Event("popstate"));
-      await new Promise((r) => setTimeout(r, 2500));
+    const link =
+      candidates.find(
+        (a) => new URL(a.href).pathname.replace(/\/?$/, "/").toLowerCase() === "/r/popular/",
+      ) || candidates[0];
+    if (!link) return null;
+    link.setAttribute("data-readit-smoke-softnav", "1");
+    return link.href;
+  });
+  const readSoftNav = (mode) =>
+    page.evaluate((m) => {
       const fab = !!document
         .querySelector("readit-studio")
         ?.shadowRoot?.querySelector(".readit-fab");
       const active = document.documentElement.classList.contains("readit-active");
-      return {
-        ok: fab && active,
-        href: location.href,
-        fab,
-        active,
-        mode: "pushState",
-      };
+      return { ok: fab && active, href: location.href, fab, active, mode: m };
+    }, mode);
+  let soft;
+  if (softTarget) {
+    await page.evaluate(() =>
+      /** @type {HTMLElement | null} */ (
+        document.querySelector("[data-readit-smoke-softnav]")
+      )?.click(),
+    );
+    await sleep(3500);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        soft = await readSoftNav("click");
+        break;
+      } catch (err) {
+        // Still navigating: give the new page a moment and read again.
+        if (attempt >= 4) throw err;
+        await sleep(1000);
+      }
     }
-    link.click();
-    await new Promise((r) => setTimeout(r, 3500));
-    const fab = !!document
-      .querySelector("readit-studio")
-      ?.shadowRoot?.querySelector(".readit-fab");
-    const active = document.documentElement.classList.contains("readit-active");
-    return { ok: fab && active, href: location.href, fab, active, mode: "click" };
-  });
+  } else {
+    // Fallback: soft-nav via history API (still exercises locationchange)
+    await page.evaluate(() => {
+      history.pushState({}, "", "/r/AskReddit/");
+      window.dispatchEvent(new Event("popstate"));
+    });
+    await sleep(2500);
+    soft = await readSoftNav("pushState");
+  }
   record("routes.spa_soft_nav", soft.ok ? "pass" : "fail", JSON.stringify(soft));
   record("routes.home", "pass", "visited www.reddit.com");
   record(
@@ -2167,5 +2197,6 @@ try {
   } else {
     await playwrightContext.close();
   }
+  replay?.report();
   process.exit(summary.fail > 0 ? 1 : 0);
 }

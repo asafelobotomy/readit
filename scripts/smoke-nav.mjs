@@ -15,14 +15,27 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { evidenceDir, repoRelative } from "./smoke-paths.mjs";
+import {
+  maybeAttachReplay,
+  refuseReplayOverCdp,
+  replayLaunchArgs,
+  replayProfile,
+} from "./reddit-replay/replay.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const extensionPath = path.resolve(root, "dist/chrome-mv3");
 const outDir = evidenceDir(root, "nav");
 const checklistPath = path.resolve(root, "docs/smoke-checklist-nav.md");
-const userData = path.resolve(root, ".smoke-profile-nav");
+/** Replay runs update a copy in the evidence folder: the committed checklist records live runs. */
+const checklistOut = process.env.READIT_REPLAY
+  ? path.join(outDir, "smoke-checklist-nav.replay.md")
+  : checklistPath;
+const userData = replayProfile(path.resolve(root, ".smoke-profile-nav"));
 const cdpEndpoint = (process.env.READIT_CDP || "").trim();
+refuseReplayOverCdp(cdpEndpoint);
+/** Recorded Reddit instead of the live site (READIT_REPLAY=1); null on live runs. */
+let replay = null;
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -384,7 +397,8 @@ function patchChecklist(resultsList) {
   } else {
     md = md.replace(/(End-to-end coverage[^\n]*\n)/, `$1\n${stamp}\n`);
   }
-  fs.writeFileSync(checklistPath, md);
+  fs.mkdirSync(path.dirname(checklistOut), { recursive: true });
+  fs.writeFileSync(checklistOut, md);
 }
 
 function probeNav(page) {
@@ -625,10 +639,12 @@ if (cdpEndpoint) {
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
+      ...replayLaunchArgs(),
       "--no-default-browser-check",
     ],
     viewport: { width: 1440, height: 900 },
   });
+  replay = await maybeAttachReplay(playwrightContext);
   page = playwrightContext.pages()[0] || (await playwrightContext.newPage());
 }
 
@@ -963,5 +979,6 @@ try {
     puppeteerBrowser?.disconnect();
   }
   else await playwrightContext?.close().catch(() => {});
+  replay?.report();
   process.exit(summary.fail > 0 ? 1 : 0);
 }
